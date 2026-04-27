@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import { cmsStore } from '../cms/cms-store.svelte.js';
 	import type { CmsNewPageConfig } from './new-page-config.js';
-	import { resolveRouteUrl } from './resolve-route.js';
+	import { resolveRouteOnlyParams, resolveRouteUrl } from './resolve-route.js';
 
 	type PageEntry = {
 		params: Record<string, string>;
@@ -148,15 +148,16 @@
 			{#each routes as route (route.routeId)}
 				{@const creator = creatableByRouteId.get(route.routeId)}
 				<li class="cms-panel__group">
-					<div class="cms-panel__group-header">
-						<div class="cms-panel__group-title">
-							<span class="cms-panel__group-routeid">{route.routeId}</span>
-							<span class="cms-panel__group-count">
-								({route.entries.length}
-								{route.entries.length === 1 ? 'page' : 'pages'})
-							</span>
-						</div>
-						{#if creator}
+					{#if creator}
+						<div class="cms-panel__group-header">
+							<div class="cms-panel__group-title">
+								<span class="cms-panel__group-routeid">{resolveRouteOnlyParams(route.routeId)}</span
+								>
+								<span class="cms-panel__group-count">
+									({route.entries.length}
+									{route.entries.length === 1 ? 'page' : 'pages'})
+								</span>
+							</div>
 							<button
 								type="button"
 								class="cms-panel__group-new"
@@ -164,8 +165,8 @@
 							>
 								+ New
 							</button>
-						{/if}
-					</div>
+						</div>
+					{/if}
 
 					{#if route.entries.length > 0}
 						<ul class="cms-panel__items">
