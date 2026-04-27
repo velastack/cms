@@ -1,7 +1,8 @@
-<script lang="ts" generics="T = Record<string, unknown>">
+<script lang="ts" generics="T extends Record<string, unknown> = Record<string, unknown>">
 	import type { Snippet } from 'svelte';
 	import { page } from '$app/state';
-	import { getCmsScope, getCmsValue, type CmsPayload } from './scope.js';
+	import { getCmsScope, type CmsPayload } from './scope.js';
+	import { cmsStore, type CmsScopeRef } from './cms-store.svelte.js';
 
 	type Props = {
 		name: string;
@@ -13,15 +14,35 @@
 	let { name, fallback, value, children }: Props = $props();
 
 	const scope = getCmsScope();
-	const resolved = $derived(
-		value !== undefined ? value : getCmsValue(page.data.cms as CmsPayload | undefined, scope, name)
+	const ref = $derived<CmsScopeRef | null>(
+		scope
+			? { scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params }
+			: null
 	);
+
+	const resolved = $derived.by(() => {
+		if (value !== undefined) return value;
+		if (cmsStore.isEditing && ref && cmsStore.hasDraft(ref, name)) {
+			return cmsStore.getValue(ref, name);
+		}
+		if (ref && cmsStore.hasOverlay(ref, name)) {
+			return cmsStore.getOverlayValue(ref, name);
+		}
+		const cms = page.data.cms as CmsPayload | undefined;
+		return scope ? cms?.docs[scope.scopeId]?.[name] : undefined;
+	});
+
 	const items = $derived(
 		Array.isArray(resolved) ? (resolved as T[]) : Array.isArray(fallback) ? fallback : []
 	);
+	const editable = $derived(cmsStore.isEditing && value === undefined && !!ref);
 </script>
 
-{#if items.length}
+{#if editable && ref}
+	{#await import('./cms-repeater-editable.svelte') then { default: Editable }}
+		<Editable scope={ref} {name} {items} {children} />
+	{/await}
+{:else if items.length}
 	{#each items as item, i}
 		{@render children(item, i)}
 	{/each}

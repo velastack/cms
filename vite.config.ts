@@ -1,9 +1,9 @@
 import { defineConfig } from 'vitest/config';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { velaCmsManifest } from './plugin/src/index.js';
+import { velacms } from './plugin/src/index.js';
 
 export default defineConfig({
-	plugins: [velaCmsManifest(), sveltekit()],
+	plugins: [velacms(), sveltekit()],
 	test: {
 		expect: { requireAssertions: true },
 		projects: [

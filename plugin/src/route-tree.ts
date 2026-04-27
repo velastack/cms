@@ -8,6 +8,10 @@ export type RouteNode = {
 	layoutPath: string | null;
 	/** Absolute path to `+page.svelte` in this directory, if present. */
 	pagePath: string | null;
+	/** Absolute path to `+page.ts` in this directory, if present. */
+	pageScriptPath: string | null;
+	/** Absolute path to `+page.server.ts` in this directory, if present. */
+	pageServerScriptPath: string | null;
 };
 
 const toRouteId = (routesDir: string, dir: string): string => {
@@ -26,10 +30,14 @@ export const discoverRoutes = (routesDir: string): RouteNode[] => {
 	const visit = (dir: string) => {
 		const layoutPath = join(dir, '+layout.svelte');
 		const pagePath = join(dir, '+page.svelte');
+		const pageScriptPath = join(dir, '+page.ts');
+		const pageServerScriptPath = join(dir, '+page.server.ts');
 		out.push({
 			routeId: toRouteId(routesDir, dir),
 			layoutPath: existsSync(layoutPath) ? layoutPath : null,
-			pagePath: existsSync(pagePath) ? pagePath : null
+			pagePath: existsSync(pagePath) ? pagePath : null,
+			pageScriptPath: existsSync(pageScriptPath) ? pageScriptPath : null,
+			pageServerScriptPath: existsSync(pageServerScriptPath) ? pageServerScriptPath : null
 		});
 		for (const entry of readdirSync(dir)) {
 			if (entry.startsWith('+') || entry.startsWith('.')) continue;

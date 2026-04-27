@@ -1,6 +1,17 @@
 {
-	"name": "velastack-cms",
-	"version": "0.0.1",
+	"name": "velacms",
+	"version": "0.1.0",
+	"description": "Manifest-driven, scope-aware CMS for SvelteKit. Author content with <CmsText/> components, edit in place, ship with any backend.",
+	"keywords": [
+		"svelte",
+		"sveltekit",
+		"cms",
+		"content",
+		"editing",
+		"vite-plugin"
+	],
+	"license": "MIT",
+	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build && npm run prepack",
@@ -18,18 +29,24 @@
 		"dist",
 		"!dist/**/*.test.*",
 		"!dist/**/*.spec.*",
-		"plugin/src/**/*.ts"
+		"plugin/src/**/*.ts",
+		"README.md",
+		"LICENSE"
 	],
 	"sideEffects": [
 		"**/*.css"
 	],
 	"svelte": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"type": "module",
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
-			"svelte": "./dist/index.js"
+			"svelte": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./server": {
+			"types": "./dist/server/index.d.ts",
+			"default": "./dist/server/index.js"
 		},
 		"./vite": {
 			"types": "./plugin/src/index.ts",
@@ -37,7 +54,9 @@
 		}
 	},
 	"peerDependencies": {
-		"svelte": "^5.0.0"
+		"@sveltejs/kit": "^2.0.0",
+		"svelte": "^5.0.0",
+		"vite": "^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^7.0.1",
@@ -50,11 +69,9 @@
 		"publint": "^0.3.18",
 		"svelte": "^5.55.2",
 		"svelte-check": "^4.4.6",
+		"svelte-meta-tags": "^4.6.0",
 		"typescript": "^6.0.2",
 		"vite": "^8.0.7",
 		"vitest": "^4.1.3"
-	},
-	"keywords": [
-		"svelte"
-	]
+	}
 }

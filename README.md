@@ -1,65 +1,418 @@
-# Svelte library
+# velacms
 
-Everything you need to build a Svelte library, powered by [`sv`](https://npmjs.com/package/sv).
+A scope-aware CMS for SvelteKit, for static or dynamic sites.
 
-Read more about creating a library [in the docs](https://svelte.dev/docs/kit/packaging).
+```svelte
+<!-- src/routes/(marketing)/about/+page.svelte -->
+<script>
+	import { CmsText, CmsRichText } from 'velacms';
+</script>
 
-## Creating a project
+<h1>
+	<CmsText name="hero.title" fallback="About us" />
+</h1>
 
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
+<CmsRichText name="body" />
 ```
 
-To recreate this project with the same configuration:
+That's the whole authoring API. No field paths, no manual wiring. The build-time Vite plugin discovers every `<CmsText/>` (and friends) reachable from each route, computes which route scope they belong to, and emits a manifest. At request time, `loadCms(event, …)` resolves the right documents for the current route. At edit time, the admin bar swaps display components for inline editors — without shipping a single byte of editing code to public visitors.
 
-```sh
-# recreate this project
-npx sv@0.15.1 create --template library --types ts --add prettier vitest="usages:unit" --install npm .
+## Why a manifest?
+
+A reusable component like `Header.svelte` may be mounted from `(marketing)/+layout.svelte` and `(app)/+layout.svelte`. Its `<CmsText name="header.title" />` is **the same field name** in both places, but those should be **different stored values** — one for the marketing site, one for the app shell.
+
+CMS identity therefore can't be `(component file + field name)`. It has to be `(usage scope + field name)`. The plugin walks each `+layout.svelte` / `+page.svelte`'s static import graph, attributes every CMS field reference to the route entrypoint that reached it, and emits:
+
+```ts
+{
+  '/(marketing)/about': {
+    scopes: [
+      { scopeId: 'layout:/',                 fields: ['footer.links'] },
+      { scopeId: 'layout:/(marketing)',      fields: ['header.title', 'announcement.text'] },
+      { scopeId: 'page:/(marketing)/about',  fields: ['hero.title', 'body'], metadata: ['title', 'description', 'canonical', 'robots'] }
+    ]
+  },
+  …
+}
 ```
 
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Install
 
 ```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+npm install velacms
 ```
 
-Everything inside `src/lib` is part of your library, everything inside `src/routes` can be used as a showcase or preview app.
+## Quick start
 
-## Building
+### 1. Register the Vite plugin
 
-To build your library:
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { velacms } from 'velacms/vite';
 
-```sh
-npm pack
+export default defineConfig({
+	plugins: [velacms(), sveltekit()]
+});
 ```
 
-To create a production version of your showcase app:
+The plugin reads `src/routes/` and `src/lib/` by default. Override with `velacms({ routesDir, libDir })` if your project is laid out differently.
 
-```sh
-npm run build
+### 2. Wire `loadCms` into the root `+layout.server.ts`
+
+Optionally include `svelte-meta-tags` for easy page metadata handling, but it isn't a requirement.
+
+```ts
+// src/routes/+layout.server.ts
+import type { ServerLoad } from '@sveltejs/kit';
+import { loadCms, mockAdapter } from 'velacms/server';
+import { defineBaseMetaTags, definePageMetaTags } from 'svelte-meta-tags';
+
+const adapter = mockAdapter({
+	docs: {
+		'layout:/(marketing)': { 'header.title': 'Climb Angola' },
+		'page:/(marketing)/about': {
+			'hero.title': 'About us',
+			body: '<p>…</p>',
+			_metadata: { title: 'About us', description: '…' }
+		}
+	}
+});
+
+export const load: ServerLoad = async (event) => {
+	const { baseMetaTags } = defineBaseMetaTags({
+		title: 'My site',
+		titleTemplate: '%s · My site'
+	});
+	const cms = await loadCms(event, { locale: 'en', adapter });
+	const { pageMetaTags } = definePageMetaTags(cms.metadata);
+	return { baseMetaTags, pageMetaTags, cms };
+};
 ```
 
-You can preview the production build with `npm run preview`.
+Swap `mockAdapter` for your real adapter once you have a backend (see [Adapters](#adapters)).
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+### 3. Render `<AdminBar/>` in the root layout
 
-## Publishing
+```svelte
+<!-- src/routes/+layout.svelte -->
+<script lang="ts">
+	import { page } from '$app/state';
+	import { MetaTags, deepMerge } from 'svelte-meta-tags';
+	import { AdminBar } from 'velacms';
 
-Go into the `package.json` and give your package the desired name through the `"name"` option. Also consider adding a `"license"` field and point it to a `LICENSE` file which you can create from a template (one popular option is the [MIT license](https://opensource.org/license/mit/)).
+	let { data, children } = $props();
+	let metaTags = $derived(deepMerge(data.baseMetaTags, page.data.pageMetaTags));
+</script>
 
-To publish your library to [npm](https://www.npmjs.com):
+<MetaTags {...metaTags} />
+<AdminBar />
 
-```sh
-npm publish
+{@render children()}
 ```
+
+`<AdminBar/>` is a tiny sync wrapper. Its UI and every editable component are dynamically imported, so public visitors never download editing code.
+
+### 4. Author your routes
+
+```svelte
+<!-- src/routes/(marketing)/about/+page.svelte -->
+<script lang="ts">
+	import { CmsText, CmsRichText } from 'velacms';
+</script>
+
+<h1>
+	<CmsText name="hero.title" fallback="About us" />
+</h1>
+
+<CmsRichText name="body" />
+```
+
+That's it — the plugin handles scope and the loader handles data fetching.
+
+## CMS components
+
+All four included CMS components share the same prop shape:
+
+| Prop       | Type               | Notes                                                                    |
+| ---------- | ------------------ | ------------------------------------------------------------------------ |
+| `name`     | `string`           | Field path inside this scope. Must be a static string at v1.             |
+| `fallback` | varies             | Rendered when no value is stored. `string` for text, HTML for rich text. |
+| `value`    | `unknown` (opt-in) | Per-item override used inside `<CmsRepeater/>`; bypasses scope lookup.   |
+
+### `<CmsText />`
+
+```svelte
+<CmsText name="hero.title" fallback="About us" />
+```
+
+Plain text. In edit mode, swaps for an inline `<input>` bound to the draft store.
+
+### `<CmsRichText />`
+
+```svelte
+<CmsRichText name="body" fallback="<p>Coming soon.</p>" />
+```
+
+Rendered with `{@html}`. Edit mode swaps for a `<textarea>`.
+
+### `<CmsImage />`
+
+```svelte
+<CmsImage name="hero.image" alt="Hero" />
+```
+
+Renders an `<img>`. Edit mode shows the current image plus a URL input.
+
+### `<CmsRepeater />`
+
+```svelte
+<CmsRepeater name="gallery.items">
+	{#snippet children(item)}
+		<figure>
+			<CmsImage name="src" value={item.src} alt={item.caption} />
+			<figcaption>
+				<CmsText name="caption" value={item.caption} />
+			</figcaption>
+		</figure>
+	{/snippet}
+</CmsRepeater>
+```
+
+Iterates an array stored at `name`. Inside the snippet, pass per-item values via `value=` to bypass scope lookup. Edit mode renders the same snippet for each item plus add/remove controls and per-key inputs.
+
+## Custom CMS components
+
+Velacms discovers your custom or third-party CMS components by convention.
+
+### Auto-discovery (zero config)
+
+A component is treated as a CMS component if **any** of the following hold:
+
+1. **It lives in your app's `src/lib/components/cms/`.** Drop a new `.svelte` file there and it's registered automatically:
+
+   ```svelte
+   <!-- src/lib/components/cms/cms-link.svelte -->
+   <script lang="ts">
+   	import { CmsText } from 'velacms';
+   	let { name, fallback, value } = $props();
+   </script>
+
+   <a href={typeof value === 'string' ? value : undefined}>
+   	<CmsText name={`${name}.label`} {fallback} />
+   </a>
+   ```
+
+   Use it from any route: `<CmsLink name="hero.cta" />`. The plugin picks up `hero.cta` as a field on the page's scope; no plugin config edit required.
+
+2. **It's a named export from your local `src/lib/components/cms/index.{ts,js}` barrel.** Re-export your component there if you prefer a single import path..
+
+3. **It's imported from the `velacms` package itself.** The four built-ins (`CmsText`, `CmsRichText`, `CmsImage`, `CmsRepeater`) work this way: any import resolving inside the installed `velacms` package is auto-classified.
+
+### Third-party packs (opt-in)
+
+For CMS components published in npm packages outside velacms, declare them with the plugin's `components` option:
+
+```ts
+// vite.config.ts
+import { velacms } from 'velacms/vite';
+
+velacms({
+	components: [
+		// Named exports — `import { Hero, Quote } from 'my-cms-pack'`
+		{ source: 'my-cms-pack', names: ['Hero', 'Quote'] },
+		// Single-file default export — `import Accordion from 'my-cms-pack/accordion.svelte'`
+		{ source: 'my-cms-pack/accordion.svelte', default: true }
+	]
+});
+```
+
+Listed sources are auto-registered for traversal; the plugin walks `.svelte` files inside those packages to discover any further CMS usages they contain.
+
+If you want the walker to descend into a package whose `.svelte` files **contain** CMS usages but aren't themselves CMS components (a wrapper / design-system scenario), add it to `traverse`:
+
+```ts
+velacms({
+	traverse: ['my-design-system', /^@my-org\//]
+});
+```
+
+String patterns match `source === pattern || source.startsWith(pattern + '/')`. RegExp is the escape hatch — use it sparingly; matching too broadly will pull arbitrary `node_modules` `.svelte` files into the walk.
+
+### Component contract
+
+A CMS component should:
+
+- Accept `{ name: string; fallback?: string; value?: unknown }` props (and any extras you need).
+- Call `getCmsScope()` from `velacms` to find its scope.
+- Read drafts via `cmsStore.hasDraft(scopeKey, name)` / `cmsStore.getValue(scopeKey, name)` when `cmsStore.isEditing` is true; fall back to `page.data.cms.docs[scopeKey][name]` otherwise.
+- Skip scope lookup when `value !== undefined` — that prop is the per-item override used inside `<CmsRepeater/>`.
+- Optionally provide an editable sibling that's dynamically `import()`'d when `cmsStore.isEditing` flips on, so editing code doesn't ship to public visitors.
+
+The four built-ins are reference implementations; copy `src/lib/components/cms/cms-text.svelte` + `cms-text-editable.svelte` as a starting point.
+
+## Architecture
+
+### Scopes
+
+A scope is `{ kind, routeId, ownedParams }`. There are two kinds:
+
+- **`layout:/(marketing)`** — content the marketing layout uses. Shared across every page rendered through `(marketing)`.
+- **`page:/(marketing)/rooms/[slug]`** — page-specific content. With `ownedParams: ['slug']`, the runtime composes scope keys per slug: `page:/(marketing)/rooms/[slug]?slug=suite-1`.
+
+A request through `/(marketing)/rooms/suite-1` produces three scope queries (root layout, marketing layout, page) and the adapter resolves all three. The runtime returns one merged `CmsPayload`:
+
+```ts
+{
+  locale: 'en',
+  docs: {
+    'layout:/(marketing)': { 'header.title': '…' },
+    'page:/(marketing)/rooms/[slug]?slug=suite-1': { 'hero.title': '…' }
+  },
+  scopes: { /* one entry per scopeKey, with kind/routeId/params/fields/metadata */ },
+  metadata: { title: '…', description: '…' } // page-scoped only
+}
+```
+
+Components read from this via `getContext(CMS_SCOPE)` + `page.data.cms`.
+
+### Auto-injected scope context
+
+The Vite plugin transforms every `+layout.svelte` and `+page.svelte` by inserting:
+
+```ts
+import { installCmsScope } from 'velacms';
+
+installCmsScope({
+	scopeId: 'page:/(marketing)/rooms/[slug]',
+	kind: 'page',
+	routeId: '/(marketing)/rooms/[slug]',
+	ownedParams: ['slug']
+});
+```
+
+`installCmsScope` synchronously seeds the scope from `page.params` (so SSR is correct) and keeps `scopeKey` in sync via `$effect` (so client-side navigations between sibling param values update reactively).
+
+### Edit mode
+
+`cmsStore` is a runes-backed singleton:
+
+- `isEditing: boolean`
+- `drafts: Record<scopeKey, Record<fieldName, value>>`
+- `metadataDrafts: Record<scopeKey, Record<metaKey, value>>`
+- `setValue` / `getValue` / `hasDraft`
+- `setMetadataValue` / `getMetadataValue` / `hasMetadataDraft`
+- `save()` — currently logs to the console (replace with a write-back call once you wire your adapter)
+- `clearDrafts()`
+
+Display components prefer drafts over published values when `isEditing` is true. Editable variants (`*-editable.svelte`) and the SEO panel are dynamic-import-only chunks; nothing edit-related ships in the public bundle.
+
+### Page metadata
+
+Page scopes carry an editable metadata field list (default: `title`, `description`, `canonical`, `robots`). Resolution order, per design:
+
+```
+editable page metadata (cms.metadata)
+  → static route/template defaults (+page.ts pageMetaTags)
+  → static site defaults (defineBaseMetaTags)
+```
+
+Hand `cms.metadata` directly to `definePageMetaTags(...)` from `svelte-meta-tags` and you're done.
+
+## Adapters
+
+```ts
+export interface CmsAdapter {
+	fetchDocs(
+		queries: CmsScopeQuery[],
+		context: { fetch: typeof fetch }
+	): Promise<Record<string, Record<string, unknown>>> | Record<string, Record<string, unknown>>;
+}
+```
+
+Each `CmsScopeQuery` contains the composed `scopeKey`, the `kind` (`'layout' | 'page'`), the route id, the resolved owned params, the locale, and (for page scopes) the metadata field list. Map those to backend reads however you want. The `context.fetch` argument is the SvelteKit request-scoped fetch for HTTP-backed adapters.
+
+Page-kind docs may carry a reserved `_metadata` field. `loadCms` lifts it onto `cms.metadata` (for `definePageMetaTags(...)`) and strips it from the doc before components see it. Storing metadata alongside the doc lets adapters keep a page's content and SEO under one key in the backing store.
+
+### `mockAdapter` (built-in)
+
+Useful for tests, demos, and pre-backend development:
+
+```ts
+import { mockAdapter } from 'velacms/server';
+
+const adapter = mockAdapter({
+	docs: {
+		'layout:/(marketing)': { 'header.title': 'Climb Angola' },
+		'page:/(marketing)/about': {
+			'hero.title': 'About us',
+			_metadata: { title: 'About us' }
+		}
+	}
+});
+```
+
+### Writing your own adapter
+
+A skeleton sketch:
+
+```ts
+import type { CmsAdapter, CmsScopeQuery } from 'velacms/server';
+
+export const myAdapter = (config: { project: string; client: MyClient }): CmsAdapter => ({
+	async fetchDocs(queries, { fetch }) {
+		const rows = await config.client.findMany({
+			project: config.project,
+			keys: queries.map((q) => q.scopeKey),
+			fetch
+		});
+		return Object.fromEntries(rows.map((r) => [r.scopeKey, r.contents]));
+	}
+});
+```
+
+## Plugin options
+
+```ts
+velacms({
+	routesDir: 'src/routes', // path to SvelteKit routes (default)
+	libDir: 'src/lib', // path to project lib (default)
+	components: [
+		// third-party CMS packs — see "Custom CMS components"
+		{ source: 'my-cms-pack', names: ['Hero', 'Quote'] }
+	],
+	traverse: [
+		// bare specifiers whose .svelte files should be walked
+		'my-design-system'
+	]
+});
+```
+
+The plugin also exposes `virtual:vela-cms/manifest` (typed via the package's ambient declaration). You almost never need to import it directly — `loadCms` does that internally — but it's there if you want to introspect the manifest at build time.
+
+## Constraints (v1)
+
+Static analysis is conservative on purpose:
+
+- `name=` props must be string literals or `name={'literal'}`. Computed names are not extracted.
+- Only static `import` of `.svelte` files is followed when walking the component graph. Bare specifiers (npm packages) are skipped unless they're the velacms package itself, are listed under `components`, or match a `traverse` pattern.
+- `<svelte:component this={…} />` and dynamic component selection are not traced.
+- Layout reset segments (`+page@layout.svelte`) are not yet supported.
+
+Repeater item internals can be edited via the per-key inputs the editable variant emits; nested `<CmsText name="…" value={item.x} />` overrides stay non-editable by design.
+
+## Project layout
+
+```
+plugin/src/      Vite plugin (route discovery, AST parse, manifest builder, transform)
+src/lib/         Public library
+  components/cms/      Display + editable components, scope helpers, store
+  components/admin-bar/ Admin bar wrapper + async internal + SEO panel
+  server/              loadCms, mockAdapter, types
+src/routes/      Test harness / showcase
+```
+
+## License
+
+MIT

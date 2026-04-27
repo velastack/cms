@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { CmsText } from '$lib/components/cms/index.js';
-	import Header from '$lib/components/header.svelte';
+	import Header from '../_components/header.svelte';
 
 	type Props = { children: Snippet };
 	let { children }: Props = $props();
