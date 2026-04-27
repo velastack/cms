@@ -7,4 +7,10 @@ export {
 	type PageVersion,
 	type CmsStatus
 } from './mock-adapter.js';
-export type { CmsAdapter, CmsAdapterContext, CmsAdapterDoc, CmsScopeQuery } from './types.js';
+export type {
+	CmsAdapter,
+	CmsAdapterContext,
+	CmsAdapterDoc,
+	CmsEntry,
+	CmsScopeQuery
+} from './types.js';

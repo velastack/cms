@@ -40,7 +40,18 @@
       "Bash(npm test *)",
       "Bash(curl -sL -H \"Cookie: cms_session=abc\" http://localhost:5174/about)",
       "Bash(grep -oE 'preview_key[^,}]{0,40}|\"version\":[0-9]+|\"status\":\"[a-z]+\"|hero\\\\.title.{0,80}')",
-      "Bash(grep -oE \"About VelaStack CMS[^<]{0,30}\")"
+      "Bash(grep -oE \"About VelaStack CMS[^<]{0,30}\")",
+      "Bash(curl -s -X POST http://localhost:5174/api/cms/user -c /tmp/cms-cookies.txt -i)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" -X POST http://localhost:5174/api/cms/pages -H \"content-type: application/json\" -d '{\"routeId\":\"/\\(marketing\\)/rooms/[slug]\",\"params\":{\"slug\":\"garden-loft\"},\"metadata\":{\"title\":\"Garden Loft\"}}')",
+      "Bash(curl -s -X POST http://localhost:5174/api/cms/pages -H \"content-type: application/json\" -H \"cookie: cms_session=test\" -d '{\"routeId\":\"/\\(marketing\\)/rooms/[slug]\",\"params\":{\"slug\":\"garden-loft\"},\"metadata\":{\"title\":\"Garden Loft\"}}')",
+      "Bash(tee /tmp/create.json)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" -X POST http://localhost:5174/api/cms/pages -H \"content-type: application/json\" -H \"cookie: cms_session=test\" -d '{\"routeId\":\"/\\(marketing\\)/rooms/[slug]\",\"params\":{\"slug\":\"garden-loft\"},\"metadata\":{\"title\":\"Garden Loft\"}}')",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" -X POST http://localhost:5174/api/cms/pages -H \"content-type: application/json\" -H \"cookie: cms_session=test\" -d '{\"routeId\":\"/\\(marketing\\)/rooms/[slug]\",\"params\":{\"slug\":\"suite-1\"},\"metadata\":{\"title\":\"x\"}}')",
+      "Read(//private/tmp/**)",
+      "Bash(curl -s 'http://localhost:5174/api/cms/docs?routeId=%2F%28marketing%29%2Frooms%2F%5Bslug%5D&params=%7B%22slug%22%3A%22garden-loft%22%7D&version=1&preview=__TRACKED_VAR__')",
+      "Bash(curl -s -o /dev/null -w '%{http_code}\\\\n' 'http://localhost:5174/rooms/garden-loft?version=1&preview=__TRACKED_VAR__')",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:5174/rooms/garden-loft\")",
+      "Bash(kill bta5o3jc3 *)"
     ]
   }
 }

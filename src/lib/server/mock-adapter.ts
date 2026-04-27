@@ -1,4 +1,4 @@
-import type { CmsAdapter, CmsAdapterDoc, CmsScopeQuery } from './types.js';
+import type { CmsAdapter, CmsAdapterDoc, CmsEntry, CmsScopeQuery } from './types.js';
 
 export type CmsStatus = 'draft' | 'published';
 
@@ -131,10 +131,12 @@ export const mockAdapter = (options: MockAdapterOptions = {}): CmsAdapter => {
 		fetchEntries(routeId: string) {
 			const entries = pageDocs[routeId];
 			if (!entries) return [];
-			const out: Record<string, string>[] = [];
+			const out: CmsEntry[] = [];
 			for (const e of entries) {
-				if (!e.versions.some((v) => v.status === 'published')) continue;
-				out.push({ ...e.params });
+				const published = findLatestPublished(e.versions);
+				if (!published) continue;
+				const metadata = (published.contents._metadata as Record<string, unknown>) ?? {};
+				out.push({ params: { ...e.params }, metadata });
 			}
 			return out;
 		}

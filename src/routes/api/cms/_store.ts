@@ -359,3 +359,30 @@ const paramsEqual = (a: Record<string, string>, b: Record<string, string>): bool
 	}
 	return true;
 };
+
+export type CreatePageResult =
+	| { ok: true; version: number; preview_key: string }
+	| { ok: false; reason: 'exists' };
+
+/**
+ * Create a brand-new page entry at `routeId` + `params` with a single v1 draft.
+ * Refuses (returns `{ ok: false, reason: 'exists' }`) if an entry with the
+ * exact same params is already present.
+ */
+export const createPage = (
+	routeId: string,
+	params: Record<string, string>,
+	metadata: Record<string, unknown> = {}
+): CreatePageResult => {
+	const entries = (pageDocs[routeId] ??= []);
+	if (findPageEntry(entries, params)) return { ok: false, reason: 'exists' };
+	const preview_key = generatePreviewKey();
+	const newRecord: PageVersion = {
+		version: 1,
+		status: 'draft',
+		preview_key,
+		contents: { _metadata: metadata }
+	};
+	entries.push({ params: { ...params }, versions: [newRecord] });
+	return { ok: true, version: 1, preview_key };
+};

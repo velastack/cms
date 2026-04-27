@@ -4,13 +4,17 @@
 	import { cmsStore } from '../cms/cms-store.svelte.js';
 	import type { CmsPagePointer, CmsPayload } from '../cms/scope.js';
 	import { clickOutside } from './click-outside.js';
+	import type { CmsNewPageConfig } from './new-page-config.js';
+	import NewPageDialog from './new-page-dialog.svelte';
+	import { resolveRouteUrl } from './resolve-route.js';
 
 	type Props = {
 		user: { id: string; name: string };
 		endpoint: string;
+		newPages: CmsNewPageConfig[];
 		onClose: () => void;
 	};
-	let { user, endpoint, onClose }: Props = $props();
+	let { user, endpoint, newPages, onClose }: Props = $props();
 
 	type VersionSummary = {
 		version: number;
@@ -55,10 +59,14 @@
 	let versionsLoading = $state(false);
 	let versionsLoadedFor = $state<string | null>(null);
 
+	let newMenuOpen = $state(false);
+	let newDialog = $state<CmsNewPageConfig | null>(null);
+	let newPageError = $state<string | null>(null);
+	let newPageCreating = $state(false);
+
 	const latestPublishedVersion = $derived(
 		versions.reduce<number | null>(
-			(max, v) =>
-				v.status === 'published' && (max == null || v.version > max) ? v.version : max,
+			(max, v) => (v.status === 'published' && (max == null || v.version > max) ? v.version : max),
 			null
 		)
 	);
@@ -249,11 +257,120 @@
 			await invalidateAll();
 		}
 	};
+
+	const openNewPageDialog = (config: CmsNewPageConfig) => {
+		newDialog = config;
+		newMenuOpen = false;
+		newPageError = null;
+	};
+
+	const closeNewPageDialog = () => {
+		if (newPageCreating) return;
+		newDialog = null;
+		newPageError = null;
+	};
+
+	const handleCreate = async (rawValues: Record<string, string>) => {
+		const target = newDialog;
+		if (!target) return;
+		newPageCreating = true;
+		newPageError = null;
+		try {
+			let transformed: { params: Record<string, string>; metadata?: Record<string, unknown> };
+			try {
+				transformed = target.transform(rawValues);
+			} catch {
+				newPageError = 'Could not derive params from input.';
+				return;
+			}
+			const { params: newParams, metadata = {} } = transformed;
+
+			const createRes = await fetch(`${endpoint}/pages`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ routeId: target.routeId, params: newParams, metadata })
+			});
+			if (createRes.status === 409) {
+				newPageError = 'A page with these values already exists.';
+				return;
+			}
+			if (!createRes.ok) {
+				newPageError = 'Could not create page.';
+				return;
+			}
+			const { version, preview_key } = (await createRes.json()) as {
+				version: number;
+				preview_key: string;
+			};
+
+			// Mirror the version-switch flow: fetch the created doc and apply via overlay.
+			const docQs = new URLSearchParams({
+				routeId: target.routeId,
+				params: JSON.stringify(newParams),
+				version: String(version),
+				preview: preview_key
+			});
+			const docRes = await fetch(`${endpoint}/docs?${docQs}`);
+			if (docRes.ok) {
+				const doc = (await docRes.json()) as {
+					version: number;
+					status: 'draft' | 'published';
+					contents: Record<string, unknown>;
+				};
+				const { _metadata: _omit, ...fields } = doc.contents as Record<string, unknown>;
+				const scopeId = `page:${target.routeId}`;
+				cmsStore.setOverlay({ scopeId, routeId: target.routeId, params: newParams }, fields, {
+					scopeId,
+					routeId: target.routeId,
+					params: newParams,
+					version: doc.version,
+					status: doc.status
+				});
+			}
+
+			const url = new URL(resolveRouteUrl(target.routeId, newParams), page.url.origin);
+			url.searchParams.set('version', String(version));
+			url.searchParams.set('preview', preview_key);
+			newDialog = null;
+			versionsLoadedFor = null;
+			cmsStore.isEditing = true;
+			await goto(url, { keepFocus: true, noScroll: true });
+		} finally {
+			newPageCreating = false;
+		}
+	};
 </script>
 
 <div class="cms-admin-bar">
 	<span class="cms-admin-bar__brand">CMS</span>
 	<div class="cms-admin-bar__group">
+		{#if !cmsStore.isEditing && newPages.length > 0}
+			<div class="cms-menu" use:clickOutside={() => (newMenuOpen = false)}>
+				<button
+					type="button"
+					class="cms-btn"
+					class:cms-btn--active={newMenuOpen}
+					onclick={() => (newMenuOpen = !newMenuOpen)}
+				>
+					<span aria-hidden="true">+</span> New Page
+				</button>
+				{#if newMenuOpen}
+					<ul class="cms-menu__list" role="menu">
+						{#each newPages as config (config.routeId + '|' + config.type)}
+							<li>
+								<button
+									type="button"
+									class="cms-menu__item"
+									onclick={() => openNewPageDialog(config)}
+								>
+									<span>{config.type}</span>
+								</button>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</div>
+		{/if}
 		{#if cmsStore.isEditing}
 			<button
 				type="button"
@@ -326,6 +443,16 @@
 	{#await import('./seo-panel.svelte') then { default: SeoPanel }}
 		<SeoPanel onClose={() => (seoOpen = false)} />
 	{/await}
+{/if}
+
+{#if newDialog}
+	<NewPageDialog
+		config={newDialog}
+		creating={newPageCreating}
+		error={newPageError}
+		onCreate={handleCreate}
+		onClose={closeNewPageDialog}
+	/>
 {/if}
 
 <style>
@@ -486,5 +613,70 @@
 	.cms-admin-bar__close:hover {
 		background: rgba(255, 255, 255, 0.18);
 		opacity: 1;
+	}
+	:global(.cms-dialog) {
+		padding: 0;
+		border: 0;
+		border-radius: 0.75rem;
+		max-width: 32rem;
+		width: calc(100% - 2rem);
+		color: canvastext;
+		background: canvas;
+	}
+	:global(.cms-dialog::backdrop) {
+		background: rgba(0, 0, 0, 0.4);
+	}
+	:global(.cms-dialog__body) {
+		padding: 1.25rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+	:global(.cms-dialog h2) {
+		margin: 0;
+		font-size: 1.125rem;
+	}
+	:global(.cms-dialog__fields) {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+	:global(.cms-dialog label) {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		font-size: 0.8rem;
+	}
+	:global(.cms-dialog label > span) {
+		opacity: 0.7;
+	}
+	:global(.cms-dialog input) {
+		padding: 0.4rem 0.6rem;
+		border: 1px solid rgba(0, 0, 0, 0.15);
+		border-radius: 0.375rem;
+		background: canvas;
+		color: inherit;
+		font: inherit;
+	}
+	:global(.cms-dialog__error) {
+		margin: 0;
+		padding: 0.5rem 0.6rem;
+		border-radius: 0.375rem;
+		background: rgba(220, 60, 60, 0.12);
+		color: #b32d2d;
+		font-size: 0.8rem;
+	}
+	:global(.cms-dialog footer) {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.5rem;
+	}
+	:global(.cms-btn--ghost) {
+		border: 0;
+		background: transparent;
+		color: inherit;
+	}
+	:global(.cms-btn--ghost:hover) {
+		background: rgba(0, 0, 0, 0.06);
 	}
 </style>

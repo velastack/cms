@@ -41,6 +41,22 @@ export type CmsAdapterContext = {
 };
 
 /**
+ * One publishable page-kind entry, as returned by
+ * {@link CmsAdapter.fetchEntries}. `params` is the bound owned-param map for
+ * the route (e.g. `{ slug: 'suite-1' }`) — feed this directly to SvelteKit's
+ * prerender `entries()` export. `metadata` is the entry's `_metadata` field
+ * (or `{}` if the doc has none) so listing pages can render a title or
+ * description per entry without a second fetch.
+ *
+ * Parameterized by the params shape so `generateEntries(routeId)` can return
+ * route-typed params (e.g. `{ slug: string }`) instead of a generic record.
+ */
+export type CmsEntry<Params extends Record<string, string> = Record<string, string>> = {
+	params: Params;
+	metadata: Record<string, unknown>;
+};
+
+/**
  * Backend-agnostic adapter. Implementations connect Vela CMS to a backing
  * store (PocketBase, a flat-file mock, an in-memory table, …) and decide how
  * scope queries map to documents.
@@ -64,15 +80,13 @@ export interface CmsAdapter {
 	): Promise<Record<string, CmsAdapterDoc>> | Record<string, CmsAdapterDoc>;
 
 	/**
-	 * Enumerate the bound `params` maps the adapter has page docs for at a
-	 * given `routeId` — used by `generateEntries` to feed SvelteKit's
-	 * prerender `entries()`. Implementations should return only the
-	 * combinations that are actually publishable (e.g. have a published
-	 * version). Optional: adapters that don't support enumeration omit it,
-	 * and `generateEntries` falls back to an empty list.
+	 * Enumerate the publishable entries the adapter has at a given
+	 * `routeId`. Each entry carries its bound owned `params` (for SvelteKit's
+	 * prerender `entries()`) plus the doc's `_metadata` map (for index pages
+	 * that render a list with titles). Implementations should return only
+	 * combinations that are actually publishable (e.g. have at least one
+	 * published version) and substitute `{}` for any entry whose published
+	 * doc has no `_metadata`.
 	 */
-	fetchEntries?(
-		routeId: string,
-		context: CmsAdapterContext
-	): Promise<Record<string, string>[]> | Record<string, string>[];
+	fetchEntries(routeId: string, context: CmsAdapterContext): Promise<CmsEntry[]> | CmsEntry[];
 }
