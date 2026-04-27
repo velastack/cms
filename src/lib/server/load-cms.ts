@@ -36,12 +36,6 @@ const emptyPayload = (locale: string): CmsPayload => ({
 	page: null
 });
 
-const parseVersionParam = (value: string | null): number | null => {
-	if (value == null || value === '') return null;
-	const n = Number(value);
-	return Number.isFinite(n) && Number.isInteger(n) && n > 0 ? n : null;
-};
-
 /**
  * Resolve the CMS payload for the current SvelteKit request.
  *
@@ -51,12 +45,11 @@ const parseVersionParam = (value: string | null): number | null => {
  * into a {@link CmsPayload} (keyed by `scopeId`) that the runtime CMS
  * components consume via `getContext(CMS_SCOPE)` + `page.data.cms`.
  *
- * Page-kind scopes also honor `?version=N` and `?preview=KEY` URL params:
- * the adapter resolves the requested version, validates the preview key
- * (when not the latest published), and returns the matching version's
- * `contents` along with `version`/`status` so `loadCms` can populate
- * `cms.page`. A non-resolvable version request yields a 404 — even on
- * static (param-less) page routes.
+ * When `?preview=KEY` is present in the URL, the key is forwarded to the
+ * adapter as `context.previewKey`. Adapters that support release previews
+ * (e.g. `mockAdapter`) overlay any pending edits in the matching open
+ * release on top of the published content for each requested scope. Without
+ * a preview key, only published content is returned.
  *
  * The page-kind doc may carry a reserved `_metadata` key; it's lifted onto
  * `payload.metadata` (for `definePageMetaTags(...)`) and removed from the
@@ -76,9 +69,6 @@ const parseVersionParam = (value: string | null): number | null => {
  *   return { cms };
  * };
  * ```
- *
- * The `virtual:vela-cms/manifest` module is imported here so callers never
- * touch the virtual specifier directly.
  */
 export const loadCms = async (
 	event: ServerLoadEvent,
@@ -92,16 +82,14 @@ export const loadCms = async (
 	if (!route) return { cms: emptyPayload(locale), notFound: false };
 
 	const params = event.params as Record<string, string>;
-	const requestedVersion = parseVersionParam(event.url.searchParams.get('version'));
 	const previewKey = event.url.searchParams.get('preview');
-	const versionParamPresent = event.url.searchParams.has('version');
 
 	const queries: CmsScopeQuery[] = route.scopes.map((scope) => {
 		const scopeParams: Record<string, string> = {};
 		for (const p of scope.ownedParams) {
 			if (params[p] !== undefined) scopeParams[p] = params[p];
 		}
-		const base: CmsScopeQuery = {
+		return {
 			scopeId: scope.scopeId,
 			kind: scope.kind,
 			routeId: scope.routeId,
@@ -110,14 +98,9 @@ export const loadCms = async (
 			metadata: scope.metadata,
 			locale
 		};
-		if (scope.kind === 'page') {
-			base.version = requestedVersion;
-			base.previewKey = previewKey;
-		}
-		return base;
 	});
 
-	const rawDocs = await adapter.fetchDocs(queries, { fetch: event.fetch });
+	const rawDocs = await adapter.fetchDocs(queries, { fetch: event.fetch, previewKey });
 
 	const pageQuery = queries.find((q) => q.kind === 'page');
 	let metadata: Record<string, unknown> = {};
@@ -133,29 +116,28 @@ export const loadCms = async (
 			} else {
 				docs[scopeId] = contents;
 			}
-			if (doc.version != null && doc.status) {
-				pagePointer = {
-					scopeId,
-					routeId: pageQuery.routeId,
-					params: pageQuery.params,
-					version: doc.version,
-					status: doc.status
-				};
-			}
 		} else {
 			docs[scopeId] = contents;
 		}
 	}
 
+	if (pageQuery) {
+		pagePointer = {
+			scopeId: pageQuery.scopeId,
+			routeId: pageQuery.routeId,
+			params: pageQuery.params
+		};
+	}
+
 	const scopes: Record<string, CmsScopeEntry> = {};
 	for (const q of queries) {
-		const { locale: _omit, version: _v, previewKey: _p, ...entry } = q;
+		const { locale: _omit, ...entry } = q;
 		scopes[q.scopeId] = entry;
 	}
 
 	const notFound =
 		!!pageQuery &&
-		(Object.keys(pageQuery.params).length > 0 || versionParamPresent) &&
+		Object.keys(pageQuery.params).length > 0 &&
 		!(pageQuery.scopeId in rawDocs);
 
 	return {

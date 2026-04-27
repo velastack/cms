@@ -4,40 +4,31 @@ import type { CmsScopeEntry } from '../components/cms/scope.js';
  * One scope's request, expanded from the build-time manifest with the locale
  * and any owned param values from the current SvelteKit request. Adapters
  * receive arrays of these and translate them into backend reads.
- *
- * For page-kind queries, `version` and `previewKey` carry the values of the
- * `?version` and `?preview` URL search params (when present). Adapters that
- * support versioning resolve the requested version against their store, with
- * the rule: if the requested version is the latest published, no preview key
- * is required; otherwise `previewKey` must match the stored `preview_key` for
- * that version, else the adapter omits the doc and `loadCms` 404s.
  */
 export type CmsScopeQuery = CmsScopeEntry & {
 	locale: string;
-	version?: number | null;
-	previewKey?: string | null;
 };
 
 /**
  * One resolved document from an adapter. `contents` is the raw field map
  * (page-kind docs may include a reserved `_metadata` key that `loadCms` lifts
- * onto `cms.metadata`). For page-kind scopes, adapters also return the
- * resolved `version` and `status` so `loadCms` can populate `cms.page`;
- * layout-kind scopes leave both undefined.
+ * onto `cms.metadata`).
  */
 export type CmsAdapterDoc = {
 	contents: Record<string, unknown>;
-	version?: number;
-	status?: 'draft' | 'published';
 };
 
 /**
  * Per-request context handed to adapter methods alongside their queries.
  * `fetch` is the SvelteKit request-scoped fetch, suitable for HTTP-backed
- * adapters that need cookie forwarding during SSR.
+ * adapters that need cookie forwarding during SSR. `previewKey`, when set,
+ * is the value of `?preview=…` from the request URL — adapters that support
+ * release previews use it to overlay an open release's pending edits onto
+ * published content.
  */
 export type CmsAdapterContext = {
 	fetch: typeof fetch;
+	previewKey?: string | null;
 };
 
 /**
@@ -72,7 +63,10 @@ export interface CmsAdapter {
 	 * by `query.scopeId`; missing entries are treated as "no document yet"
 	 * and components fall back to their authored `fallback`. Adapters
 	 * disambiguate page-kind documents using `routeId` + `params` from the
-	 * query, never a pre-composed scope-key string.
+	 * query, never a pre-composed scope-key string. When `context.previewKey`
+	 * is set, adapters that support release previews overlay the matching
+	 * open release's pending field edits on top of published content before
+	 * returning.
 	 */
 	fetchDocs(
 		queries: CmsScopeQuery[],
@@ -83,10 +77,7 @@ export interface CmsAdapter {
 	 * Enumerate the publishable entries the adapter has at a given
 	 * `routeId`. Each entry carries its bound owned `params` (for SvelteKit's
 	 * prerender `entries()`) plus the doc's `_metadata` map (for index pages
-	 * that render a list with titles). Implementations should return only
-	 * combinations that are actually publishable (e.g. have at least one
-	 * published version) and substitute `{}` for any entry whose published
-	 * doc has no `_metadata`.
+	 * that render a list with titles).
 	 */
 	fetchEntries(routeId: string, context: CmsAdapterContext): Promise<CmsEntry[]> | CmsEntry[];
 }

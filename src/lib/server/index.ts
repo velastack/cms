@@ -4,8 +4,8 @@ export {
 	mockAdapter,
 	type MockAdapterOptions,
 	type PageEntry,
-	type PageVersion,
-	type CmsStatus
+	type ReleaseItemSnapshot,
+	type ReleaseSnapshot
 } from './mock-adapter.js';
 export type {
 	CmsAdapter,

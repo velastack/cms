@@ -1,28 +1,46 @@
-import type { CmsAdapter, CmsAdapterDoc, CmsEntry, CmsScopeQuery } from './types.js';
-
-export type CmsStatus = 'draft' | 'published';
-
-/**
- * One stored version of a page-kind document. `versions` arrays are ordered
- * arbitrarily; resolution is by `version` and `status`, not array position.
- */
-export type PageVersion = {
-	version: number;
-	status: CmsStatus;
-	preview_key: string;
-	contents: Record<string, unknown>;
-};
+import type {
+	CmsAdapter,
+	CmsAdapterContext,
+	CmsAdapterDoc,
+	CmsEntry,
+	CmsScopeQuery
+} from './types.js';
 
 /**
- * One page-kind entry: a specific (`routeId`, `params`) pair and all its
- * stored versions. `routeId` is the SvelteKit route id (e.g.
+ * One page-kind entry: a specific (`routeId`, `params`) pair and its
+ * currently-published content. `routeId` is the SvelteKit route id (e.g.
  * `/(marketing)/rooms/[slug]`); `params` is the bound values for that route's
  * owned params (e.g. `{ slug: 'suite-1' }`). For static page routes (no owned
  * params) `params` is `{}` and there's exactly one entry per route id.
+ *
+ * Pending edits live in releases (see `_store.ts`), not on the entry — saving
+ * a draft adds an item to the editor's open release rather than mutating the
+ * published content here.
  */
 export type PageEntry = {
 	params: Record<string, string>;
-	versions: PageVersion[];
+	published: Record<string, unknown>;
+};
+
+/**
+ * One pending change in an open release, snapshot for adapter overlay. Items
+ * with `kind: 'page'` carry `params`; layout items don't (layouts have no
+ * owned params). `kind: 'page-delete'` signals a staged page removal — in
+ * preview, the adapter omits the matching page so it appears removed.
+ */
+export type ReleaseItemSnapshot =
+	| {
+			kind: 'page';
+			routeId: string;
+			params: Record<string, string>;
+			fields: Record<string, unknown>;
+	  }
+	| { kind: 'layout'; routeId: string; fields: Record<string, unknown> }
+	| { kind: 'page-delete'; routeId: string; params: Record<string, string> };
+
+export type ReleaseSnapshot = {
+	id: string;
+	items: ReleaseItemSnapshot[];
 };
 
 export type MockAdapterOptions = {
@@ -33,20 +51,15 @@ export type MockAdapterOptions = {
 	layoutDocs?: Record<string, Record<string, unknown>>;
 	/**
 	 * Page docs keyed by `routeId`, with one `PageEntry` per (`params`)
-	 * combination. `loadLatestPublished` is the default version resolution;
-	 * specific versions are addressable via the `?version`/`?preview` URL
-	 * params.
+	 * combination. Stores only the currently-published content.
 	 */
 	pageDocs?: Record<string, PageEntry[]>;
-};
-
-const findLatestPublished = (versions: PageVersion[]): PageVersion | undefined => {
-	let best: PageVersion | undefined;
-	for (const v of versions) {
-		if (v.status !== 'published') continue;
-		if (!best || v.version > best.version) best = v;
-	}
-	return best;
+	/**
+	 * Look up an open release by its preview key. Called when a request
+	 * carries `?preview=…` so adapter results overlay the matching release's
+	 * pending edits onto published content.
+	 */
+	resolvePreview?: (previewKey: string) => ReleaseSnapshot | null | undefined;
 };
 
 /** Match a `PageEntry` whose `params` map equals the requested params. */
@@ -71,72 +84,129 @@ export const findPageEntry = (
 	return undefined;
 };
 
+const paramsEqual = (a: Record<string, string>, b: Record<string, string>): boolean => {
+	const aKeys = Object.keys(a);
+	if (aKeys.length !== Object.keys(b).length) return false;
+	for (const k of aKeys) if (a[k] !== b[k]) return false;
+	return true;
+};
+
+const findReleaseItem = (
+	snapshot: ReleaseSnapshot,
+	q: CmsScopeQuery
+): ReleaseItemSnapshot | undefined => {
+	for (const item of snapshot.items) {
+		if (q.kind === 'layout') {
+			if (item.kind === 'layout' && item.routeId === q.routeId) return item;
+		} else {
+			if (item.kind === 'layout') continue;
+			if (item.routeId === q.routeId && paramsEqual(item.params, q.params)) {
+				return item;
+			}
+		}
+	}
+	return undefined;
+};
+
+const isPageDeleted = (
+	snapshot: ReleaseSnapshot,
+	routeId: string,
+	params: Record<string, string>
+): boolean => {
+	for (const item of snapshot.items) {
+		if (item.kind !== 'page-delete') continue;
+		if (item.routeId === routeId && paramsEqual(item.params, params)) return true;
+	}
+	return false;
+};
+
+/**
+ * Merge release-item field edits onto a published document. Page items may
+ * include a `_metadata` key (treated like any field — shallow-merged into the
+ * existing `_metadata` object so partial metadata edits don't drop other
+ * keys). Only field-bearing variants (page / layout) reach this helper —
+ * page-delete is handled separately by the caller.
+ */
+type ReleaseFieldItem = Exclude<ReleaseItemSnapshot, { kind: 'page-delete' }>;
+
+const applyOverlay = (
+	base: Record<string, unknown> | undefined,
+	item: ReleaseFieldItem
+): Record<string, unknown> => {
+	const out: Record<string, unknown> = base ? { ...base } : {};
+	for (const [k, v] of Object.entries(item.fields)) {
+		if (k === '_metadata' && v && typeof v === 'object' && !Array.isArray(v)) {
+			const existing = (out._metadata as Record<string, unknown>) ?? {};
+			out._metadata = { ...existing, ...(v as Record<string, unknown>) };
+		} else {
+			out[k] = v;
+		}
+	}
+	return out;
+};
+
 /**
  * In-memory {@link CmsAdapter} useful for tests, demos, and local development
  * before a real backend is wired up.
  *
- * Layout queries are looked up by `routeId`. Page queries match by `routeId`
- * + exact `params` map, then resolve a version with this rule:
- *
- *   - If `query.version` is unset, return the latest published version.
- *   - If `query.version` is the latest published version, return it (no
- *     `previewKey` required — public traffic with a `?version=` pin still
- *     works as long as it points at the live published version).
- *   - Otherwise the doc's `preview_key` must equal `query.previewKey`. On
- *     mismatch (or unknown version) the doc is omitted, which `loadCms`
- *     translates into a 404.
+ * Layout queries are looked up by `routeId`; page queries by `routeId` +
+ * exact `params` map. When `context.previewKey` is set and matches an open
+ * release (via `resolvePreview`), pending edits in that release overlay the
+ * published content for any matching scope. Without a preview key, queries
+ * always return the published content.
  */
 export const mockAdapter = (options: MockAdapterOptions = {}): CmsAdapter => {
 	const layoutDocs = options.layoutDocs ?? {};
 	const pageDocs = options.pageDocs ?? {};
-
-	const resolvePage = (q: CmsScopeQuery): PageVersion | null => {
-		const entry = findPageEntry(pageDocs[q.routeId], q.params);
-		if (!entry || entry.versions.length === 0) return null;
-
-		const latestPublished = findLatestPublished(entry.versions);
-
-		if (q.version == null) {
-			return latestPublished ?? null;
-		}
-
-		const target = entry.versions.find((v) => v.version === q.version);
-		if (!target) return null;
-		if (latestPublished && target.version === latestPublished.version) return target;
-		if (!q.previewKey || q.previewKey !== target.preview_key) return null;
-		return target;
-	};
+	const resolvePreview = options.resolvePreview;
 
 	return {
-		fetchDocs(queries: CmsScopeQuery[]) {
+		fetchDocs(queries: CmsScopeQuery[], context: CmsAdapterContext) {
+			const previewKey = context.previewKey;
+			const release = previewKey && resolvePreview ? resolvePreview(previewKey) : null;
+
 			const out: Record<string, CmsAdapterDoc> = {};
 			for (const q of queries) {
+				let base: Record<string, unknown> | undefined;
 				if (q.kind === 'page') {
-					const resolved = resolvePage(q);
-					if (resolved) {
-						out[q.scopeId] = {
-							contents: resolved.contents,
-							version: resolved.version,
-							status: resolved.status
-						};
-					}
+					const entry = findPageEntry(pageDocs[q.routeId], q.params);
+					base = entry?.published;
 				} else {
-					const doc = layoutDocs[q.routeId];
-					if (doc) out[q.scopeId] = { contents: doc };
+					base = layoutDocs[q.routeId];
+				}
+
+				if (release && q.kind === 'page' && isPageDeleted(release, q.routeId, q.params)) {
+					continue;
+				}
+
+				const overlayItem = release ? findReleaseItem(release, q) : undefined;
+				if (overlayItem && overlayItem.kind !== 'page-delete') {
+					out[q.scopeId] = { contents: applyOverlay(base, overlayItem) };
+				} else if (base) {
+					out[q.scopeId] = { contents: base };
 				}
 			}
 			return out;
 		},
 
-		fetchEntries(routeId: string) {
+		fetchEntries(routeId: string, context: CmsAdapterContext) {
 			const entries = pageDocs[routeId];
 			if (!entries) return [];
+			const previewKey = context.previewKey;
+			const release = previewKey && resolvePreview ? resolvePreview(previewKey) : null;
 			const out: CmsEntry[] = [];
 			for (const e of entries) {
-				const published = findLatestPublished(e.versions);
-				if (!published) continue;
-				const metadata = (published.contents._metadata as Record<string, unknown>) ?? {};
+				if (release && isPageDeleted(release, routeId, e.params)) continue;
+				const metadata = (e.published._metadata as Record<string, unknown>) ?? {};
 				out.push({ params: { ...e.params }, metadata });
+			}
+			if (release) {
+				for (const item of release.items) {
+					if (item.kind !== 'page' || item.routeId !== routeId) continue;
+					if (findPageEntry(entries, item.params)) continue;
+					const meta = (item.fields._metadata as Record<string, unknown>) ?? {};
+					out.push({ params: { ...item.params }, metadata: meta });
+				}
 			}
 			return out;
 		}

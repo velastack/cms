@@ -25,9 +25,6 @@
 		if (cmsStore.isEditing && ref && cmsStore.hasDraft(ref, name)) {
 			return cmsStore.getValue(ref, name);
 		}
-		if (ref && cmsStore.hasOverlay(ref, name)) {
-			return cmsStore.getOverlayValue(ref, name);
-		}
 		const cms = page.data.cms as CmsPayload | undefined;
 		return scope ? cms?.docs[scope.scopeId]?.[name] : undefined;
 	});

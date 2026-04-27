@@ -25,19 +25,13 @@ export type CmsScopeEntry = {
 };
 
 /**
- * Resolved identity of the page-kind doc for the current request: which
- * version was loaded and whether it's the latest published or a draft. Set
- * only when the page-kind scope resolved to a doc; `null` otherwise.
- *
- * Intentionally omits `preview_key` — that's an out-of-band secret carried in
- * the URL, not in the SSR payload.
+ * Resolved identity of the page-kind doc for the current request. Set only
+ * when a page-kind scope is present on the route; `null` otherwise.
  */
 export type CmsPagePointer = {
 	scopeId: string;
 	routeId: string;
 	params: Record<string, string>;
-	version: number;
-	status: 'draft' | 'published';
 };
 
 export type CmsPayload = {
