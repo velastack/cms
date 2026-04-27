@@ -1,9 +1,10 @@
 import { defineConfig } from 'vitest/config';
 import { sveltekit } from '@sveltejs/kit/vite';
+import tailwindcss from '@tailwindcss/vite';
 import { velacms } from './plugin/src/index.js';
 
 export default defineConfig({
-	plugins: [velacms(), sveltekit()],
+	plugins: [tailwindcss(), velacms(), sveltekit()],
 	test: {
 		expect: { requireAssertions: true },
 		projects: [

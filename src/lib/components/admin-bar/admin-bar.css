@@ -1,0 +1,102 @@
+/* Tailwind v4 entry for the admin bar.
+ *
+ * Isolation tactics:
+ *   - Utility prefix `vela` (e.g. `vela:flex`).
+ *   - Preflight skipped — we don't import tailwindcss/preflight.css.
+ *   - Reset and theme tokens scoped to descendants of `.vela-admin-bar`.
+ *   - Reset rules use `:where()` for zero specificity, so existing component
+ *     CSS (which is unlayered) beats them. Tailwind utilities sit in the
+ *     `utilities` cascade layer and beat both.
+ *   - All custom properties are namespaced as --vela-* to avoid collision
+ *     with host CSS variables.
+ *
+ * The package build wraps this file in `@scope (.vela-admin-bar) { ... }`
+ * for additional containment (see scripts/build-admin-bar-css.js).
+ */
+
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme) prefix(vela);
+@import 'tailwindcss/utilities.css' layer(utilities) prefix(vela);
+
+@theme inline {
+	--color-background: var(--vela-background);
+	--color-foreground: var(--vela-foreground);
+	--color-card: var(--vela-card);
+	--color-card-foreground: var(--vela-card-foreground);
+	--color-popover: var(--vela-popover);
+	--color-popover-foreground: var(--vela-popover-foreground);
+	--color-primary: var(--vela-primary);
+	--color-primary-foreground: var(--vela-primary-foreground);
+	--color-secondary: var(--vela-secondary);
+	--color-secondary-foreground: var(--vela-secondary-foreground);
+	--color-muted: var(--vela-muted);
+	--color-muted-foreground: var(--vela-muted-foreground);
+	--color-accent: var(--vela-accent);
+	--color-accent-foreground: var(--vela-accent-foreground);
+	--color-destructive: var(--vela-destructive);
+	--color-destructive-foreground: var(--vela-destructive-foreground);
+	--color-border: var(--vela-border);
+	--color-input: var(--vela-input);
+	--color-ring: var(--vela-ring);
+	--radius-sm: calc(var(--vela-radius) - 4px);
+	--radius-md: calc(var(--vela-radius) - 2px);
+	--radius-lg: var(--vela-radius);
+	--radius-xl: calc(var(--vela-radius) + 4px);
+}
+
+@layer base {
+	.vela-admin-bar {
+		--vela-background: oklch(0.145 0 0);
+		--vela-foreground: oklch(0.985 0 0);
+		--vela-card: oklch(0.205 0 0);
+		--vela-card-foreground: oklch(0.985 0 0);
+		--vela-popover: oklch(0.205 0 0);
+		--vela-popover-foreground: oklch(0.985 0 0);
+		--vela-primary: oklch(0.985 0 0);
+		--vela-primary-foreground: oklch(0.205 0 0);
+		--vela-secondary: oklch(0.269 0 0);
+		--vela-secondary-foreground: oklch(0.985 0 0);
+		--vela-muted: oklch(0.269 0 0);
+		--vela-muted-foreground: oklch(0.708 0 0);
+		--vela-accent: oklch(0.269 0 0);
+		--vela-accent-foreground: oklch(0.985 0 0);
+		--vela-destructive: oklch(0.704 0.191 22.216);
+		--vela-destructive-foreground: oklch(0.985 0 0);
+		--vela-border: oklch(1 0 0 / 10%);
+		--vela-input: oklch(1 0 0 / 15%);
+		--vela-ring: oklch(0.556 0 0);
+		--vela-radius: 0.5rem;
+	}
+
+	/* Box-sizing + border defaults are required for Tailwind utilities like
+	   vela:border to render as 1px solid lines. These rules live in @layer
+	   base, so existing unlayered component CSS automatically beats them. */
+	.vela-admin-bar,
+	.vela-admin-bar *,
+	.vela-admin-bar *::before,
+	.vela-admin-bar *::after {
+		box-sizing: border-box;
+		border-width: 0;
+		border-style: solid;
+		border-color: var(--vela-border);
+	}
+
+	/* Strip browser-default chrome from buttons that opt into Tailwind styling.
+	   Existing component classes (.cms-btn etc.) are unlayered and override
+	   this layer-base rule. */
+	.vela-admin-bar button,
+	.vela-admin-bar [type='button'],
+	.vela-admin-bar [type='submit'],
+	.vela-admin-bar [type='reset'] {
+		appearance: button;
+		-webkit-appearance: button;
+		background-color: transparent;
+		background-image: none;
+		color: inherit;
+		cursor: pointer;
+		font: inherit;
+		padding: 0;
+		margin: 0;
+	}
+}

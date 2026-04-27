@@ -2,12 +2,14 @@
 	import { goto, invalidateAll, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { cmsStore } from '../cms/cms-store.svelte.js';
+	import './admin-bar.css';
 	import HistoryPanel from './history-panel.svelte';
 	import type { CmsNewPageConfig } from './new-page-config.js';
 	import NewPageDialog from './new-page-dialog.svelte';
 	import PagesPanel from './pages-panel.svelte';
 	import PublishDialog from './publish-dialog.svelte';
 	import { resolveRouteUrl } from './resolve-route.js';
+	import { Button } from './ui/button/index.js';
 	import WorkingCopyPanel from './working-copy-panel.svelte';
 
 	type Props = {
@@ -194,6 +196,7 @@
 	};
 </script>
 
+<div class="vela-admin-bar">
 <div class="cms-admin-bar">
 	<span class="cms-admin-bar__brand">CMS</span>
 	<div class="cms-admin-bar__group">
@@ -246,7 +249,15 @@
 		{/if}
 	</div>
 	<span class="cms-admin-bar__avatar" title={user.name}>{initials}</span>
-	<button type="button" class="cms-admin-bar__close" aria-label="Close" onclick={onClose}>×</button>
+	<Button
+		variant="ghost"
+		size="icon"
+		aria-label="Close"
+		onclick={onClose}
+		class="vela:h-6 vela:w-6 vela:rounded-full vela:opacity-70 vela:hover:opacity-100"
+	>
+		×
+	</Button>
 </div>
 
 {#if seoOpen}
@@ -303,6 +314,7 @@
 		onClose={closeNewPageDialog}
 	/>
 {/if}
+</div>
 
 <style>
 	.cms-admin-bar {
@@ -379,27 +391,6 @@
 		font-size: 0.7rem;
 		font-weight: 600;
 		letter-spacing: 0.02em;
-	}
-	.cms-admin-bar__close {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.5rem;
-		height: 1.5rem;
-		border-radius: 9999px;
-		border: none;
-		background: rgba(255, 255, 255, 0.08);
-		color: inherit;
-		cursor: pointer;
-		font: inherit;
-		font-size: 1rem;
-		line-height: 1;
-		padding: 0;
-		opacity: 0.7;
-	}
-	.cms-admin-bar__close:hover {
-		background: rgba(255, 255, 255, 0.18);
-		opacity: 1;
 	}
 	:global(.cms-dialog) {
 		padding: 0;
