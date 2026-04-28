@@ -13,10 +13,14 @@
  * is published atomically by the separate `/release/publish` action — saving
  * is cheap and reversible, publishing is the deliberate "go live" step.
  *
- * Once edits are saved into the open release, they show up in subsequent
- * SSR loads via the `?preview=<release-preview-key>` URL parameter, so
- * there's no client-side overlay machinery here.
+ * `overlay` and `metadataOverlay` hold merged published+release content
+ * fetched client-side from `${endpoint}/docs`. Display components prefer
+ * overlay over `page.data.cms.docs`. This is how the authed editor sees
+ * working-copy state on static-export sites where SvelteKit's server load
+ * cannot be re-run; the SSR `?preview=KEY` path remains as a fallback for
+ * shared preview links rendered on hosts that do have a Node backend.
  */
+import type { CmsScopeEntry } from './scope.js';
 
 export type CmsScopeRef = {
 	scopeId: string;
@@ -42,9 +46,15 @@ export type ReleaseItem =
 			routeId: string;
 			params: Record<string, string>;
 			fields: Record<string, unknown>;
+			addedAt: string;
 	  }
-	| { kind: 'layout'; routeId: string; fields: Record<string, unknown> }
-	| { kind: 'page-delete'; routeId: string; params: Record<string, string> };
+	| { kind: 'layout'; routeId: string; fields: Record<string, unknown>; addedAt: string }
+	| {
+			kind: 'page-delete';
+			routeId: string;
+			params: Record<string, string>;
+			addedAt: string;
+	  };
 
 export type OpenRelease = {
 	userId: string;
@@ -62,9 +72,99 @@ class CmsStore {
 	drafts = $state<Record<string, DraftBucket>>({});
 	metadataDrafts = $state<Record<string, DraftBucket>>({});
 	openRelease = $state<OpenRelease | null>(null);
+	overlay = $state<Record<string, Record<string, unknown>>>({});
+	metadataOverlay = $state<Record<string, Record<string, unknown>>>({});
+	private overlayFetchToken = 0;
 
 	toggleEdit(): void {
 		this.isEditing = !this.isEditing;
+	}
+
+	hasOverlay(scope: CmsScopeRef, name: string): boolean {
+		const bucket = this.overlay[composeKey(scope)];
+		return bucket !== undefined && name in bucket;
+	}
+
+	getOverlayValue(scope: CmsScopeRef, name: string): unknown {
+		return this.overlay[composeKey(scope)]?.[name];
+	}
+
+	hasMetadataOverlay(scope: CmsScopeRef, name: string): boolean {
+		const bucket = this.metadataOverlay[composeKey(scope)];
+		return bucket !== undefined && name in bucket;
+	}
+
+	getMetadataOverlayValue(scope: CmsScopeRef, name: string): unknown {
+		return this.metadataOverlay[composeKey(scope)]?.[name];
+	}
+
+	clearOverlay(): void {
+		this.overlay = {};
+		this.metadataOverlay = {};
+	}
+
+	/**
+	 * Fetch merged published+release content for each scope on the current
+	 * route via `${endpoint}/docs` and apply as a client-side overlay.
+	 *
+	 * `previewKey` selects the user's open release on the server; pass `null`
+	 * to fetch published-only content (used post-publish to mask the now-stale
+	 * `page.data.cms.docs` on static-export sites).
+	 *
+	 * `opts.reset` replaces the overlay maps wholesale (mount with release,
+	 * post-publish, post-discard). Otherwise we merge — keeps unchanged-layout
+	 * overlays applied during navigation while new-page scopes load.
+	 */
+	async loadAndApplyOverlay(
+		endpoint: string,
+		scopes: CmsScopeEntry[],
+		previewKey: string | null,
+		opts: { reset?: boolean } = {}
+	): Promise<void> {
+		const token = ++this.overlayFetchToken;
+
+		const fetchOne = async (scope: CmsScopeEntry) => {
+			const qs = new URLSearchParams({
+				kind: scope.kind,
+				routeId: scope.routeId,
+				params: JSON.stringify(scope.params)
+			});
+			if (previewKey) qs.set('preview', previewKey);
+			const res = await fetch(`${endpoint}/docs?${qs}`);
+			if (!res.ok) return null;
+			const data = (await res.json()) as { contents: Record<string, unknown> };
+			return { scope, contents: data.contents };
+		};
+
+		const results = await Promise.all(scopes.map(fetchOne));
+		if (token !== this.overlayFetchToken) return;
+
+		const nextOverlay: Record<string, Record<string, unknown>> = {};
+		const nextMeta: Record<string, Record<string, unknown>> = {};
+		for (const r of results) {
+			if (!r) continue;
+			const key = composeKey({
+				scopeId: r.scope.scopeId,
+				routeId: r.scope.routeId,
+				params: r.scope.params
+			});
+			const { _metadata, ...fields } = r.contents as { _metadata?: unknown } & Record<
+				string,
+				unknown
+			>;
+			nextOverlay[key] = fields;
+			if (r.scope.kind === 'page' && _metadata && typeof _metadata === 'object') {
+				nextMeta[key] = _metadata as Record<string, unknown>;
+			}
+		}
+
+		if (opts.reset) {
+			this.overlay = nextOverlay;
+			this.metadataOverlay = nextMeta;
+		} else {
+			this.overlay = { ...this.overlay, ...nextOverlay };
+			this.metadataOverlay = { ...this.metadataOverlay, ...nextMeta };
+		}
 	}
 
 	setValue(scope: CmsScopeRef, name: string, value: unknown): void {
@@ -143,10 +243,12 @@ class CmsStore {
 	 * the matching scope's item under a `_metadata` key.
 	 */
 	async save(endpoint: string): Promise<{ ok: boolean; release?: OpenRelease }> {
-		type EditableItem = Exclude<ReleaseItem, { kind: 'page-delete' }>;
-		const itemsByKey = new Map<string, EditableItem>();
+		type SaveInput =
+			| { kind: 'page'; routeId: string; params: Record<string, string>; fields: Record<string, unknown> }
+			| { kind: 'layout'; routeId: string; fields: Record<string, unknown> };
+		const itemsByKey = new Map<string, SaveInput>();
 
-		const itemFor = (scope: CmsScopeRef): EditableItem => {
+		const itemFor = (scope: CmsScopeRef): SaveInput => {
 			const key = composeKey(scope);
 			let item = itemsByKey.get(key);
 			if (!item) {

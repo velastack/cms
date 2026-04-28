@@ -1,9 +1,16 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import SearchIcon from '@lucide/svelte/icons/search';
 	import { cmsStore } from '../cms/cms-store.svelte.js';
 	import type { CmsNewPageConfig } from './new-page-config.js';
+	import PanelFooter from './panel-footer.svelte';
+	import PanelHeader from './panel-header.svelte';
+	import Panel from './panel.svelte';
 	import { resolveRouteOnlyParams, resolveRouteUrl } from './resolve-route.js';
+	import { Badge } from './ui/badge/index.js';
+	import { Button } from './ui/button/index.js';
+	import { Input } from './ui/input/index.js';
 
 	type PageEntry = {
 		params: Record<string, string>;
@@ -30,18 +37,14 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let mutating = $state<string | null>(null);
+	let query = $state('');
+	let searchEl = $state<HTMLInputElement | null>(null);
 
 	const creatableByRouteId = $derived(new Map(newPages.map((c) => [c.routeId, c] as const)));
 
 	const rowKey = (routeId: string, params: Record<string, string>): string =>
 		`${routeId}?${JSON.stringify(params)}`;
 
-	// True when the row's (routeId, params) matches the page the user is
-	// currently viewing. Mutating that page (delete or undo) skips the
-	// post-mutation SSR refresh — invalidating would re-render with the
-	// preview overlay and 404 on a staged delete, which is jarring. The admin
-	// bar state still updates via `cmsStore.fetchOpenRelease`; the user sees
-	// fresh data when they navigate away.
 	const isCurrentPage = (routeId: string, params: Record<string, string>): boolean => {
 		const current = page.data.cms?.page;
 		if (!current || current.routeId !== routeId) return false;
@@ -73,12 +76,121 @@
 		void fetchList();
 	});
 
-	const onNavigate = async (routeId: string, params: Record<string, string>) => {
+	// Escape is handled by Panel; here we only own the `/` to-focus-search shortcut.
+	$effect(() => {
+		const onKeydown = (e: KeyboardEvent) => {
+			if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+			const t = e.target as HTMLElement | null;
+			if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+			e.preventDefault();
+			searchEl?.focus();
+			searchEl?.select();
+		};
+		window.addEventListener('keydown', onKeydown);
+		return () => window.removeEventListener('keydown', onKeydown);
+	});
+
+	const editedKeys = $derived.by(() => {
+		const set = new Set<string>();
+		for (const item of cmsStore.openRelease?.items ?? []) {
+			if (item.kind === 'layout') continue;
+			set.add(rowKey(item.routeId, item.params));
+		}
+		return set;
+	});
+	const hasDraft = (routeId: string, entry: PageEntry): boolean =>
+		entry.isDraft || entry.isDeletePending || editedKeys.has(rowKey(routeId, entry.params));
+
+	const totalPages = $derived(routes.reduce((n, r) => n + r.entries.length, 0));
+	const draftPages = $derived(
+		routes.reduce(
+			(n, r) => n + r.entries.filter((e) => hasDraft(r.routeId, e)).length,
+			0
+		)
+	);
+
+	const matchesQuery = (routeId: string, params: Record<string, string>): boolean => {
+		const q = query.trim().toLowerCase();
+		if (!q) return true;
+		const url = resolveRouteUrl(routeId, params).toLowerCase();
+		const stripped = resolveRouteOnlyParams(routeId).toLowerCase();
+		return url.includes(q) || stripped.includes(q);
+	};
+
+	type StaticRow = { routeId: string; entry: PageEntry; url: string };
+	const staticRows = $derived.by<StaticRow[]>(() => {
+		const out: StaticRow[] = [];
+		for (const r of routes) {
+			if (creatableByRouteId.has(r.routeId)) continue;
+			for (const e of r.entries) {
+				if (!matchesQuery(r.routeId, e.params)) continue;
+				out.push({ routeId: r.routeId, entry: e, url: resolveRouteUrl(r.routeId, e.params) });
+			}
+		}
+		return out.sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
+	});
+
+	type TemplateGroup = {
+		routeId: string;
+		creator: CmsNewPageConfig;
+		entries: Array<{ entry: PageEntry; url: string }>;
+	};
+	const templateGroups = $derived.by<TemplateGroup[]>(() => {
+		const isFiltering = query.trim() !== '';
+		const out: TemplateGroup[] = [];
+		for (const r of routes) {
+			const creator = creatableByRouteId.get(r.routeId);
+			if (!creator) continue;
+			const entries = r.entries
+				.filter((e) => matchesQuery(r.routeId, e.params))
+				.map((entry) => ({ entry, url: resolveRouteUrl(r.routeId, entry.params) }));
+			// While filtering, hide template cards whose entries all got filtered
+			// out — keeps the search results focused. With no filter, empty cards
+			// stay so the user can still hit "+ New".
+			if (isFiltering && entries.length === 0) continue;
+			out.push({ routeId: r.routeId, creator, entries });
+		}
+		return out;
+	});
+
+	const navigateTo = async (routeId: string, params: Record<string, string>) => {
 		const url = new URL(resolveRouteUrl(routeId, params), page.url.origin);
 		const key = cmsStore.openRelease?.preview_key;
 		if (key) url.searchParams.set('preview', key);
 		onClose();
 		await goto(url, { keepFocus: true, noScroll: true });
+	};
+
+	const onView = async (routeId: string, params: Record<string, string>) => {
+		await navigateTo(routeId, params);
+	};
+
+	const onEdit = async (routeId: string, params: Record<string, string>) => {
+		await navigateTo(routeId, params);
+		cmsStore.isEditing = true;
+	};
+
+	const onDiscard = async (routeId: string, params: Record<string, string>) => {
+		const url = resolveRouteUrl(routeId, params);
+		if (!confirm(`Discard pending edits on ${url}?`)) return;
+		const key = rowKey(routeId, params);
+		mutating = key;
+		try {
+			const res = await fetch(`${endpoint}/release/items`, {
+				method: 'DELETE',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ kind: 'page', routeId, params })
+			});
+			if (!res.ok) {
+				error = 'Could not discard.';
+				return;
+			}
+			await cmsStore.fetchOpenRelease(endpoint);
+			await fetchList();
+			await onChanged();
+		} finally {
+			mutating = null;
+		}
 	};
 
 	const onDelete = async (routeId: string, params: Record<string, string>, isDraft: boolean) => {
@@ -131,275 +243,224 @@
 	};
 </script>
 
-<div class="cms-panel" role="dialog" aria-label="Pages">
-	<header class="cms-panel__header">
-		<h2>Pages</h2>
-		<button type="button" class="cms-panel__close" aria-label="Close" onclick={onClose}>×</button>
-	</header>
+<Panel ariaLabel="All pages" {onClose}>
+	<PanelHeader title="All pages" {onClose} class="vela:pb-2">
+		{#snippet subtitle()}
+			<span class="vela:text-[12px] vela:text-bar-text-secondary vela:truncate">
+				{totalPages}
+				{totalPages === 1 ? 'page' : 'pages'}{draftPages > 0 ? ` · ${draftPages} with draft` : ''}
+			</span>
+		{/snippet}
+	</PanelHeader>
 
-	{#if loading && routes.length === 0}
-		<p class="cms-panel__empty">Loading…</p>
-	{:else if error}
-		<p class="cms-panel__empty">{error}</p>
-	{:else if routes.length === 0}
-		<p class="cms-panel__empty">No CMS pages.</p>
-	{:else}
-		<ul class="cms-panel__groups">
-			{#each routes as route (route.routeId)}
-				{@const creator = creatableByRouteId.get(route.routeId)}
-				<li class="cms-panel__group">
-					{#if creator}
-						<div class="cms-panel__group-header">
-							<div class="cms-panel__group-title">
-								<span class="cms-panel__group-routeid">{resolveRouteOnlyParams(route.routeId)}</span
-								>
-								<span class="cms-panel__group-count">
-									({route.entries.length}
-									{route.entries.length === 1 ? 'page' : 'pages'})
-								</span>
-							</div>
-							<button
-								type="button"
-								class="cms-panel__group-new"
-								onclick={() => onRequestNew(creator)}
+	<div class="vela:px-4 vela:pb-3">
+		<div class="vela:relative">
+			<SearchIcon
+				class="vela:absolute vela:left-2.5 vela:top-1/2 vela:-translate-y-1/2 vela:size-4 vela:text-bar-text-tertiary vela:pointer-events-none"
+			/>
+			<Input
+				bind:ref={searchEl}
+				bind:value={query}
+				placeholder="Filter pages…"
+				aria-label="Filter pages"
+				class="vela:pl-8 vela:pr-9"
+			/>
+			<kbd
+				class="vela:absolute vela:right-2 vela:top-1/2 vela:-translate-y-1/2
+					vela:inline-flex vela:items-center vela:justify-center vela:min-w-5 vela:h-5 vela:px-1
+					vela:rounded vela:border vela:border-[var(--cms-bar-divider)]
+					vela:text-[11px] vela:font-mono vela:text-bar-text-tertiary"
+			>
+				/
+			</kbd>
+		</div>
+	</div>
+
+	<div class="vela:overflow-y-auto vela:px-4 vela:pb-3 vela:flex vela:flex-col vela:gap-3">
+		{#if loading && routes.length === 0}
+			<p class="vela:text-[13px] vela:text-bar-text-tertiary vela:py-2">Loading…</p>
+		{:else if error}
+			<p class="vela:text-[13px] vela:text-bar-text-tertiary vela:py-2">{error}</p>
+		{:else if routes.length === 0}
+			<p class="vela:text-[13px] vela:text-bar-text-tertiary vela:py-2">No CMS pages.</p>
+		{:else}
+			{#if staticRows.length > 0}
+				<ul class="vela:list-none vela:pl-0 vela:m-0 vela:flex vela:flex-col">
+					{#each staticRows as { routeId, entry, url } (rowKey(routeId, entry.params))}
+						{@const k = rowKey(routeId, entry.params)}
+						<li
+							class="vela:group vela:flex vela:items-center vela:gap-2 vela:px-1.5 vela:py-1.5 vela:rounded-md vela:hover:bg-[var(--cms-bar-bg-hover)]"
+						>
+							<span class="vela:flex vela:items-center vela:justify-center vela:w-3 vela:h-3">
+								{#if hasDraft(routeId, entry)}
+									<span
+										class="vela:w-1.5 vela:h-1.5 vela:rounded-full vela:bg-[var(--cms-status-warn-dot)]"
+									></span>
+								{/if}
+							</span>
+							<span
+								class="vela:font-mono vela:text-[12px] vela:text-bar-text vela:truncate vela:flex-1"
 							>
-								+ New
-							</button>
-						</div>
-					{/if}
-
-					{#if route.entries.length > 0}
-						<ul class="cms-panel__items">
-							{#each route.entries as entry (rowKey(route.routeId, entry.params))}
-								{@const url = resolveRouteUrl(route.routeId, entry.params)}
-								{@const key = rowKey(route.routeId, entry.params)}
-								<li class="cms-panel__item">
-									<button
-										type="button"
-										class="cms-panel__row-link"
-										onclick={() => onNavigate(route.routeId, entry.params)}
+								{url}
+							</span>
+							{#if entry.isDeletePending}
+								<Badge variant="warn" size="sm">delete pending</Badge>
+								<Button
+									variant="outline"
+									size="xs"
+									disabled={mutating === k}
+									onclick={() => onUndoDelete(routeId, entry.params)}
+									class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
+								>
+									{mutating === k ? '…' : 'Undo'}
+								</Button>
+							{:else}
+								{#if hasDraft(routeId, entry)}
+									<Button
+										variant="outline"
+										size="xs"
+										disabled={mutating === k}
+										onclick={() => onDiscard(routeId, entry.params)}
+										class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
 									>
-										<span class="cms-panel__item-label">{url}</span>
-										{#if entry.isDraft}
-											<span class="cms-panel__tag cms-panel__tag--draft">draft</span>
-										{:else if entry.isDeletePending}
-											<span class="cms-panel__tag cms-panel__tag--delete">delete pending</span>
+										{mutating === k ? '…' : 'Discard'}
+									</Button>
+								{/if}
+								<Button
+									variant="outline"
+									size="xs"
+									onclick={() => onView(routeId, entry.params)}
+									class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
+								>
+									View
+								</Button>
+								<Button
+									variant="outline"
+									size="xs"
+									onclick={() => onEdit(routeId, entry.params)}
+									class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
+								>
+									Edit
+								</Button>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+			{/if}
+
+			{#each templateGroups as group (group.routeId)}
+				<section
+					class="vela:rounded-lg vela:bg-[#181818] vela:border vela:border-[var(--cms-bar-divider)] vela:overflow-hidden"
+				>
+					<div
+						class="vela:flex vela:items-center vela:justify-between vela:gap-2 vela:px-3 vela:py-2"
+					>
+						<div class="vela:flex vela:items-baseline vela:gap-2 vela:min-w-0">
+							<span class="vela:text-[11px] vela:text-bar-text-tertiary">Template</span>
+							<span
+								class="vela:font-mono vela:text-[12px] vela:px-1.5 vela:py-0.5 vela:rounded
+									vela:bg-[#2a2740] vela:text-[#AFA9EC] vela:truncate"
+							>
+								{resolveRouteOnlyParams(group.routeId)}
+							</span>
+						</div>
+						<Button
+							variant="outline"
+							size="pill"
+							class="vela:shrink-0"
+							onclick={() => onRequestNew(group.creator)}
+						>
+							+ New {group.creator.type}
+						</Button>
+					</div>
+					{#if group.entries.length > 0}
+						<ul
+							class="vela:list-none vela:pl-0 vela:m-0 vela:flex vela:flex-col vela:px-1.5 vela:pb-1.5"
+						>
+							{#each group.entries as { entry, url } (rowKey(group.routeId, entry.params))}
+								{@const k = rowKey(group.routeId, entry.params)}
+								<li
+									class="vela:group vela:flex vela:items-center vela:gap-2 vela:px-1.5 vela:py-1.5 vela:rounded-md vela:hover:bg-[var(--cms-bar-bg-hover)]"
+								>
+									<span
+										class="vela:flex vela:items-center vela:justify-center vela:w-3 vela:h-3"
+									>
+										{#if hasDraft(group.routeId, entry)}
+											<span
+												class="vela:w-1.5 vela:h-1.5 vela:rounded-full vela:bg-[var(--cms-status-warn-dot)]"
+											></span>
 										{/if}
-									</button>
-									{#if creator}
-										{#if entry.isDeletePending}
-											<button
-												type="button"
-												class="cms-panel__discard"
-												disabled={mutating === key}
-												onclick={() => onUndoDelete(route.routeId, entry.params)}
+									</span>
+									<span
+										class="vela:font-mono vela:text-[12px] vela:text-bar-text vela:truncate vela:flex-1"
+									>
+										{url}
+									</span>
+									{#if entry.isDeletePending}
+										<Badge variant="warn" size="sm">delete pending</Badge>
+										<Button
+											variant="outline"
+											size="xs"
+											disabled={mutating === k}
+											onclick={() => onUndoDelete(group.routeId, entry.params)}
+											class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
+										>
+											{mutating === k ? '…' : 'Undo'}
+										</Button>
+									{:else}
+										{#if hasDraft(group.routeId, entry)}
+											<Button
+												variant="outline"
+												size="xs"
+												disabled={mutating === k}
+												onclick={() => onDiscard(group.routeId, entry.params)}
+												class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
 											>
-												{mutating === key ? '…' : 'Undo'}
-											</button>
-										{:else}
-											<button
-												type="button"
-												class="cms-panel__discard"
-												disabled={mutating === key}
-												onclick={() => onDelete(route.routeId, entry.params, entry.isDraft)}
-											>
-												{mutating === key ? '…' : 'Delete'}
-											</button>
+												{mutating === k ? '…' : 'Discard'}
+											</Button>
 										{/if}
+										<Button
+											variant="outline"
+											size="xs"
+											onclick={() => onView(group.routeId, entry.params)}
+											class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
+										>
+											View
+										</Button>
+										<Button
+											variant="outline"
+											size="xs"
+											onclick={() => onEdit(group.routeId, entry.params)}
+											class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
+										>
+											Edit
+										</Button>
+										<Button
+											variant="outline-destructive"
+											size="xs"
+											disabled={mutating === k}
+											onclick={() => onDelete(group.routeId, entry.params, entry.isDraft)}
+											class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
+										>
+											{mutating === k ? '…' : 'Delete'}
+										</Button>
 									{/if}
 								</li>
 							{/each}
 						</ul>
 					{/if}
-				</li>
+				</section>
 			{/each}
-		</ul>
-	{/if}
-</div>
 
-<style>
-	.cms-panel {
-		position: fixed;
-		top: 4rem;
-		left: 50%;
-		transform: translateX(-50%);
-		width: min(100%, 36rem);
-		padding: 1rem;
-		border-radius: 0.75rem;
-		background: rgba(20, 20, 20, 0.94);
-		color: #fafafa;
-		backdrop-filter: blur(8px);
-		box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
-		z-index: 9998;
-		font-family:
-			ui-sans-serif,
-			system-ui,
-			-apple-system,
-			Segoe UI,
-			Roboto,
-			sans-serif;
-		font-size: 0.85rem;
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		max-height: calc(100vh - 6rem);
-	}
-	.cms-panel__header {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-	}
-	.cms-panel__header h2 {
-		margin: 0;
-		font-size: 1rem;
-		font-weight: 600;
-	}
-	.cms-panel__close {
-		width: 1.75rem;
-		height: 1.75rem;
-		border: 0;
-		border-radius: 9999px;
-		background: rgba(255, 255, 255, 0.06);
-		color: inherit;
-		cursor: pointer;
-		font-size: 1.1rem;
-		line-height: 1;
-	}
-	.cms-panel__close:hover {
-		background: rgba(255, 255, 255, 0.14);
-	}
-	.cms-panel__empty {
-		margin: 0;
-		opacity: 0.7;
-	}
-	.cms-panel__groups {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		overflow-y: auto;
-	}
-	.cms-panel__group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.4rem;
-	}
-	.cms-panel__group-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.5rem;
-		padding-bottom: 0.25rem;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-	}
-	.cms-panel__group-title {
-		display: flex;
-		align-items: baseline;
-		gap: 0.4rem;
-		min-width: 0;
-		flex: 1;
-	}
-	.cms-panel__group-routeid {
-		font-family: ui-monospace, monospace;
-		font-size: 0.78rem;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.cms-panel__group-count {
-		font-size: 0.7rem;
-		opacity: 0.6;
-	}
-	.cms-panel__group-new {
-		flex-shrink: 0;
-		padding: 0.2rem 0.5rem;
-		border: 1px solid rgba(255, 255, 255, 0.18);
-		border-radius: 9999px;
-		background: rgba(255, 255, 255, 0.06);
-		color: inherit;
-		cursor: pointer;
-		font: inherit;
-		font-size: 0.72rem;
-	}
-	.cms-panel__group-new:hover {
-		background: rgba(255, 255, 255, 0.14);
-	}
-	.cms-panel__items {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-	.cms-panel__item {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.4rem 0.625rem;
-		border-radius: 0.375rem;
-		background: rgba(255, 255, 255, 0.04);
-	}
-	.cms-panel__row-link {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		flex: 1;
-		min-width: 0;
-		padding: 0;
-		border: 0;
-		background: transparent;
-		color: inherit;
-		cursor: pointer;
-		font: inherit;
-		text-align: left;
-	}
-	.cms-panel__row-link:hover .cms-panel__item-label {
-		text-decoration: underline;
-	}
-	.cms-panel__item-label {
-		font-family: ui-monospace, monospace;
-		font-size: 0.78rem;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		flex: 1;
-		min-width: 0;
-	}
-	.cms-panel__tag {
-		flex-shrink: 0;
-		padding: 0.05rem 0.45rem;
-		border-radius: 9999px;
-		font-size: 0.65rem;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-	}
-	.cms-panel__tag--draft {
-		background: rgba(120, 180, 255, 0.18);
-		color: #a8c8ff;
-	}
-	.cms-panel__tag--delete {
-		background: rgba(220, 60, 60, 0.18);
-		color: #ffb3b3;
-	}
-	.cms-panel__discard {
-		flex-shrink: 0;
-		padding: 0.2rem 0.55rem;
-		border: 1px solid rgba(255, 255, 255, 0.18);
-		border-radius: 9999px;
-		background: transparent;
-		color: inherit;
-		cursor: pointer;
-		font: inherit;
-		font-size: 0.72rem;
-	}
-	.cms-panel__discard:hover {
-		background: rgba(255, 255, 255, 0.12);
-	}
-	.cms-panel__discard:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
-</style>
+			{#if query.trim() && staticRows.length === 0 && templateGroups.length === 0}
+				<p class="vela:text-[13px] vela:text-bar-text-tertiary vela:py-2 vela:px-1.5">
+					No pages match "{query}".
+				</p>
+			{/if}
+		{/if}
+	</div>
+
+	<PanelFooter>
+		<span>Click a page to open it · ⌘N to create</span>
+	</PanelFooter>
+</Panel>

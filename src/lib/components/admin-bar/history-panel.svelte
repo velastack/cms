@@ -1,14 +1,23 @@
 <script lang="ts">
+	import PanelFooter from './panel-footer.svelte';
+	import PanelHeader from './panel-header.svelte';
+	import Panel from './panel.svelte';
+	import { resolveRouteOnlyParams, resolveRouteUrl } from './resolve-route.js';
+	import { Badge } from './ui/badge/index.js';
+	import { Button } from './ui/button/index.js';
+
+	type ReleaseItem =
+		| { kind: 'page'; routeId: string; params: Record<string, string>; fields: Record<string, unknown> }
+		| { kind: 'page-delete'; routeId: string; params: Record<string, string> }
+		| { kind: 'layout'; routeId: string; fields: Record<string, unknown> };
+
 	type PublishedRelease = {
 		id: string;
 		name?: string;
 		publishedBy: string;
 		publishedAt: string;
 		revertedAt?: string;
-		items: Array<
-			| { kind: 'page'; routeId: string; params: Record<string, string>; fields: Record<string, unknown> }
-			| { kind: 'layout'; routeId: string; fields: Record<string, unknown> }
-		>;
+		items: ReleaseItem[];
 	};
 
 	type Props = {
@@ -40,7 +49,9 @@
 
 	const onRevert = async (release: PublishedRelease) => {
 		const label = release.name ?? release.id.slice(0, 8);
-		if (!confirm(`Revert release "${label}"? This will create a new release that undoes its changes.`))
+		if (
+			!confirm(`Revert release "${label}"? This will create a new release that undoes its changes.`)
+		)
 			return;
 		reverting = release.id;
 		try {
@@ -57,176 +68,182 @@
 
 	const formatDate = (iso: string): string => {
 		try {
-			return new Date(iso).toLocaleString();
+			const d = new Date(iso);
+			const now = new Date();
+			const sameDay =
+				d.getFullYear() === now.getFullYear() &&
+				d.getMonth() === now.getMonth() &&
+				d.getDate() === now.getDate();
+			const yesterday = new Date(now);
+			yesterday.setDate(yesterday.getDate() - 1);
+			const isYesterday =
+				d.getFullYear() === yesterday.getFullYear() &&
+				d.getMonth() === yesterday.getMonth() &&
+				d.getDate() === yesterday.getDate();
+			const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+			if (sameDay) return `Today, ${time}`;
+			if (isYesterday) return `Yesterday`;
+			return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 		} catch {
 			return iso;
 		}
 	};
 
-	const itemSummary = (release: PublishedRelease): string => {
-		let pages = 0;
-		let layouts = 0;
-		for (const i of release.items) {
-			if (i.kind === 'page') pages += 1;
-			else layouts += 1;
-		}
-		const parts: string[] = [];
-		if (pages > 0) parts.push(`${pages} page${pages === 1 ? '' : 's'}`);
-		if (layouts > 0) parts.push(`${layouts} layout${layouts === 1 ? '' : 's'}`);
-		return parts.join(' · ') || '0 items';
+	const isCommitHash = (s: string): boolean => /^[a-f0-9]{6,40}$/i.test(s);
+
+	type DisplayRelease = {
+		release: PublishedRelease;
+		title: string;
+		titleIsHash: boolean;
+		isLive: boolean;
+		paths: string[];
+		extraPaths: number;
+	};
+
+	const displayList = $derived.by<DisplayRelease[]>(() =>
+		history.map((release, idx) => {
+			const title = release.name ?? release.id.slice(0, 8);
+			const titleIsHash = !release.name && isCommitHash(title);
+			const isLive = idx === 0 && !release.revertedAt;
+
+			const seen = new Set<string>();
+			const allPaths: string[] = [];
+			for (const item of release.items) {
+				let path: string;
+				if (item.kind === 'layout') {
+					path = resolveRouteOnlyParams(item.routeId);
+				} else {
+					try {
+						path = resolveRouteUrl(item.routeId, item.params);
+					} catch {
+						path = resolveRouteOnlyParams(item.routeId);
+					}
+				}
+				if (!seen.has(path)) {
+					seen.add(path);
+					allPaths.push(path);
+				}
+			}
+			const cap = 3;
+			const paths = allPaths.slice(0, cap);
+			const extraPaths = Math.max(0, allPaths.length - cap);
+			return { release, title, titleIsHash, isLive, paths, extraPaths };
+		})
+	);
+
+	const onView = (_release: PublishedRelease) => {
+		// Stub — opening release diff/preview is a future feature (DESIGN §6.2).
 	};
 </script>
 
-<div class="cms-panel" role="dialog" aria-label="Release history">
-	<header class="cms-panel__header">
-		<h2>History</h2>
-		<button type="button" class="cms-panel__close" aria-label="Close" onclick={onClose}>×</button>
-	</header>
+<Panel ariaLabel="Recent releases" {onClose}>
+	<PanelHeader title="Recent releases" {onClose}>
+		{#snippet subtitle()}
+			<span class="vela:text-[12px] vela:text-bar-text-secondary">last 30 days</span>
+		{/snippet}
+	</PanelHeader>
 
-	{#if loading && history.length === 0}
-		<p class="cms-panel__empty">Loading…</p>
-	{:else if history.length === 0}
-		<p class="cms-panel__empty">No published releases yet.</p>
-	{:else}
-		<ul class="cms-panel__items">
-			{#each history as release (release.id)}
-				<li class="cms-panel__item">
-					<div class="cms-panel__item-main">
-						<div class="cms-panel__item-label">
-							{release.name ?? release.id.slice(0, 8)}
-							{#if release.revertedAt}<span class="cms-history__reverted">reverted</span>{/if}
+	<div class="vela:overflow-y-auto vela:px-4 vela:pb-2">
+		{#if loading && history.length === 0}
+			<p class="vela:text-[13px] vela:text-bar-text-tertiary vela:py-2">Loading…</p>
+		{:else if history.length === 0}
+			<p class="vela:text-[13px] vela:text-bar-text-tertiary vela:py-2">
+				No published releases yet.
+			</p>
+		{:else}
+			<ol class="vela:list-none vela:pl-0 vela:m-0 vela:relative vela:flex vela:flex-col">
+				<span
+					class="vela:absolute vela:left-[5px] vela:top-2 vela:bottom-2 vela:w-px vela:bg-[var(--cms-bar-divider)]"
+					aria-hidden="true"
+				></span>
+				{#each displayList as { release, title, titleIsHash, isLive, paths, extraPaths } (release.id)}
+					<li class="vela:relative vela:pl-6 vela:pr-1 vela:py-2.5">
+						<span
+							class="vela:absolute vela:left-0 vela:top-3.5 vela:w-[11px] vela:h-[11px]
+								vela:rounded-full vela:bg-bar-bg vela:flex vela:items-center vela:justify-center"
+							aria-hidden="true"
+						>
+							<span
+								class="vela:w-2 vela:h-2 vela:rounded-full"
+								style:background-color={isLive ? 'var(--cms-status-clean-dot)' : '#444'}
+							></span>
+						</span>
+						<div class="vela:flex vela:items-start vela:justify-between vela:gap-3">
+							<div class="vela:flex vela:flex-col vela:min-w-0 vela:flex-1">
+								<div class="vela:flex vela:items-center vela:gap-2 vela:min-w-0">
+									{#if titleIsHash}
+										<span
+											class="vela:font-mono vela:text-[12px] vela:text-bar-text vela:truncate"
+										>
+											{title}
+										</span>
+									{:else}
+										<span
+											class="vela:text-[13px] vela:font-medium vela:text-bar-text vela:truncate"
+										>
+											{title}
+										</span>
+									{/if}
+									{#if release.revertedAt}
+										<Badge variant="warn" size="sm">reverted</Badge>
+									{/if}
+								</div>
+								<div class="vela:text-[11px] vela:text-bar-text-tertiary vela:mt-0.5">
+									{formatDate(release.publishedAt)} · published by {release.publishedBy}{isLive
+										? ' · '
+										: ''}{#if isLive}<span class="vela:text-[var(--cms-status-clean-dot)]"
+											>live now</span
+										>{/if}
+								</div>
+								{#if paths.length > 0}
+									<div class="vela:flex vela:flex-wrap vela:gap-1.5 vela:mt-2">
+										{#each paths as path}
+											<span
+												class="vela:font-mono vela:text-[11px] vela:px-1.5 vela:py-0.5 vela:rounded
+													vela:bg-[var(--cms-bar-bg-hover)] vela:text-bar-text-secondary"
+											>
+												{path}
+											</span>
+										{/each}
+										{#if extraPaths > 0}
+											<span
+												class="vela:text-[11px] vela:text-bar-text-tertiary vela:px-1 vela:py-0.5"
+											>
+												+{extraPaths} more
+											</span>
+										{/if}
+									</div>
+								{/if}
+							</div>
+							<div class="vela:flex vela:items-center vela:gap-1.5 vela:shrink-0">
+								<Button variant="outline" size="pill" onclick={() => onView(release)}>
+									View
+								</Button>
+								{#if !isLive}
+									<Button
+										variant="outline"
+										size="pill"
+										disabled={reverting === release.id || !!release.revertedAt}
+										onclick={() => onRevert(release)}
+									>
+										{reverting === release.id ? '…' : 'Revert'}
+									</Button>
+								{/if}
+							</div>
 						</div>
-						<div class="cms-panel__item-fields">
-							{itemSummary(release)} · {formatDate(release.publishedAt)}
-						</div>
-					</div>
-					<button
-						type="button"
-						class="cms-panel__discard"
-						disabled={reverting === release.id || !!release.revertedAt}
-						onclick={() => onRevert(release)}
-					>
-						{reverting === release.id ? '…' : 'Revert'}
-					</button>
-				</li>
-			{/each}
-		</ul>
-	{/if}
-</div>
+					</li>
+				{/each}
+			</ol>
+		{/if}
+	</div>
 
-<style>
-	.cms-panel {
-		position: fixed;
-		top: 4rem;
-		left: 50%;
-		transform: translateX(-50%);
-		width: min(100%, 36rem);
-		padding: 1rem;
-		border-radius: 0.75rem;
-		background: rgba(20, 20, 20, 0.94);
-		color: #fafafa;
-		backdrop-filter: blur(8px);
-		box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
-		z-index: 9998;
-		font-family:
-			ui-sans-serif,
-			system-ui,
-			-apple-system,
-			Segoe UI,
-			Roboto,
-			sans-serif;
-		font-size: 0.85rem;
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		max-height: calc(100vh - 6rem);
-	}
-	.cms-panel__header {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-	}
-	.cms-panel__header h2 {
-		margin: 0;
-		font-size: 1rem;
-		font-weight: 600;
-	}
-	.cms-panel__close {
-		width: 1.75rem;
-		height: 1.75rem;
-		border: 0;
-		border-radius: 9999px;
-		background: rgba(255, 255, 255, 0.06);
-		color: inherit;
-		cursor: pointer;
-		font-size: 1.1rem;
-		line-height: 1;
-	}
-	.cms-panel__close:hover {
-		background: rgba(255, 255, 255, 0.14);
-	}
-	.cms-panel__empty {
-		margin: 0;
-		opacity: 0.7;
-	}
-	.cms-panel__items {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.4rem;
-		overflow-y: auto;
-	}
-	.cms-panel__item {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.5rem 0.625rem;
-		border-radius: 0.375rem;
-		background: rgba(255, 255, 255, 0.04);
-	}
-	.cms-panel__item-main {
-		flex: 1;
-		min-width: 0;
-	}
-	.cms-panel__item-label {
-		font-size: 0.85rem;
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-	}
-	.cms-panel__item-fields {
-		font-size: 0.7rem;
-		opacity: 0.6;
-	}
-	.cms-panel__discard {
-		flex-shrink: 0;
-		padding: 0.25rem 0.55rem;
-		border: 1px solid rgba(255, 255, 255, 0.18);
-		border-radius: 9999px;
-		background: transparent;
-		color: inherit;
-		cursor: pointer;
-		font: inherit;
-		font-size: 0.72rem;
-	}
-	.cms-panel__discard:hover:not(:disabled) {
-		background: rgba(255, 255, 255, 0.12);
-	}
-	.cms-panel__discard:disabled {
-		opacity: 0.4;
-		cursor: default;
-	}
-	.cms-history__reverted {
-		display: inline-block;
-		padding: 0.05rem 0.4rem;
-		border-radius: 9999px;
-		background: rgba(240, 180, 60, 0.2);
-		color: #f5d27a;
-		font-size: 0.6rem;
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-	}
-</style>
+	<PanelFooter>
+		<span>
+			{history.length}
+			{history.length === 1 ? 'release' : 'releases'} shown
+		</span>
+		<Button variant="link" size="xs" disabled class="vela:text-bar-text-tertiary">
+			Load older →
+		</Button>
+	</PanelFooter>
+</Panel>

@@ -10,6 +10,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	if (!userId) return new Response(null, { status: 403 });
 
 	let name: string | undefined;
+
 	const text = await request.text();
 	if (text) {
 		let body: unknown;

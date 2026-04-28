@@ -43,6 +43,31 @@
 	--radius-md: calc(var(--vela-radius) - 2px);
 	--radius-lg: var(--vela-radius);
 	--radius-xl: calc(var(--vela-radius) + 4px);
+
+	/* Brand-surface colors used by the bar's chrome.
+	   --vela-* are the abstract shadcn semantic tokens; --cms-* are concrete
+	   bar-surface colors. Keep them separate so shadcn primitives stay portable. */
+	--color-bar-bg: var(--cms-bar-bg);
+	--color-bar-bg-hover: var(--cms-bar-bg-hover);
+	--color-bar-divider: var(--cms-bar-divider);
+	--color-bar-text: var(--cms-bar-text);
+	--color-bar-text-secondary: var(--cms-bar-text-secondary);
+	--color-bar-text-tertiary: var(--cms-bar-text-tertiary);
+	--color-cms-accent: var(--cms-accent);
+
+	/* Subtle nudge applied to the status pill when there are unpublished changes.
+	   See DESIGN.md §2.2 — 2.4s ease-in-out, opacity 1 → 0.6 → 1. */
+	--animate-bar-pulse: bar-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes bar-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.6;
+	}
 }
 
 @layer base {
@@ -67,6 +92,24 @@
 		--vela-input: oklch(1 0 0 / 15%);
 		--vela-ring: oklch(0.556 0 0);
 		--vela-radius: 0.5rem;
+
+		/* Bar redesign tokens — see DESIGN.md §4. */
+		--cms-bar-bg: #1f1f1f;
+		--cms-bar-bg-hover: #2e2e2e;
+		--cms-bar-divider: #3a3a3a;
+		--cms-bar-text: #f5f5f5;
+		--cms-bar-text-secondary: #a3a3a3;
+		--cms-bar-text-tertiary: #737373;
+
+		--cms-status-clean-dot: #5dcaa5;
+		--cms-status-warn-bg: #2a2416;
+		--cms-status-warn-text: #fac775;
+		--cms-status-warn-dot: #ef9f27;
+		--cms-status-edit-bg: #182338;
+		--cms-status-edit-text: #85b7eb;
+		--cms-status-edit-dot: #378add;
+
+		--cms-accent: #534ab7;
 	}
 
 	/* Box-sizing + border defaults are required for Tailwind utilities like

@@ -133,8 +133,12 @@ export const pageDocs: Record<string, PageEntry[]> = {
  * key) and shallow-merge into existing items for the same scope. The
  * `page-delete` variant stages a published-page removal — it carries no
  * fields and only takes effect on publish.
+ *
+ * `addedAt` is updated whenever the item is added or its fields are merged,
+ * so it tracks the most recent edit to that scope. The publish modal uses
+ * this for the per-row "edited 2 minutes ago" meta line.
  */
-export type ReleaseItem =
+type ReleaseItemCore =
 	| {
 			kind: 'page';
 			routeId: string;
@@ -144,6 +148,8 @@ export type ReleaseItem =
 	| { kind: 'layout'; routeId: string; fields: Record<string, unknown> }
 	| { kind: 'page-delete'; routeId: string; params: Record<string, string> };
 
+export type ReleaseItem = ReleaseItemCore & { addedAt: string };
+
 export type OpenRelease = {
 	userId: string;
 	name?: string;
@@ -152,7 +158,7 @@ export type OpenRelease = {
 	items: ReleaseItem[];
 };
 
-export type PublishedReleaseItem = ReleaseItem & {
+export type PublishedReleaseItem = ReleaseItemCore & {
 	/** The fields' values immediately before this release was applied; null
 	 * for page items where no published entry existed yet. Used by revert. */
 	priorFields: Record<string, unknown> | null;
@@ -260,23 +266,27 @@ export type AddReleaseItemInput =
  */
 export const addReleaseItems = (userId: string, inputs: AddReleaseItemInput[]): OpenRelease => {
 	const release = ensureOpenRelease(userId);
+	const now = new Date().toISOString();
 	for (const input of inputs) {
 		if (Object.keys(input.fields).length === 0) continue;
 		const existing = findItem(release.items, input);
 		if (existing) {
 			mergeFields(existing.fields, input.fields);
+			existing.addedAt = now;
 		} else if (input.kind === 'page') {
 			release.items.push({
 				kind: 'page',
 				routeId: input.routeId,
 				params: { ...input.params },
-				fields: { ...input.fields }
+				fields: { ...input.fields },
+				addedAt: now
 			});
 		} else {
 			release.items.push({
 				kind: 'layout',
 				routeId: input.routeId,
-				fields: { ...input.fields }
+				fields: { ...input.fields },
+				addedAt: now
 			});
 		}
 	}
@@ -332,21 +342,32 @@ export const regeneratePreviewKey = (userId: string): string | null => {
 /**
  * Apply every item in the user's open release atomically to `pageDocs` /
  * `layoutDocs`, capture each item's prior fields for revert, append to
- * history, and clear the open release. Returns the new `PublishedRelease`,
- * or null if the user has nothing to publish.
+ * history, and clear the open release.
+ *
+ * Returns the new `PublishedRelease`, or null if there's nothing to publish.
  */
-export const publishRelease = (userId: string, name?: string): PublishedRelease | null => {
+export const publishRelease = (
+	userId: string,
+	name?: string
+): PublishedRelease | null => {
 	const release = openReleases[userId];
 	if (!release || release.items.length === 0) return null;
 
+	const toPublish = release.items;
+
 	const publishedItems: PublishedReleaseItem[] = [];
 
-	for (const item of release.items) {
+	for (const item of toPublish) {
 		if (item.kind === 'layout') {
 			const target = (layoutDocs[item.routeId] ??= {});
 			const priorFields = capturePriorFields(target, item.fields);
 			mergeFields(target, item.fields);
-			publishedItems.push({ ...item, fields: { ...item.fields }, priorFields });
+			publishedItems.push({
+				kind: 'layout',
+				routeId: item.routeId,
+				fields: { ...item.fields },
+				priorFields
+			});
 		} else if (item.kind === 'page') {
 			const entries = (pageDocs[item.routeId] ??= []);
 			let pageEntry = findPageEntry(entries, item.params);
@@ -616,7 +637,12 @@ export const stagePageDelete = (
 		}
 	}
 	const r = ensureOpenRelease(userId);
-	r.items.push({ kind: 'page-delete', routeId, params: { ...params } });
+	r.items.push({
+		kind: 'page-delete',
+		routeId,
+		params: { ...params },
+		addedAt: new Date().toISOString()
+	});
 	return { ok: true, alreadyStaged: false };
 };
 

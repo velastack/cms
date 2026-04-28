@@ -1,18 +1,22 @@
 <script lang="ts">
 	import { SvelteMap } from 'svelte/reactivity';
 	import { normalizeField, type CmsNewPageConfig } from './new-page-config.js';
+	import { Button } from './ui/button/index.js';
+	import * as Dialog from './ui/dialog/index.js';
+	import { Input } from './ui/input/index.js';
+	import { Label } from './ui/label/index.js';
 
 	type Props = {
+		open: boolean;
+		onOpenChange: (open: boolean) => void;
 		config: CmsNewPageConfig;
 		creating: boolean;
 		error: string | null;
 		onCreate: (values: Record<string, string>) => void;
-		onClose: () => void;
 	};
 
-	let { config, creating, error, onCreate, onClose }: Props = $props();
+	let { open, onOpenChange, config, creating, error, onCreate }: Props = $props();
 
-	let dialogEl = $state<HTMLDialogElement | null>(null);
 	let values = new SvelteMap<string, string>();
 
 	const fields = $derived(config.fields.map(normalizeField));
@@ -21,10 +25,6 @@
 		for (const f of fields) {
 			if (!values.has(f.name)) values.set(f.name, '');
 		}
-	});
-
-	$effect(() => {
-		if (dialogEl && !dialogEl.open) dialogEl.showModal();
 	});
 
 	const allFilled = $derived(fields.every((f) => (values.get(f.name) ?? '').trim() !== ''));
@@ -37,61 +37,58 @@
 	};
 </script>
 
-<dialog
-	bind:this={dialogEl}
-	class="cms-dialog"
-	onclose={() => onClose()}
-	onclick={(e) => {
-		if (e.target === dialogEl) onClose();
+<Dialog.Root
+	{open}
+	onOpenChange={(next) => {
+		if (!next && creating) return;
+		onOpenChange(next);
 	}}
 >
-	<form
-		method="dialog"
-		class="cms-dialog__body"
-		onsubmit={(e) => {
-			e.preventDefault();
-			submit();
-		}}
-	>
-		<header>
-			<h2>New {config.type}</h2>
-		</header>
+	<Dialog.Content showCloseButton={false} class="vela:max-w-[28rem]">
+		<form
+			class="vela:flex vela:flex-col vela:gap-0"
+			onsubmit={(e) => {
+				e.preventDefault();
+				submit();
+			}}
+		>
+			<Dialog.Header>
+				<Dialog.Title>New {config.type}</Dialog.Title>
+			</Dialog.Header>
 
-		<div class="cms-dialog__fields">
-			{#each fields as f (f.name)}
-				<label>
-					<span>{f.label}</span>
-					<input
-						type="text"
-						placeholder={f.placeholder}
-						value={values.get(f.name) ?? ''}
-						oninput={(e) => values.set(f.name, e.currentTarget.value)}
-						disabled={creating}
-					/>
-				</label>
-			{/each}
-		</div>
+			<div class="vela:px-6 vela:pb-2 vela:flex vela:flex-col vela:gap-3">
+				{#each fields as f (f.name)}
+					<div class="vela:flex vela:flex-col vela:gap-1.5">
+						<Label for={`vela-new-page-${f.name}`}>{f.label}</Label>
+						<Input
+							id={`vela-new-page-${f.name}`}
+							placeholder={f.placeholder}
+							value={values.get(f.name) ?? ''}
+							oninput={(e) => values.set(f.name, e.currentTarget.value)}
+							disabled={creating}
+						/>
+					</div>
+				{/each}
+			</div>
 
-		{#if error}
-			<p class="cms-dialog__error" role="alert">{error}</p>
-		{/if}
+			{#if error}
+				<p
+					role="alert"
+					class="vela:mx-6 vela:mt-2 vela:px-3 vela:py-2 vela:rounded-md
+						vela:bg-[#2a1818] vela:text-[#F08A8A] vela:text-[12px]"
+				>
+					{error}
+				</p>
+			{/if}
 
-		<footer>
-			<button
-				type="button"
-				class="cms-btn cms-btn--ghost"
-				onclick={() => onClose()}
-				disabled={creating}
-			>
-				Cancel
-			</button>
-			<button
-				type="submit"
-				class="cms-btn cms-btn--primary"
-				disabled={!allFilled || creating}
-			>
-				{creating ? 'Creating…' : 'Create'}
-			</button>
-		</footer>
-	</form>
-</dialog>
+			<Dialog.Footer class="vela:justify-end vela:pt-4">
+				<Button variant="ghost" onclick={() => onOpenChange(false)} disabled={creating}>
+					Cancel
+				</Button>
+				<Button type="submit" disabled={!allFilled || creating}>
+					{creating ? 'Creating…' : 'Create'}
+				</Button>
+			</Dialog.Footer>
+		</form>
+	</Dialog.Content>
+</Dialog.Root>
