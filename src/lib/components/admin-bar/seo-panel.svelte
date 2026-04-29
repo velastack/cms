@@ -150,7 +150,13 @@
 <Panel ariaLabel="SEO and metadata" {onClose}>
 	<PanelHeader title="SEO &amp; metadata" {onClose} />
 
-	<div class="vela:overflow-y-auto vela:px-4 vela:pb-4 vela:flex vela:flex-col vela:gap-4">
+	<form
+		class="vela:overflow-y-auto vela:px-4 vela:pb-4 vela:flex vela:flex-col vela:gap-4"
+		onsubmit={(e) => {
+			e.preventDefault();
+			handleSave();
+		}}
+	>
 		{#if !pageScope}
 			<p class="vela:text-[13px] vela:text-bar-text-tertiary vela:py-2">
 				No page scope on this route.
@@ -373,7 +379,7 @@
 				</Collapsible.Root>
 			{/if}
 		{/if}
-	</div>
+	</form>
 
 	<PanelFooter>
 		<span>Save to keep your changes</span>

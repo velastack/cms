@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { Plugin, ResolvedConfig } from 'vite';
+import { transformWithOxc, type Plugin, type ResolvedConfig } from 'vite';
 import {
 	buildManifest,
 	type BuildManifestResult,
@@ -198,11 +198,21 @@ export const velacms = (options: VelacmsPluginOptions = {}): Plugin => {
 				);
 				const m = result.pageCmsModules[idx];
 				if (!m) return null;
-				// Read the file source and return it for downstream Vite plugins
-				// (TS/Svelte) to compile and resolve its `$lib/…` imports.
-				// `addWatchFile(m.path)` is intentionally omitted — see comment
-				// in the pages-module branch.
-				return readFileSync(m.path, 'utf-8');
+				// `addWatchFile(m.path)` is intentionally omitted — see the
+				// comment in the pages-module branch.
+				//
+				// Compile TS → JS ourselves: Vite's built-in TS transform
+				// filters by file extension, and `\0`-prefixed virtual ids
+				// don't match. Without this step, TS-only syntax in
+				// `page.cms.ts` (e.g. `import { type X } from '…'`,
+				// `satisfies T`) reaches the browser parser and fails with
+				// "missing '}' after module specifier list".
+				const source = readFileSync(m.path, 'utf-8');
+				const transformed = await transformWithOxc(source, m.path, {
+					lang: 'ts',
+					sourcemap: true
+				});
+				return { code: transformed.code, map: transformed.map };
 			}
 		},
 

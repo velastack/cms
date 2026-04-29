@@ -1,6 +1,6 @@
-import { definePage } from '$lib/index.js';
+import { type CmsPageConfig } from '$lib/index.js';
 
-export default definePage({
+export default {
 	type: 'Room',
 	creatable: true,
 	fields: ['title'],
@@ -20,4 +20,4 @@ export default definePage({
 		max_guests: 'number',
 		bed_type: { type: 'enum', values: ['king', 'queen', 'twin'] }
 	}
-});
+} satisfies CmsPageConfig;
