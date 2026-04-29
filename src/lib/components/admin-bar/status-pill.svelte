@@ -13,7 +13,7 @@
 	let { variant, onclick, class: className, children }: Props = $props();
 
 	const variantClass: Record<Variant, string> = {
-		clean: 'vela:text-[#d4d4d4]',
+		clean: 'vela:text-[var(--cms-status-clean-text)]',
 		warn: 'vela:bg-[var(--cms-status-warn-bg)] vela:text-[var(--cms-status-warn-text)] vela:animate-bar-pulse',
 		edit: 'vela:bg-[var(--cms-status-edit-bg)] vela:text-[var(--cms-status-edit-text)]'
 	};
@@ -34,7 +34,7 @@
 		class={cn(
 			baseClass,
 			variantClass[variant],
-			'vela:cursor-pointer vela:hover:bg-[#3a2f1e] vela:focus:outline-none',
+			'vela:cursor-pointer vela:hover:bg-[var(--cms-status-warn-bg-hover)] vela:focus:outline-none',
 			className
 		)}
 	>

@@ -430,7 +430,7 @@
 
 			{#each templateGroups as group (group.routeId)}
 				<section
-					class="vela:rounded-lg vela:bg-[#181818] vela:border vela:border-[var(--cms-bar-divider)] vela:overflow-hidden"
+					class="vela:rounded-lg vela:bg-[var(--cms-template-bg)] vela:border vela:border-[var(--cms-bar-divider)] vela:overflow-hidden"
 				>
 					<div
 						class="vela:flex vela:items-center vela:justify-between vela:gap-2 vela:px-3 vela:py-2"
@@ -439,7 +439,7 @@
 							<span class="vela:text-[11px] vela:text-bar-text-tertiary">Template</span>
 							<span
 								class="vela:font-mono vela:text-[12px] vela:px-1.5 vela:py-0.5 vela:rounded
-									vela:bg-[#2a2740] vela:text-[#AFA9EC] vela:truncate"
+									vela:bg-[var(--cms-template-accent-bg)] vela:text-[var(--cms-template-accent-text)] vela:truncate"
 							>
 								{resolveRouteOnlyParams(group.routeId)}
 							</span>

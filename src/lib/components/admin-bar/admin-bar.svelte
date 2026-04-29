@@ -1,15 +1,58 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { browser } from '$app/environment';
 	import { beforeNavigate, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { cmsStore } from '$lib/components/cms/cms-store.svelte.js';
 
 	const STORAGE_KEY = 'cms.editEnabled';
+	const THEME_STORAGE_KEY = 'cms.theme';
+
+	export type AdminBarTheme = 'system' | 'light' | 'dark';
+	type Props = { theme?: AdminBarTheme };
+	let { theme = 'system' }: Props = $props();
 
 	type State = 'idle' | 'authed' | 'unauthed';
 	let authState: State = $state('idle');
 	let user: { id: string; name: string } | null = $state(null);
 	let barEnabled = $state(false);
+
+	// User's chosen theme preference. Initial value: localStorage override if
+	// present (and valid), otherwise the `theme` prop. Persisted on every
+	// change so the choice survives reloads. The prop is read once at mount —
+	// after that, the user's selection from the View → Theme menu wins.
+	const readStoredTheme = (): AdminBarTheme | null => {
+		if (typeof localStorage === 'undefined') return null;
+		const raw = localStorage.getItem(THEME_STORAGE_KEY);
+		return raw === 'system' || raw === 'light' || raw === 'dark' ? raw : null;
+	};
+	let themePref = $state<AdminBarTheme>(
+		untrack(() => (browser ? (readStoredTheme() ?? theme) : theme))
+	);
+
+	const setThemePref = (next: AdminBarTheme) => {
+		themePref = next;
+		try {
+			localStorage.setItem(THEME_STORAGE_KEY, next);
+		} catch {
+			/* private mode etc. — non-fatal */
+		}
+	};
+
+	// Resolves themePref to a concrete 'light' | 'dark' value, watching the
+	// OS preference when pref is 'system'. The bar mounts client-only (see
+	// {#if browser} below), so we don't need an SSR fallback.
+	let systemPrefersDark = $state(false);
+	$effect(() => {
+		const mq = window.matchMedia('(prefers-color-scheme: dark)');
+		systemPrefersDark = mq.matches;
+		const handler = (e: MediaQueryListEvent) => (systemPrefersDark = e.matches);
+		mq.addEventListener('change', handler);
+		return () => mq.removeEventListener('change', handler);
+	});
+	const resolvedTheme = $derived<'light' | 'dark'>(
+		themePref === 'system' ? (systemPrefersDark ? 'dark' : 'light') : themePref
+	);
 
 	const endpoint = $derived(page.data.cms?.endpoint ?? '/api/cms');
 	const editParam = $derived(page.url.searchParams.has('edit'));
@@ -79,7 +122,14 @@
 {#if browser}
 	{#if barEnabled && authState === 'authed' && user}
 		{#await import('./admin-bar-internal.svelte') then { default: Internal }}
-			<Internal {user} {endpoint} onClose={closeBar} />
+			<Internal
+				{user}
+				{endpoint}
+				onClose={closeBar}
+				{themePref}
+				{setThemePref}
+				{resolvedTheme}
+			/>
 		{/await}
 	{:else if barEnabled && authState === 'unauthed'}
 		<div class="cms-signin">

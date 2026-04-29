@@ -8,8 +8,12 @@ export declare const pageDocs: Record<string, PageEntry[]>;
  * key) and shallow-merge into existing items for the same scope. The
  * `page-delete` variant stages a published-page removal — it carries no
  * fields and only takes effect on publish.
+ *
+ * `addedAt` is updated whenever the item is added or its fields are merged,
+ * so it tracks the most recent edit to that scope. The publish modal uses
+ * this for the per-row "edited 2 minutes ago" meta line.
  */
-export type ReleaseItem = {
+type ReleaseItemCore = {
     kind: 'page';
     routeId: string;
     params: Record<string, string>;
@@ -23,6 +27,9 @@ export type ReleaseItem = {
     routeId: string;
     params: Record<string, string>;
 };
+export type ReleaseItem = ReleaseItemCore & {
+    addedAt: string;
+};
 export type OpenRelease = {
     userId: string;
     name?: string;
@@ -30,7 +37,7 @@ export type OpenRelease = {
     preview_key: string;
     items: ReleaseItem[];
 };
-export type PublishedReleaseItem = ReleaseItem & {
+export type PublishedReleaseItem = ReleaseItemCore & {
     /** The fields' values immediately before this release was applied; null
      * for page items where no published entry existed yet. Used by revert. */
     priorFields: Record<string, unknown> | null;
@@ -96,8 +103,9 @@ export declare const regeneratePreviewKey: (userId: string) => string | null;
 /**
  * Apply every item in the user's open release atomically to `pageDocs` /
  * `layoutDocs`, capture each item's prior fields for revert, append to
- * history, and clear the open release. Returns the new `PublishedRelease`,
- * or null if the user has nothing to publish.
+ * history, and clear the open release.
+ *
+ * Returns the new `PublishedRelease`, or null if there's nothing to publish.
  */
 export declare const publishRelease: (userId: string, name?: string) => PublishedRelease | null;
 export declare const getReleaseHistory: () => PublishedRelease[];
@@ -156,6 +164,15 @@ export type PageMapRoute = {
     entries: PageMapEntry[];
 };
 /**
+ * Empty all four stores in place. The references in {@link layoutDocs},
+ * {@link pageDocs}, {@link openReleases}, and {@link releaseHistory} are
+ * preserved (the mockAdapter and route handlers captured them at import
+ * time). Tests call this in `beforeEach` to start from a known clean
+ * baseline, then seed whatever they need by mutating the same exported
+ * objects.
+ */
+export declare const __resetStoreForTests: () => void;
+/**
  * Walk every published page entry plus every `page` / `page-delete` item in
  * the user's open release, producing a per-route view of the editor's site
  * map. `isDraft` flags entries that exist only in the open release (not yet
@@ -164,3 +181,4 @@ export type PageMapRoute = {
  * by serialized params.
  */
 export declare const listAllPages: (userId: string) => PageMapRoute[];
+export {};

@@ -227,7 +227,7 @@
 				<p
 					role="alert"
 					class="vela:mx-6 vela:mb-2 vela:px-3 vela:py-2 vela:rounded-md
-						vela:bg-[#2a1818] vela:text-[#F08A8A] vela:text-[12px]"
+						vela:bg-[var(--cms-status-error-bg)] vela:text-[var(--cms-status-error-text)] vela:text-[12px]"
 				>
 					{error}
 				</p>

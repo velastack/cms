@@ -71,6 +71,9 @@
 }
 
 @layer base {
+	/* Default tokens are dark — applied when no [data-vela-theme] attribute is
+	   set yet (e.g. before the theme controller runs) and when explicitly
+	   data-vela-theme="dark". The light variant overrides below. */
 	.vela-admin-bar {
 		--vela-background: oklch(0.145 0 0);
 		--vela-foreground: oklch(0.985 0 0);
@@ -102,12 +105,102 @@
 		--cms-bar-text-tertiary: #737373;
 
 		--cms-status-clean-dot: #5dcaa5;
+		--cms-status-clean-text: #d4d4d4;
 		--cms-status-warn-bg: #2a2416;
+		--cms-status-warn-bg-hover: #3a2f1e;
 		--cms-status-warn-text: #fac775;
 		--cms-status-warn-dot: #ef9f27;
 		--cms-status-edit-bg: #182338;
 		--cms-status-edit-text: #85b7eb;
 		--cms-status-edit-dot: #378add;
+
+		/* Translucent backdrop for the sub-bar that hangs below the main pill.
+		   The border is transparent in dark mode (the translucent backdrop on
+		   a dark page provides enough definition) and visible in light mode
+		   so the sub-bar reads as a distinct surface against a light page. */
+		--cms-sub-bar-bg: rgba(46, 46, 46, 0.75);
+		--cms-sub-bar-border: transparent;
+
+		/* Template-tile palette in the All Pages panel. */
+		--cms-template-bg: #181818;
+		--cms-template-accent-bg: #2a2740;
+		--cms-template-accent-text: #afa9ec;
+
+		/* Soft error tones used by inline alerts, the destructive badge, and the
+		   destructive menu / button variants. Kept separate from the shadcn
+		   --vela-destructive token (which is used for solid Destructive buttons). */
+		--cms-status-error-bg: #2a1818;
+		--cms-status-error-bg-hover: #3a1f1f;
+		--cms-status-error-text: #f08a8a;
+		--cms-status-error-text-hover: #ffb3b3;
+		--cms-status-error-text-base: #e88a8a;
+		--cms-status-error-border: #5a2a2a;
+
+		/* Soft success tones — used by the "new page" change badge. */
+		--cms-status-success-bg: #162a1d;
+		--cms-status-success-text: #7ed49a;
+
+		--cms-accent: #534ab7;
+	}
+
+	/* Light theme: re-paints the bar surface white-on-dark-text and lightens
+	   the status accents while preserving hue. The Google search preview and
+	   social card in the SEO panel are intentionally light-on-light and stay
+	   hardcoded — they're content, not chrome. */
+	.vela-admin-bar[data-vela-theme='light'] {
+		--vela-background: oklch(1 0 0);
+		--vela-foreground: oklch(0.145 0 0);
+		--vela-card: oklch(1 0 0);
+		--vela-card-foreground: oklch(0.145 0 0);
+		--vela-popover: oklch(1 0 0);
+		--vela-popover-foreground: oklch(0.145 0 0);
+		--vela-primary: oklch(0.205 0 0);
+		--vela-primary-foreground: oklch(0.985 0 0);
+		--vela-secondary: oklch(0.97 0 0);
+		--vela-secondary-foreground: oklch(0.205 0 0);
+		--vela-muted: oklch(0.97 0 0);
+		--vela-muted-foreground: oklch(0.556 0 0);
+		--vela-accent: oklch(0.97 0 0);
+		--vela-accent-foreground: oklch(0.205 0 0);
+		--vela-destructive: oklch(0.577 0.245 27.325);
+		--vela-destructive-foreground: oklch(0.985 0 0);
+		--vela-border: oklch(0 0 0 / 10%);
+		--vela-input: oklch(0 0 0 / 15%);
+		--vela-ring: oklch(0.708 0 0);
+
+		--cms-bar-bg: #ffffff;
+		--cms-bar-bg-hover: #f1f1f1;
+		--cms-bar-divider: #e5e5e5;
+		--cms-bar-text: #171717;
+		--cms-bar-text-secondary: #525252;
+		--cms-bar-text-tertiary: #a3a3a3;
+
+		--cms-status-clean-dot: #16a34a;
+		--cms-status-clean-text: #525252;
+		--cms-status-warn-bg: #fff4dc;
+		--cms-status-warn-bg-hover: #fce8c2;
+		--cms-status-warn-text: #92400e;
+		--cms-status-warn-dot: #d97706;
+		--cms-status-edit-bg: #dbeafe;
+		--cms-status-edit-text: #1e40af;
+		--cms-status-edit-dot: #2563eb;
+
+		--cms-sub-bar-bg: rgba(245, 245, 245, 0.85);
+		--cms-sub-bar-border: #e5e5e5;
+
+		--cms-template-bg: #fafafa;
+		--cms-template-accent-bg: #ece9ff;
+		--cms-template-accent-text: #5b50c4;
+
+		--cms-status-error-bg: #fee2e2;
+		--cms-status-error-bg-hover: #fecaca;
+		--cms-status-error-text: #b91c1c;
+		--cms-status-error-text-hover: #7f1d1d;
+		--cms-status-error-text-base: #dc2626;
+		--cms-status-error-border: #fca5a5;
+
+		--cms-status-success-bg: #dcfce7;
+		--cms-status-success-text: #15803d;
 
 		--cms-accent: #534ab7;
 	}

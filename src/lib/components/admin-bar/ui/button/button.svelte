@@ -14,7 +14,7 @@
 				outline:
 					'vela:border vela:border-[var(--cms-bar-divider)] vela:bg-transparent vela:text-bar-text-secondary vela:hover:text-bar-text vela:hover:bg-[var(--cms-bar-bg-hover)]',
 				'outline-destructive':
-					'vela:border vela:border-[#5a2a2a] vela:bg-transparent vela:text-[#e88a8a] vela:hover:text-[#ffb3b3] vela:hover:bg-[#3a1f1f]',
+					'vela:border vela:border-[var(--cms-status-error-border)] vela:bg-transparent vela:text-[var(--cms-status-error-text-base)] vela:hover:text-[var(--cms-status-error-text-hover)] vela:hover:bg-[var(--cms-status-error-bg-hover)]',
 				secondary:
 					'vela:bg-secondary vela:text-secondary-foreground vela:hover:bg-secondary/80',
 				ghost:

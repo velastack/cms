@@ -11,10 +11,12 @@
 					'vela:bg-[var(--cms-bar-bg-hover)] vela:text-bar-text-secondary',
 				warn:
 					'vela:bg-[var(--cms-status-warn-bg)] vela:text-[var(--cms-status-warn-text)]',
-				success: 'vela:bg-[#162a1d] vela:text-[#7ED49A]',
+				success:
+					'vela:bg-[var(--cms-status-success-bg)] vela:text-[var(--cms-status-success-text)]',
 				edit:
 					'vela:bg-[var(--cms-status-edit-bg)] vela:text-[var(--cms-status-edit-text)]',
-				destructive: 'vela:bg-[#2a1818] vela:text-[#F08A8A]'
+				destructive:
+					'vela:bg-[var(--cms-status-error-bg)] vela:text-[var(--cms-status-error-text)]'
 			},
 			size: {
 				default: 'vela:px-2 vela:py-0.5 vela:text-[11px]',

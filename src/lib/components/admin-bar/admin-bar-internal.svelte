@@ -36,7 +36,7 @@
 	const menuItemClass =
 		'vela:flex vela:items-center vela:gap-2 vela:px-2 vela:py-1.5 vela:rounded-md vela:text-[13px] vela:cursor-pointer vela:outline-none vela:focus:bg-[var(--cms-bar-bg-hover)] vela:focus:text-bar-text vela:data-disabled:opacity-40 vela:data-disabled:pointer-events-none';
 	const menuItemDestructiveClass =
-		'vela:flex vela:items-center vela:gap-2 vela:px-2 vela:py-1.5 vela:rounded-md vela:text-[13px] vela:cursor-pointer vela:outline-none vela:text-[#e88a8a] vela:focus:bg-[#3a1f1f] vela:focus:text-[#ffb3b3] vela:data-disabled:opacity-40 vela:data-disabled:pointer-events-none';
+		'vela:flex vela:items-center vela:gap-2 vela:px-2 vela:py-1.5 vela:rounded-md vela:text-[13px] vela:cursor-pointer vela:outline-none vela:text-[var(--cms-status-error-text-base)] vela:focus:bg-[var(--cms-status-error-bg-hover)] vela:focus:text-[var(--cms-status-error-text-hover)] vela:data-disabled:opacity-40 vela:data-disabled:pointer-events-none';
 	const menuLabelClass =
 		'vela:px-2 vela:pt-2.5 vela:pb-1 vela:text-[10px] vela:font-semibold vela:uppercase vela:tracking-widest vela:text-bar-text-tertiary';
 	const menuShortcutClass = 'vela:ml-auto';
@@ -44,12 +44,16 @@
 	const menuCheckIndicatorClass =
 		'vela:flex vela:items-center vela:gap-2 vela:px-2 vela:py-1.5 vela:pl-7 vela:rounded-md vela:text-[13px] vela:cursor-pointer vela:outline-none vela:focus:bg-[var(--cms-bar-bg-hover)] vela:focus:text-bar-text vela:data-disabled:opacity-40';
 
+	type ThemePref = 'system' | 'light' | 'dark';
 	type Props = {
 		user: { id: string; name: string };
 		endpoint: string;
 		onClose: () => void;
+		themePref: ThemePref;
+		setThemePref: (next: ThemePref) => void;
+		resolvedTheme: 'light' | 'dark';
 	};
-	let { user, endpoint, onClose }: Props = $props();
+	let { user, endpoint, onClose, themePref, setThemePref, resolvedTheme }: Props = $props();
 
 	// Auto-discovered from `page.cms.ts` files via the Vite plugin's
 	// `virtual:vela-cms/pages` module — consumers don't pass these.
@@ -553,15 +557,28 @@
 
 <div
 	class="vela-admin-bar"
+	data-vela-theme={resolvedTheme}
 	style:--cms-panel-top={subBarVisible && barPosition === 'top' ? '112px' : '72px'}
 >
+	<!-- Shadow ghost: same shape and position as the bar pill but at a lower
+	     z-index than the sub-bar (9998) and panels (9998). The pill itself
+	     carries no shadow, so the bar's drop shadow is occluded by anything
+	     sitting underneath the bar instead of being painted over the top. -->
+	<div
+		aria-hidden="true"
+		class="vela:fixed vela:left-1/2 vela:-translate-x-1/2 vela:z-[9997]
+		vela:w-full vela:max-w-[560px] vela:mx-4 vela:sm:mx-auto
+		vela:h-12 vela:rounded-full
+		vela:shadow-[0_8px_24px_rgba(0,0,0,0.25)]
+		{barPosition === 'bottom' ? 'vela:bottom-4' : 'vela:top-4'}"
+	></div>
+
 	<div
 		class="vela:fixed vela:left-1/2 vela:-translate-x-1/2 vela:z-[9999]
 		vela:flex vela:items-center vela:justify-between vela:gap-3
 		vela:w-full vela:max-w-[560px] vela:mx-4 vela:sm:mx-auto
 		vela:h-12 vela:px-3 vela:rounded-full
 		vela:bg-bar-bg vela:text-bar-text
-		vela:shadow-[0_8px_24px_rgba(0,0,0,0.25)]
 		{barPosition === 'bottom' ? 'vela:bottom-4' : 'vela:top-4'}"
 	>
 		<div class="vela:flex vela:items-center vela:gap-3">
@@ -745,9 +762,33 @@
 						<Menubar.Sub>
 							<Menubar.SubTrigger class={menuItemClass}>Theme</Menubar.SubTrigger>
 							<Menubar.SubContent class={menuContentClassExt}>
-								<Menubar.Item class={menuItemClass} disabled>System</Menubar.Item>
-								<Menubar.Item class={menuItemClass} disabled>Light</Menubar.Item>
-								<Menubar.Item class={menuItemClass} disabled>Dark</Menubar.Item>
+								<Menubar.Item
+									class={menuCheckIndicatorClass}
+									onSelect={() => setThemePref('system')}
+								>
+									<span class="vela:absolute vela:left-2">
+										{themePref === 'system' ? '✓' : ''}
+									</span>
+									System
+								</Menubar.Item>
+								<Menubar.Item
+									class={menuCheckIndicatorClass}
+									onSelect={() => setThemePref('light')}
+								>
+									<span class="vela:absolute vela:left-2">
+										{themePref === 'light' ? '✓' : ''}
+									</span>
+									Light
+								</Menubar.Item>
+								<Menubar.Item
+									class={menuCheckIndicatorClass}
+									onSelect={() => setThemePref('dark')}
+								>
+									<span class="vela:absolute vela:left-2">
+										{themePref === 'dark' ? '✓' : ''}
+									</span>
+									Dark
+								</Menubar.Item>
 							</Menubar.SubContent>
 						</Menubar.Sub>
 
@@ -785,10 +826,11 @@
 			vela:w-full vela:max-w-[560px] vela:mx-4 vela:sm:mx-auto
 			vela:h-16 vela:px-3
 			vela:text-bar-text
+			vela:bg-[var(--cms-sub-bar-bg)]
+			vela:border vela:border-[var(--cms-sub-bar-border)]
 			{barPosition === 'bottom'
 				? 'vela:bottom-10 vela:pt-2 vela:items-start vela:rounded-t-3xl'
 				: 'vela:top-10 vela:pb-2 vela:items-end vela:rounded-b-3xl'}"
-			style="background: rgba(46, 46, 46, 0.75);"
 		>
 			<div class="vela:flex vela:items-center">
 				{#if cmsStore.isEditing}
