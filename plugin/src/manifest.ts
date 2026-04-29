@@ -75,6 +75,12 @@ export type BuildManifestResult = {
 	 * `generateEntries()` calls.
 	 */
 	routeIdByScriptPath: Map<string, string>;
+	/**
+	 * `page.cms.ts` files discovered during the route walk, paired with
+	 * their leaf route id. Used by the `virtual:vela-cms/pages` virtual
+	 * module to aggregate `definePage(...)` configs at runtime.
+	 */
+	pageCmsModules: Array<{ routeId: string; path: string }>;
 };
 
 const tryStatFile = (path: string): boolean => {
@@ -374,6 +380,7 @@ export const buildManifest = async (
 	};
 
 	const routes: CmsManifest['routes'] = {};
+	const pageCmsModules: Array<{ routeId: string; path: string }> = [];
 	for (const node of nodes) {
 		if (!node.pagePath) continue;
 		const scopes = await buildScopeChain(node, byRouteId, collectOptions);
@@ -399,12 +406,14 @@ export const buildManifest = async (
 		if (node.pageScriptPath) routeIdByScriptPath.set(node.pageScriptPath, node.routeId);
 		if (node.pageServerScriptPath)
 			routeIdByScriptPath.set(node.pageServerScriptPath, node.routeId);
+		if (node.pageCmsPath) pageCmsModules.push({ routeId: node.routeId, path: node.pageCmsPath });
 	}
 
 	return {
 		manifest: { version: 1, routes },
 		visitedFiles: [...visitedFiles],
 		scopeByEntryPath,
-		routeIdByScriptPath
+		routeIdByScriptPath,
+		pageCmsModules
 	};
 };

@@ -32,6 +32,50 @@ export type VelacmsPluginOptions = {
 const VIRTUAL_ID = 'virtual:vela-cms/manifest';
 const RESOLVED_VIRTUAL_ID = '\0' + VIRTUAL_ID;
 
+const PAGES_VIRTUAL_ID = 'virtual:vela-cms/pages';
+const PAGES_RESOLVED_VIRTUAL_ID = '\0' + PAGES_VIRTUAL_ID;
+
+/**
+ * Per-`page.cms.ts` synthetic virtual id prefix. We can't import the files
+ * via their on-disk paths from inside a virtual module: SvelteKit route
+ * groups (e.g. `(marketing)`) trip Vite's `import-analysis` `normalizeUrl`
+ * — `/path/(group)/foo` and `/@fs/path/(group)/foo` both fail with
+ * `Failed to resolve import "/path"`. Routing the imports through
+ * paren-free synthetic ids and letting the plugin's `load` hook return
+ * the file source directly avoids URL normalization entirely.
+ */
+const PAGE_CMS_VIRTUAL_PREFIX = 'virtual:vela-cms/page-cms-';
+
+/**
+ * Generate the source for `virtual:vela-cms/pages`. Imports each
+ * `page.cms.ts` module via a paren-free synthetic id and aggregates them
+ * keyed by `routeId`. The `routeId` is added to each config so consumers
+ * (the AdminBar) don't have to thread it separately.
+ */
+const buildPagesModuleSource = (modules: Array<{ routeId: string; path: string }>): string => {
+	if (modules.length === 0) {
+		return 'export const pages = /* @__PURE__ */ Object.freeze({});\n';
+	}
+	const lines: string[] = [];
+	modules.forEach((_m, i) => {
+		lines.push(`import _${i} from ${JSON.stringify(PAGE_CMS_VIRTUAL_PREFIX + i)};`);
+	});
+	lines.push('export const pages = {');
+	modules.forEach((m, i) => {
+		lines.push(`	${JSON.stringify(m.routeId)}: { ..._${i}, routeId: ${JSON.stringify(m.routeId)} },`);
+	});
+	lines.push('};');
+	return lines.join('\n') + '\n';
+};
+
+/** Decode the index from a synthetic page-cms id, or `null` if not one. */
+const parsePageCmsIndex = (id: string): number | null => {
+	const prefix = '\0' + PAGE_CMS_VIRTUAL_PREFIX;
+	if (!id.startsWith(prefix)) return null;
+	const n = Number(id.slice(prefix.length));
+	return Number.isInteger(n) && n >= 0 ? n : null;
+};
+
 const INSTALL_IMPORT =
 	"import { installCmsScope as __velaCmsInstallScope } from '$lib/components/cms/install-scope.svelte.js';\n";
 
@@ -220,14 +264,43 @@ export const velacms = (options: VelacmsPluginOptions = {}): Plugin => {
 
 		resolveId(id) {
 			if (id === VIRTUAL_ID) return RESOLVED_VIRTUAL_ID;
+			if (id === PAGES_VIRTUAL_ID) return PAGES_RESOLVED_VIRTUAL_ID;
+			if (id.startsWith(PAGE_CMS_VIRTUAL_PREFIX)) return '\0' + id;
 		},
 
 		async load(id) {
-			if (id !== RESOLVED_VIRTUAL_ID) return;
-			const result = await ensureManifest(makeResolver(this as unknown as { resolve: RollupResolver }));
-			for (const f of result.visitedFiles) this.addWatchFile(f);
-			this.addWatchFile(routesDir);
-			return `export const cmsManifest = ${JSON.stringify(result.manifest)};\n`;
+			if (id === RESOLVED_VIRTUAL_ID) {
+				const result = await ensureManifest(
+					makeResolver(this as unknown as { resolve: RollupResolver })
+				);
+				for (const f of result.visitedFiles) this.addWatchFile(f);
+				this.addWatchFile(routesDir);
+				return `export const cmsManifest = ${JSON.stringify(result.manifest)};\n`;
+			}
+			if (id === PAGES_RESOLVED_VIRTUAL_ID) {
+				const result = await ensureManifest(
+					makeResolver(this as unknown as { resolve: RollupResolver })
+				);
+				// No `addWatchFile` for `m.path` — paths inside SvelteKit route
+				// groups (e.g. `(marketing)`) trip Vite's module-graph URL
+				// normalization. HMR is handled by `handleHotUpdate` below,
+				// which receives every change in `routesDir` via SvelteKit's
+				// existing watcher.
+				return buildPagesModuleSource(result.pageCmsModules);
+			}
+			const idx = parsePageCmsIndex(id);
+			if (idx !== null) {
+				const result = await ensureManifest(
+					makeResolver(this as unknown as { resolve: RollupResolver })
+				);
+				const m = result.pageCmsModules[idx];
+				if (!m) return null;
+				// Read the file source and return it for downstream Vite plugins
+				// (TS/Svelte) to compile and resolve its `$lib/…` imports.
+				// `addWatchFile(m.path)` is intentionally omitted — see comment
+				// in the pages-module branch.
+				return readFileSync(m.path, 'utf-8');
+			}
 		},
 
 		async transform(code, id) {
@@ -259,16 +332,37 @@ export const velacms = (options: VelacmsPluginOptions = {}): Plugin => {
 		handleHotUpdate({ file, server }) {
 			const isSvelte = file.endsWith('.svelte');
 			const isRouteScript = file.endsWith('+page.ts') || file.endsWith('+page.server.ts');
-			if (!isSvelte && !isRouteScript) return;
+			const isPageCms = file.endsWith('page.cms.ts');
+			if (!isSvelte && !isRouteScript && !isPageCms) return;
 			const inGraph = cachedSync?.visitedFiles.includes(file) ?? false;
 			const inRoutes = file.startsWith(routesDir + '/');
 			// Conservatively invalidate when we don't yet know the graph.
-			if (cachedSync && !inGraph && !inRoutes) return;
+			if (cachedSync && !inGraph && !inRoutes && !isPageCms) return;
+
+			// Capture the synthetic page-cms ids that point at this file before
+			// we drop the manifest cache, so we can invalidate exactly those
+			// per-file virtual modules along with the aggregate.
+			const affectedPageCmsIds: string[] = [];
+			if (isPageCms && cachedSync) {
+				cachedSync.pageCmsModules.forEach((m, i) => {
+					if (m.path === file) {
+						affectedPageCmsIds.push('\0' + PAGE_CMS_VIRTUAL_PREFIX + i);
+					}
+				});
+			}
+
 			cached = null;
 			cachedSync = null;
 			velacmsRoots = null;
-			const mod = server.moduleGraph.getModuleById(RESOLVED_VIRTUAL_ID);
-			if (mod) server.moduleGraph.invalidateModule(mod);
+
+			const manifestMod = server.moduleGraph.getModuleById(RESOLVED_VIRTUAL_ID);
+			if (manifestMod) server.moduleGraph.invalidateModule(manifestMod);
+			const pagesMod = server.moduleGraph.getModuleById(PAGES_RESOLVED_VIRTUAL_ID);
+			if (pagesMod) server.moduleGraph.invalidateModule(pagesMod);
+			for (const syntheticId of affectedPageCmsIds) {
+				const mod = server.moduleGraph.getModuleById(syntheticId);
+				if (mod) server.moduleGraph.invalidateModule(mod);
+			}
 		}
 	};
 };

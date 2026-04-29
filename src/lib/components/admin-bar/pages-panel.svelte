@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import { cmsStore } from '../cms/cms-store.svelte.js';
-	import type { CmsNewPageConfig } from './new-page-config.js';
+	import type { CmsCreatablePageConfigWithRouteId } from './page-config.js';
 	import PanelFooter from './panel-footer.svelte';
 	import PanelHeader from './panel-header.svelte';
 	import Panel from './panel.svelte';
@@ -26,12 +26,17 @@
 
 	type Props = {
 		endpoint: string;
-		newPages: CmsNewPageConfig[];
+		creatablePages: CmsCreatablePageConfigWithRouteId[];
 		onClose: () => void;
 		onChanged: () => Promise<void> | void;
-		onRequestNew: (config: CmsNewPageConfig) => void;
+		onRequestNew: (config: CmsCreatablePageConfigWithRouteId) => void;
+		onRequestDuplicate: (
+			config: CmsCreatablePageConfigWithRouteId,
+			sourceParams: Record<string, string>
+		) => void;
 	};
-	let { endpoint, newPages, onClose, onChanged, onRequestNew }: Props = $props();
+	let { endpoint, creatablePages, onClose, onChanged, onRequestNew, onRequestDuplicate }: Props =
+		$props();
 
 	let routes = $state<PageRoute[]>([]);
 	let loading = $state(true);
@@ -39,8 +44,10 @@
 	let mutating = $state<string | null>(null);
 	let query = $state('');
 	let searchEl = $state<HTMLInputElement | null>(null);
+	let scrollContainerEl = $state<HTMLElement | null>(null);
+	let highlightedIndex = $state(-1);
 
-	const creatableByRouteId = $derived(new Map(newPages.map((c) => [c.routeId, c] as const)));
+	const creatableByRouteId = $derived(new Map(creatablePages.map((c) => [c.routeId, c] as const)));
 
 	const rowKey = (routeId: string, params: Record<string, string>): string =>
 		`${routeId}?${JSON.stringify(params)}`;
@@ -90,6 +97,10 @@
 		return () => window.removeEventListener('keydown', onKeydown);
 	});
 
+	$effect(() => {
+		searchEl?.focus();
+	});
+
 	const editedKeys = $derived.by(() => {
 		const set = new Set<string>();
 		for (const item of cmsStore.openRelease?.items ?? []) {
@@ -103,10 +114,7 @@
 
 	const totalPages = $derived(routes.reduce((n, r) => n + r.entries.length, 0));
 	const draftPages = $derived(
-		routes.reduce(
-			(n, r) => n + r.entries.filter((e) => hasDraft(r.routeId, e)).length,
-			0
-		)
+		routes.reduce((n, r) => n + r.entries.filter((e) => hasDraft(r.routeId, e)).length, 0)
 	);
 
 	const matchesQuery = (routeId: string, params: Record<string, string>): boolean => {
@@ -132,7 +140,7 @@
 
 	type TemplateGroup = {
 		routeId: string;
-		creator: CmsNewPageConfig;
+		creator: CmsCreatablePageConfigWithRouteId;
 		entries: Array<{ entry: PageEntry; url: string }>;
 	};
 	const templateGroups = $derived.by<TemplateGroup[]>(() => {
@@ -153,11 +161,53 @@
 		return out;
 	});
 
+	type FlatRow = { routeId: string; entry: PageEntry; key: string };
+	const flatRows = $derived.by<FlatRow[]>(() => {
+		const out: FlatRow[] = [];
+		for (const r of staticRows) {
+			out.push({ routeId: r.routeId, entry: r.entry, key: rowKey(r.routeId, r.entry.params) });
+		}
+		for (const g of templateGroups) {
+			for (const e of g.entries) {
+				out.push({
+					routeId: g.routeId,
+					entry: e.entry,
+					key: rowKey(g.routeId, e.entry.params)
+				});
+			}
+		}
+		return out;
+	});
+
+	const highlightedKey = $derived(
+		highlightedIndex >= 0 && highlightedIndex < flatRows.length
+			? flatRows[highlightedIndex].key
+			: null
+	);
+
+	// Reset highlight when the filter changes — indices are no longer meaningful.
+	$effect(() => {
+		query;
+		highlightedIndex = -1;
+	});
+
+	$effect(() => {
+		if (highlightedIndex >= flatRows.length) highlightedIndex = flatRows.length - 1;
+	});
+
+	$effect(() => {
+		if (highlightedKey === null || !scrollContainerEl) return;
+		const el = scrollContainerEl.querySelector(
+			`[data-row-key="${CSS.escape(highlightedKey)}"]`
+		) as HTMLElement | null;
+		el?.scrollIntoView({ block: 'nearest' });
+	});
+
 	const navigateTo = async (routeId: string, params: Record<string, string>) => {
 		const url = new URL(resolveRouteUrl(routeId, params), page.url.origin);
 		const key = cmsStore.openRelease?.preview_key;
 		if (key) url.searchParams.set('preview', key);
-		onClose();
+		// onClose();
 		await goto(url, { keepFocus: true, noScroll: true });
 	};
 
@@ -220,6 +270,29 @@
 		}
 	};
 
+	const setHighlightByKey = (k: string) => {
+		const i = flatRows.findIndex((r) => r.key === k);
+		if (i >= 0) highlightedIndex = i;
+	};
+
+	const onSearchKeydown = (e: KeyboardEvent) => {
+		if (e.key === 'ArrowDown') {
+			if (flatRows.length === 0) return;
+			e.preventDefault();
+			highlightedIndex =
+				highlightedIndex < 0 ? 0 : Math.min(highlightedIndex + 1, flatRows.length - 1);
+		} else if (e.key === 'ArrowUp') {
+			if (highlightedIndex < 0) return;
+			e.preventDefault();
+			highlightedIndex = highlightedIndex === 0 ? -1 : highlightedIndex - 1;
+		} else if (e.key === 'Enter') {
+			if (highlightedIndex < 0 || highlightedIndex >= flatRows.length) return;
+			e.preventDefault();
+			const r = flatRows[highlightedIndex];
+			void onView(r.routeId, r.entry.params);
+		}
+	};
+
 	const onUndoDelete = async (routeId: string, params: Record<string, string>) => {
 		const key = rowKey(routeId, params);
 		const onCurrent = isCurrentPage(routeId, params);
@@ -261,6 +334,7 @@
 			<Input
 				bind:ref={searchEl}
 				bind:value={query}
+				onkeydown={onSearchKeydown}
 				placeholder="Filter pages…"
 				aria-label="Filter pages"
 				class="vela:pl-8 vela:pr-9"
@@ -276,7 +350,10 @@
 		</div>
 	</div>
 
-	<div class="vela:overflow-y-auto vela:px-4 vela:pb-3 vela:flex vela:flex-col vela:gap-3">
+	<div
+		bind:this={scrollContainerEl}
+		class="vela:overflow-y-auto vela:px-4 vela:pb-3 vela:flex vela:flex-col vela:gap-3"
+	>
 		{#if loading && routes.length === 0}
 			<p class="vela:text-[13px] vela:text-bar-text-tertiary vela:py-2">Loading…</p>
 		{:else if error}
@@ -289,7 +366,12 @@
 					{#each staticRows as { routeId, entry, url } (rowKey(routeId, entry.params))}
 						{@const k = rowKey(routeId, entry.params)}
 						<li
-							class="vela:group vela:flex vela:items-center vela:gap-2 vela:px-1.5 vela:py-1.5 vela:rounded-md vela:hover:bg-[var(--cms-bar-bg-hover)]"
+							data-row-key={k}
+							onmouseenter={() => setHighlightByKey(k)}
+							class="vela:flex vela:items-center vela:gap-2 vela:min-h-9 vela:px-1.5 vela:py-1.5 vela:rounded-md {highlightedKey ===
+							k
+								? 'vela:bg-[var(--cms-bar-bg-hover)]'
+								: ''}"
 						>
 							<span class="vela:flex vela:items-center vela:justify-center vela:w-3 vela:h-3">
 								{#if hasDraft(routeId, entry)}
@@ -305,23 +387,23 @@
 							</span>
 							{#if entry.isDeletePending}
 								<Badge variant="warn" size="sm">delete pending</Badge>
-								<Button
-									variant="outline"
-									size="xs"
-									disabled={mutating === k}
-									onclick={() => onUndoDelete(routeId, entry.params)}
-									class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
-								>
-									{mutating === k ? '…' : 'Undo'}
-								</Button>
-							{:else}
+								{#if highlightedKey === k}
+									<Button
+										variant="outline"
+										size="xs"
+										disabled={mutating === k}
+										onclick={() => onUndoDelete(routeId, entry.params)}
+									>
+										{mutating === k ? '…' : 'Undo'}
+									</Button>
+								{/if}
+							{:else if highlightedKey === k}
 								{#if hasDraft(routeId, entry)}
 									<Button
 										variant="outline"
 										size="xs"
 										disabled={mutating === k}
 										onclick={() => onDiscard(routeId, entry.params)}
-										class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
 									>
 										{mutating === k ? '…' : 'Discard'}
 									</Button>
@@ -330,7 +412,6 @@
 									variant="outline"
 									size="xs"
 									onclick={() => onView(routeId, entry.params)}
-									class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
 								>
 									View
 								</Button>
@@ -338,7 +419,6 @@
 									variant="outline"
 									size="xs"
 									onclick={() => onEdit(routeId, entry.params)}
-									class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
 								>
 									Edit
 								</Button>
@@ -380,11 +460,14 @@
 							{#each group.entries as { entry, url } (rowKey(group.routeId, entry.params))}
 								{@const k = rowKey(group.routeId, entry.params)}
 								<li
-									class="vela:group vela:flex vela:items-center vela:gap-2 vela:px-1.5 vela:py-1.5 vela:rounded-md vela:hover:bg-[var(--cms-bar-bg-hover)]"
+									data-row-key={k}
+									onmouseenter={() => setHighlightByKey(k)}
+									class="vela:flex vela:items-center vela:gap-2 vela:min-h-9 vela:px-1.5 vela:py-1.5 vela:rounded-md {highlightedKey ===
+									k
+										? 'vela:bg-[var(--cms-bar-bg-hover)]'
+										: ''}"
 								>
-									<span
-										class="vela:flex vela:items-center vela:justify-center vela:w-3 vela:h-3"
-									>
+									<span class="vela:flex vela:items-center vela:justify-center vela:w-3 vela:h-3">
 										{#if hasDraft(group.routeId, entry)}
 											<span
 												class="vela:w-1.5 vela:h-1.5 vela:rounded-full vela:bg-[var(--cms-status-warn-dot)]"
@@ -398,23 +481,23 @@
 									</span>
 									{#if entry.isDeletePending}
 										<Badge variant="warn" size="sm">delete pending</Badge>
-										<Button
-											variant="outline"
-											size="xs"
-											disabled={mutating === k}
-											onclick={() => onUndoDelete(group.routeId, entry.params)}
-											class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
-										>
-											{mutating === k ? '…' : 'Undo'}
-										</Button>
-									{:else}
+										{#if highlightedKey === k}
+											<Button
+												variant="outline"
+												size="xs"
+												disabled={mutating === k}
+												onclick={() => onUndoDelete(group.routeId, entry.params)}
+											>
+												{mutating === k ? '…' : 'Undo'}
+											</Button>
+										{/if}
+									{:else if highlightedKey === k}
 										{#if hasDraft(group.routeId, entry)}
 											<Button
 												variant="outline"
 												size="xs"
 												disabled={mutating === k}
 												onclick={() => onDiscard(group.routeId, entry.params)}
-												class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
 											>
 												{mutating === k ? '…' : 'Discard'}
 											</Button>
@@ -423,7 +506,6 @@
 											variant="outline"
 											size="xs"
 											onclick={() => onView(group.routeId, entry.params)}
-											class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
 										>
 											View
 										</Button>
@@ -431,16 +513,21 @@
 											variant="outline"
 											size="xs"
 											onclick={() => onEdit(group.routeId, entry.params)}
-											class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
 										>
 											Edit
+										</Button>
+										<Button
+											variant="outline"
+											size="xs"
+											onclick={() => onRequestDuplicate(group.creator, entry.params)}
+										>
+											Duplicate
 										</Button>
 										<Button
 											variant="outline-destructive"
 											size="xs"
 											disabled={mutating === k}
 											onclick={() => onDelete(group.routeId, entry.params, entry.isDraft)}
-											class="vela:opacity-0 vela:group-hover:opacity-100 vela:focus-visible:opacity-100"
 										>
 											{mutating === k ? '…' : 'Delete'}
 										</Button>
@@ -459,8 +546,4 @@
 			{/if}
 		{/if}
 	</div>
-
-	<PanelFooter>
-		<span>Click a page to open it · ⌘N to create</span>
-	</PanelFooter>
 </Panel>

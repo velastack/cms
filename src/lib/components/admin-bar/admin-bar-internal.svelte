@@ -1,18 +1,22 @@
 <script lang="ts">
 	import { afterNavigate, goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
+	import { pages } from 'virtual:vela-cms/pages';
 	import { cmsStore } from '../cms/cms-store.svelte.js';
 	import type { CmsPayload, CmsScopeEntry } from '../cms/scope.js';
 	import './admin-bar.css';
 	import HistoryPanel from './history-panel.svelte';
+	import KeyboardShortcutsDialog from './keyboard-shortcuts-dialog.svelte';
 	import NewPageChooserDialog from './new-page-chooser-dialog.svelte';
-	import type { CmsNewPageConfig } from './new-page-config.js';
 	import NewPageDialog from './new-page-dialog.svelte';
+	import { isCreatable, type CmsCreatablePageConfigWithRouteId } from './page-config.js';
 	import PagesPanel from './pages-panel.svelte';
 	import PublishDialog from './publish-dialog.svelte';
 	import { resolveRouteOnlyParams, resolveRouteUrl } from './resolve-route.js';
+	import SharePreviewLinkDialog from './share-preview-link-dialog.svelte';
 	import StatusPill from './status-pill.svelte';
 	import { Button } from './ui/button/index.js';
+	import { KbdShortcut } from './ui/kbd/index.js';
 	import * as Menubar from './ui/menubar/index.js';
 	import UserAvatar from './user-avatar.svelte';
 
@@ -35,35 +39,52 @@
 		'vela:flex vela:items-center vela:gap-2 vela:px-2 vela:py-1.5 vela:rounded-md vela:text-[13px] vela:cursor-pointer vela:outline-none vela:text-[#e88a8a] vela:focus:bg-[#3a1f1f] vela:focus:text-[#ffb3b3] vela:data-disabled:opacity-40 vela:data-disabled:pointer-events-none';
 	const menuLabelClass =
 		'vela:px-2 vela:pt-2.5 vela:pb-1 vela:text-[10px] vela:font-semibold vela:uppercase vela:tracking-widest vela:text-bar-text-tertiary';
-	const menuShortcutClass =
-		'vela:ml-auto vela:text-[11px] vela:text-bar-text-tertiary vela:font-mono vela:tracking-normal';
-	const menuSeparatorClass =
-		'vela:my-1 vela:h-px vela:bg-[var(--cms-bar-divider)]';
+	const menuShortcutClass = 'vela:ml-auto';
+	const menuSeparatorClass = 'vela:my-1 vela:h-px vela:bg-[var(--cms-bar-divider)]';
 	const menuCheckIndicatorClass =
 		'vela:flex vela:items-center vela:gap-2 vela:px-2 vela:py-1.5 vela:pl-7 vela:rounded-md vela:text-[13px] vela:cursor-pointer vela:outline-none vela:focus:bg-[var(--cms-bar-bg-hover)] vela:focus:text-bar-text vela:data-disabled:opacity-40';
 
 	type Props = {
 		user: { id: string; name: string };
 		endpoint: string;
-		newPages: CmsNewPageConfig[];
 		onClose: () => void;
 	};
-	let { user, endpoint, newPages, onClose }: Props = $props();
+	let { user, endpoint, onClose }: Props = $props();
+
+	// Auto-discovered from `page.cms.ts` files via the Vite plugin's
+	// `virtual:vela-cms/pages` module — consumers don't pass these.
+	const creatablePages = $derived(Object.values(pages).filter(isCreatable));
 
 	let seoOpen = $state(false);
 	let historyOpen = $state(false);
 	let pagesOpen = $state(false);
 	let publishOpen = $state(false);
 	let chooserOpen = $state(false);
+	let shareLinkOpen = $state(false);
+	let shortcutsOpen = $state(false);
 	const anyPanelOpen = $derived(
-		seoOpen || historyOpen || pagesOpen || publishOpen || chooserOpen
+		seoOpen ||
+			historyOpen ||
+			pagesOpen ||
+			publishOpen ||
+			chooserOpen ||
+			shareLinkOpen ||
+			shortcutsOpen
 	);
 	let publishing = $state(false);
 	let publishError = $state<string | null>(null);
 
-	let newDialog = $state<CmsNewPageConfig | null>(null);
+	let newDialog = $state<CmsCreatablePageConfigWithRouteId | null>(null);
 	let newPageError = $state<string | null>(null);
 	let newPageCreating = $state(false);
+	// Source content captured when the dialog is opened in duplicate mode.
+	// `metadata` seeds the input field values; `fields` is the rest of the
+	// source's content (non-`_metadata` keys) that gets copied to the new page
+	// after create succeeds.
+	let duplicateSource = $state<{
+		fields: Record<string, unknown>;
+		metadata: Record<string, unknown>;
+	} | null>(null);
 
 	// Only one panel/dialog open at a time. Every "open X" routes through here.
 	const closeAllPanels = () => {
@@ -72,8 +93,11 @@
 		pagesOpen = false;
 		publishOpen = false;
 		chooserOpen = false;
+		shareLinkOpen = false;
+		shortcutsOpen = false;
 		newDialog = null;
 		newPageError = null;
+		duplicateSource = null;
 	};
 
 	const counts = $derived(cmsStore.workingCopyCounts);
@@ -265,7 +289,7 @@
 	};
 
 	const onDiscardAllChanges = async () => {
-		if (!confirm('Discard every pending edit in your working copy?')) return;
+		if (!confirm('Discard all unpublished changes in your working copy?')) return;
 		const res = await fetch(`${endpoint}/release/discard`, { method: 'POST' });
 		if (!res.ok) return;
 		cmsStore.setOpenRelease(null);
@@ -275,7 +299,7 @@
 
 	const onDiscardCurrentPage = async () => {
 		if (currentPageItems.length === 0) return;
-		if (!confirm('Discard pending edits on this page?')) return;
+		if (!confirm('Discard unpublished changes on this page?')) return;
 		for (const item of currentPageItems) {
 			if (item.kind !== 'page') continue;
 			await fetch(`${endpoint}/release/items`, {
@@ -286,33 +310,44 @@
 		}
 		await cmsStore.fetchOpenRelease(endpoint);
 		await refreshAfterReleaseChange();
+		cmsStore.isEditing = false;
 	};
 
 	// "Publish this page…" and "Review & publish…" open the same modal; the
 	// user filters down to the current page via the per-row checkboxes.
 	const onPublishThisPage = onOpenPublish;
 
-	const onNewFromTemplate = (config: CmsNewPageConfig) => {
+	const onNewFromTemplate = (config: CmsCreatablePageConfigWithRouteId) => {
 		openNewPageDialog(config);
 	};
 
-	// "New page…" always opens the chooser. The Site → Create submenu has
-	// `New from /xxx` items for direct-to-template entry; this stays generic.
+	// "New page…" always opens the chooser.
 	const onNewPage = () => {
-		if (newPages.length === 0) return;
+		if (creatablePages.length === 0) return;
 		closeAllPanels();
 		chooserOpen = true;
 	};
 
 	const onHideBar = () => onClose();
-	const onShareLink = onCopyPreviewLink;
+	const onShareLink = () => {
+		closeAllPanels();
+		shareLinkOpen = true;
+	};
 
-	// Edit SEO is available outside edit mode — opening the panel implicitly
-	// enters edit mode so the metadata fields are immediately editable.
 	const onOpenSeo = () => {
 		closeAllPanels();
-		cmsStore.isEditing = true;
 		seoOpen = true;
+	};
+
+	// SEO edits are their own pending change — flush metadata drafts to the
+	// working copy without entering or exiting page edit mode.
+	const onSaveSeo = async () => {
+		const result = await cmsStore.save(endpoint);
+		if (!result.ok) return;
+		seoOpen = false;
+		const newKey = result.release?.preview_key ?? null;
+		if (newKey) await setPreviewParam(newKey, { replace: true });
+		await cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), newKey);
 	};
 
 	// Stubs for actions whose backing UIs don't exist yet. Wired so the menu
@@ -324,7 +359,8 @@
 		// Future: site-settings panel.
 	};
 	const onShowKeyboardShortcuts = () => {
-		// Future: cheat sheet.
+		closeAllPanels();
+		shortcutsOpen = true;
 	};
 
 	// Global keyboard shortcuts (DESIGN.md §9). Single-letter keys only fire
@@ -356,7 +392,7 @@
 				if (k === 's' && cmsStore.isEditing) {
 					e.preventDefault();
 					void onSave();
-				} else if (k === 'p') {
+				} else if (k === 'p' || k === 'k') {
 					e.preventDefault();
 					onOpenPages();
 				} else if (k === 'h') {
@@ -389,14 +425,49 @@
 			} else if (e.key === 'e' || e.key === 'E') {
 				e.preventDefault();
 				onToggleEdit();
+			} else if (e.key === '/') {
+				e.preventDefault();
+				onOpenPages();
+			} else if (e.key === '?') {
+				e.preventDefault();
+				onShowKeyboardShortcuts();
 			}
 		};
 		window.addEventListener('keydown', handler);
 		return () => window.removeEventListener('keydown', handler);
 	});
 
-	const openNewPageDialog = (config: CmsNewPageConfig) => {
+	const openNewPageDialog = (config: CmsCreatablePageConfigWithRouteId) => {
 		closeAllPanels();
+		newDialog = config;
+		newPageError = null;
+	};
+
+	const onRequestDuplicate = async (
+		config: CmsCreatablePageConfigWithRouteId,
+		sourceParams: Record<string, string>
+	) => {
+		const qs = new URLSearchParams({
+			kind: 'page',
+			routeId: config.routeId,
+			params: JSON.stringify(sourceParams)
+		});
+		const previewKey = cmsStore.openRelease?.preview_key;
+		if (previewKey) qs.set('preview', previewKey);
+		const res = await fetch(`${endpoint}/docs?${qs}`);
+		const sourceContents: Record<string, unknown> = res.ok
+			? ((await res.json()) as { contents: Record<string, unknown> }).contents
+			: {};
+		const { _metadata, ...rest } = sourceContents as { _metadata?: unknown } & Record<
+			string,
+			unknown
+		>;
+		const sourceMetadata =
+			_metadata && typeof _metadata === 'object' && !Array.isArray(_metadata)
+				? (_metadata as Record<string, unknown>)
+				: {};
+		closeAllPanels();
+		duplicateSource = { fields: rest, metadata: sourceMetadata };
 		newDialog = config;
 		newPageError = null;
 	};
@@ -405,6 +476,7 @@
 		if (newPageCreating) return;
 		newDialog = null;
 		newPageError = null;
+		duplicateSource = null;
 	};
 
 	const handleCreate = async (rawValues: Record<string, string>) => {
@@ -420,7 +492,14 @@
 				newPageError = 'Could not derive params from input.';
 				return;
 			}
-			const { params: newParams, metadata = {} } = transformed;
+			const { params: newParams, metadata: transformMeta = {} } = transformed;
+
+			// Duplicating: keep the source's metadata and content as the base,
+			// then let the transform's output (e.g. the new title) override on
+			// matching keys. Without this merge a duplicated room would lose its
+			// description, price, etc.
+			const dup = duplicateSource;
+			const metadata = dup ? { ...dup.metadata, ...transformMeta } : transformMeta;
 
 			const createRes = await fetch(`${endpoint}/pages`, {
 				method: 'POST',
@@ -436,11 +515,29 @@
 				return;
 			}
 
+			if (dup && Object.keys(dup.fields).length > 0) {
+				await fetch(`${endpoint}/release/items`, {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({
+						items: [
+							{
+								kind: 'page',
+								routeId: target.routeId,
+								params: newParams,
+								fields: dup.fields
+							}
+						]
+					})
+				});
+			}
+
 			await cmsStore.fetchOpenRelease(endpoint);
 			const key = cmsStore.openRelease?.preview_key ?? null;
 			const url = new URL(resolveRouteUrl(target.routeId, newParams), page.url.origin);
 			if (key) url.searchParams.set('preview', key);
 			newDialog = null;
+			duplicateSource = null;
 			pagesOpen = false;
 			cmsStore.isEditing = true;
 			await goto(url, { keepFocus: true, noScroll: true });
@@ -451,343 +548,312 @@
 </script>
 
 <div class="vela-admin-bar">
-<div
-	class="vela:fixed vela:left-1/2 vela:-translate-x-1/2 vela:z-[9999]
+	<div
+		class="vela:fixed vela:left-1/2 vela:-translate-x-1/2 vela:z-[9999]
 		vela:flex vela:items-center vela:justify-between vela:gap-3
 		vela:w-full vela:max-w-[560px] vela:mx-4 vela:sm:mx-auto
 		vela:h-12 vela:px-3 vela:rounded-full
 		vela:bg-bar-bg vela:text-bar-text
 		vela:shadow-[0_8px_24px_rgba(0,0,0,0.25)]
 		{barPosition === 'bottom' ? 'vela:bottom-4' : 'vela:top-4'}"
->
-	<div class="vela:flex vela:items-center vela:gap-3">
-		<span
-			class="vela:text-[11px] vela:font-semibold vela:tracking-wider vela:uppercase
+	>
+		<div class="vela:flex vela:items-center vela:gap-3">
+			<span
+				class="vela:text-[11px] vela:font-semibold vela:tracking-wider vela:uppercase
 				vela:text-bar-text-tertiary"
-		>
-			CMS
-		</span>
+			>
+				CMS
+			</span>
 
-		{#if cmsStore.isEditing}
-			<StatusPill variant="edit">Editing</StatusPill>
-		{:else if counts.total > 0}
-			<StatusPill variant="warn" onclick={onOpenPages}>
-				{counts.total}
-				{counts.total === 1 ? 'page draft' : 'pages draft'}
-			</StatusPill>
-		{:else}
-			<StatusPill variant="clean">All published</StatusPill>
-		{/if}
-	</div>
+			{#if cmsStore.isEditing}
+				<StatusPill variant="edit">Editing</StatusPill>
+			{:else if counts.total > 0}
+				<StatusPill variant="warn" onclick={onOpenPages}>
+					{counts.total}
+					{counts.total === 1 ? 'page draft' : 'pages draft'}
+				</StatusPill>
+			{:else}
+				<StatusPill variant="clean">All published</StatusPill>
+			{/if}
+		</div>
 
-	<div class="vela:flex vela:items-center vela:gap-2">
-		{#if cmsStore.isEditing}
-			<Button variant="ghost" size="pill" onclick={onToggleEdit}>Cancel</Button>
-			<Button size="pill" onclick={onSave}>Save</Button>
-		{:else if counts.total > 0}
-			<Button size="pill" onclick={onOpenPublish}>Publish…</Button>
-		{/if}
+		<div class="vela:flex vela:items-center vela:gap-2">
+			{#if cmsStore.isEditing}
+				<Button variant="ghost" size="pill" onclick={onToggleEdit}>Cancel</Button>
+				<Button size="pill" onclick={onSave}>Save</Button>
+			{:else if counts.total > 0}
+				<Button size="pill" onclick={onOpenPublish}>Publish…</Button>
+			{/if}
 
-		<Menubar.Root
-			class="vela:bg-transparent vela:border-0 vela:p-0 vela:gap-0.5 vela:h-auto vela:rounded-none"
-		>
-			<Menubar.Menu>
-				<Menubar.Trigger class={menubarTriggerClass}>Page</Menubar.Trigger>
-				<Menubar.Content class={menuContentClassExt} align="end">
-					<Menubar.Item
-						class={menuItemClass}
-						onSelect={onToggleEdit}
-						disabled={cmsStore.isEditing}
-					>
-						Edit
-						<Menubar.Shortcut class={menuShortcutClass}>E</Menubar.Shortcut>
-					</Menubar.Item>
-					<Menubar.Item class={menuItemClass} onSelect={onOpenSeo}>
-						Edit SEO &amp; metadata
-						<Menubar.Shortcut class={menuShortcutClass}>⌘I</Menubar.Shortcut>
-					</Menubar.Item>
-					<Menubar.Separator class={menuSeparatorClass} />
-					<Menubar.Item
-						class={menuItemClass}
-						onSelect={onCopyPreviewLink}
-						disabled={!previewUrl}
-					>
-						Copy preview link
-					</Menubar.Item>
-					<Menubar.Item class={menuItemClass} onSelect={onOpenInNewTab}>
-						Open in new tab
-						<Menubar.Shortcut class={menuShortcutClass}>⌘↵</Menubar.Shortcut>
-					</Menubar.Item>
-					<Menubar.Separator class={menuSeparatorClass} />
-					<Menubar.Item
-						class={menuItemClass}
-						onSelect={onDiscardCurrentPage}
-						disabled={!hasCurrentPageDrafts}
-					>
-						Discard changes
-					</Menubar.Item>
-					<Menubar.Item
-						class={menuItemClass}
-						onSelect={onPublishThisPage}
-						disabled={!hasCurrentPageDrafts}
-					>
-						Publish this page…
-						<Menubar.Shortcut class={menuShortcutClass}>⌘⇧P</Menubar.Shortcut>
-					</Menubar.Item>
-				</Menubar.Content>
-			</Menubar.Menu>
-
-			<Menubar.Menu>
-				<Menubar.Trigger class={menubarTriggerClass}>Site</Menubar.Trigger>
-				<Menubar.Content class={menuContentClassExt} align="end">
-					<Menubar.Label class={menuLabelClass}>Navigate</Menubar.Label>
-					<Menubar.Item class={menuItemClass} onSelect={onOpenPages}>
-						All pages…
-						<Menubar.Shortcut class={menuShortcutClass}>⌘P</Menubar.Shortcut>
-					</Menubar.Item>
-					<Menubar.Item class={menuItemClass} onSelect={onGoToPage} disabled>
-						Go to page…
-						<Menubar.Shortcut class={menuShortcutClass}>⌘K</Menubar.Shortcut>
-					</Menubar.Item>
-
-					<Menubar.Label class={menuLabelClass}>Create</Menubar.Label>
-					<Menubar.Item
-						class={menuItemClass}
-						onSelect={onNewPage}
-						disabled={newPages.length === 0}
-					>
-						New page…
-						<Menubar.Shortcut class={menuShortcutClass}>⌘N</Menubar.Shortcut>
-					</Menubar.Item>
-					{#each newPages as cfg (cfg.routeId)}
-						<Menubar.Item class={menuItemClass} onSelect={() => onNewFromTemplate(cfg)}>
-							New from
-							<span class="vela:font-mono vela:text-[12px] vela:text-bar-text-secondary">
-								{resolveRouteOnlyParams(cfg.routeId)}
-							</span>
+			<Menubar.Root
+				class="vela:bg-transparent vela:border-0 vela:p-0 vela:gap-0.5 vela:h-auto vela:rounded-none"
+			>
+				<Menubar.Menu>
+					<Menubar.Trigger class={menubarTriggerClass}>Page</Menubar.Trigger>
+					<Menubar.Content class={menuContentClassExt} align="end">
+						<Menubar.Item
+							class={menuItemClass}
+							onSelect={onToggleEdit}
+							disabled={cmsStore.isEditing}
+						>
+							Edit
+							<KbdShortcut keys="E" class={menuShortcutClass} />
 						</Menubar.Item>
-					{/each}
+						<Menubar.Item class={menuItemClass} onSelect={onOpenSeo}>
+							SEO &amp; Metadata
+							<KbdShortcut keys="⌘I" class={menuShortcutClass} />
+						</Menubar.Item>
+						<Menubar.Separator class={menuSeparatorClass} />
+						<Menubar.Item class={menuItemClass} onSelect={onCopyPreviewLink} disabled={!previewUrl}>
+							Copy Preview Link
+						</Menubar.Item>
+						<Menubar.Item class={menuItemClass} onSelect={onOpenInNewTab}>
+							Open In New Tab
+							<KbdShortcut keys="⌘↵" class={menuShortcutClass} />
+						</Menubar.Item>
+						<Menubar.Separator class={menuSeparatorClass} />
+						<Menubar.Item
+							class={menuItemClass}
+							onSelect={onDiscardCurrentPage}
+							disabled={!hasCurrentPageDrafts}
+						>
+							Discard Draft…
+						</Menubar.Item>
+						<Menubar.Item
+							class={menuItemClass}
+							onSelect={onPublishThisPage}
+							disabled={!hasCurrentPageDrafts}
+						>
+							Publish…
+							<KbdShortcut keys="⌘⇧P" class={menuShortcutClass} />
+						</Menubar.Item>
+					</Menubar.Content>
+				</Menubar.Menu>
 
-					<Menubar.Label class={menuLabelClass}>Working copy</Menubar.Label>
-					<Menubar.Item
-						class={menuItemClass}
-						onSelect={onOpenPublish}
-						disabled={counts.total === 0}
-					>
-						Review &amp; publish…
-						{#if counts.total > 0}
-							<span
-								class="vela:ml-auto vela:flex vela:items-center vela:gap-2"
-							>
-								<span
-									class="vela:inline-flex vela:items-center vela:justify-center
+				<Menubar.Menu>
+					<Menubar.Trigger class={menubarTriggerClass}>Site</Menubar.Trigger>
+					<Menubar.Content class={menuContentClassExt} align="end">
+						<Menubar.Item
+							class={menuItemClass}
+							onSelect={onNewPage}
+							disabled={creatablePages.length === 0}
+						>
+							New Page…
+							<KbdShortcut keys="⌘N" class={menuShortcutClass} />
+						</Menubar.Item>
+						<Menubar.Item class={menuItemClass} onSelect={onOpenPages}>
+							All Pages
+							<KbdShortcut keys="⌘P" class={menuShortcutClass} />
+						</Menubar.Item>
+						<Menubar.Item class={menuItemClass} onSelect={onOpenPages}>
+							Go To Page
+							<KbdShortcut keys="⌘K" class={menuShortcutClass} />
+						</Menubar.Item>
+
+						<Menubar.Label class={menuLabelClass}>Working copy</Menubar.Label>
+						<Menubar.Item
+							class={menuItemClass}
+							onSelect={onOpenPublish}
+							disabled={counts.total === 0}
+						>
+							Review &amp; Publish…
+							{#if counts.total > 0}
+								<span class="vela:ml-auto vela:flex vela:items-center vela:gap-2">
+									<span
+										class="vela:inline-flex vela:items-center vela:justify-center
 										vela:min-w-[18px] vela:h-[18px] vela:px-1 vela:rounded-full
 										vela:text-[10px] vela:font-semibold
 										vela:bg-[var(--cms-status-warn-bg)]
-										vela:text-[var(--cms-status-warn-text)]"
-								>{counts.total}</span>
-								<span class={menuShortcutClass + ' vela:ml-0'}>⌘⇧P</span>
-							</span>
-						{:else}
-							<Menubar.Shortcut class={menuShortcutClass}>⌘⇧P</Menubar.Shortcut>
-						{/if}
-					</Menubar.Item>
-					<Menubar.Item
-						class={menuItemClass}
-						onSelect={onShareLink}
-						disabled={!previewUrl}
-					>
-						Share preview link
-					</Menubar.Item>
-					<Menubar.Item
-						class={menuItemClass}
-						onSelect={onRegeneratePreviewKey}
-						disabled={!previewUrl}
-					>
-						Regenerate preview key
-					</Menubar.Item>
-					<Menubar.Item
-						class={menuItemDestructiveClass}
-						onSelect={onDiscardAllChanges}
-						disabled={counts.total === 0}
-					>
-						Discard all changes…
-					</Menubar.Item>
-
-					<Menubar.Label class={menuLabelClass}>History</Menubar.Label>
-					<Menubar.Item class={menuItemClass} onSelect={onOpenHistory}>
-						Recent releases…
-						<Menubar.Shortcut class={menuShortcutClass}>⌘H</Menubar.Shortcut>
-					</Menubar.Item>
-					<Menubar.Item class={menuItemClass} onSelect={onOpenHistory}>
-						Revert to release…
-					</Menubar.Item>
-
-					<Menubar.Separator class={menuSeparatorClass} />
-					<Menubar.Item class={menuItemClass} onSelect={onSiteSettings} disabled>
-						Site settings
-						<Menubar.Shortcut class={menuShortcutClass}>⌘,</Menubar.Shortcut>
-					</Menubar.Item>
-				</Menubar.Content>
-			</Menubar.Menu>
-
-			<Menubar.Menu>
-				<Menubar.Trigger class={menubarTriggerClass}>View</Menubar.Trigger>
-				<Menubar.Content class={menuContentClassExt} align="end">
-					<Menubar.Label class={menuLabelClass}>Bar</Menubar.Label>
-					<Menubar.Item class={menuItemClass} onSelect={onHideBar}>
-						Hide bar
-						<Menubar.Shortcut class={menuShortcutClass}>⌘.</Menubar.Shortcut>
-					</Menubar.Item>
-					<Menubar.Sub>
-						<Menubar.SubTrigger class={menuItemClass}>Position</Menubar.SubTrigger>
-						<Menubar.SubContent class={menuContentClassExt}>
-							<Menubar.Item
-								class={menuCheckIndicatorClass}
-								onSelect={() => (barPosition = 'top')}
-							>
-								<span class="vela:absolute vela:left-2">
-									{barPosition === 'top' ? '✓' : ''}
+										vela:text-[var(--cms-status-warn-text)]">{counts.total}</span
+									>
+									<KbdShortcut keys="⌘⇧P" />
 								</span>
-								Top
-							</Menubar.Item>
-							<Menubar.Item
-								class={menuCheckIndicatorClass}
-								onSelect={() => (barPosition = 'bottom')}
-							>
-								<span class="vela:absolute vela:left-2">
-									{barPosition === 'bottom' ? '✓' : ''}
-								</span>
-								Bottom
-							</Menubar.Item>
-						</Menubar.SubContent>
-					</Menubar.Sub>
+							{:else}
+								<KbdShortcut keys="⌘⇧P" class={menuShortcutClass} />
+							{/if}
+						</Menubar.Item>
+						<Menubar.Item class={menuItemClass} onSelect={onShareLink} disabled={!previewUrl}>
+							Share Preview Link…
+						</Menubar.Item>
+						<Menubar.Item
+							class={menuItemDestructiveClass}
+							onSelect={onDiscardAllChanges}
+							disabled={counts.total === 0}
+						>
+							Discard All Changes…
+						</Menubar.Item>
 
-					<Menubar.Label class={menuLabelClass}>Page indicators</Menubar.Label>
-					<Menubar.CheckboxItem
-						class={menuCheckIndicatorClass}
-						bind:checked={highlightSlots}
-					>
-						Highlight editable areas
-						<Menubar.Shortcut class={menuShortcutClass}>⌘⇧E</Menubar.Shortcut>
-					</Menubar.CheckboxItem>
-					<Menubar.CheckboxItem
-						class={menuCheckIndicatorClass}
-						bind:checked={showDraftMarkers}
-					>
-						Show draft markers on links
-					</Menubar.CheckboxItem>
-					<Menubar.CheckboxItem
-						class={menuCheckIndicatorClass}
-						bind:checked={showGrid}
-					>
-						Show grid &amp; spacing
-						<Menubar.Shortcut class={menuShortcutClass}>⌘G</Menubar.Shortcut>
-					</Menubar.CheckboxItem>
+						<Menubar.Label class={menuLabelClass}>History</Menubar.Label>
+						<Menubar.Item class={menuItemClass} onSelect={onOpenHistory}>
+							Recent Releases
+							<KbdShortcut keys="⌘H" class={menuShortcutClass} />
+						</Menubar.Item>
+					</Menubar.Content>
+				</Menubar.Menu>
 
-					<Menubar.Label class={menuLabelClass}>Preview as</Menubar.Label>
-					<Menubar.RadioGroup bind:value={previewAs}>
-						<Menubar.RadioItem class={menuCheckIndicatorClass} value="desktop">
-							Desktop
-						</Menubar.RadioItem>
-						<Menubar.RadioItem class={menuCheckIndicatorClass} value="tablet">
-							Tablet
-						</Menubar.RadioItem>
-						<Menubar.RadioItem class={menuCheckIndicatorClass} value="mobile">
-							Mobile
-						</Menubar.RadioItem>
-						<Menubar.RadioItem class={menuCheckIndicatorClass} value="signed-out">
-							Signed-out visitor
-						</Menubar.RadioItem>
-					</Menubar.RadioGroup>
+				<Menubar.Menu>
+					<Menubar.Trigger class={menubarTriggerClass}>View</Menubar.Trigger>
+					<Menubar.Content class={menuContentClassExt} align="end">
+						<Menubar.Label class={menuLabelClass}>Bar</Menubar.Label>
+						<Menubar.Item class={menuItemClass} onSelect={onHideBar}>
+							Hide Bar
+							<KbdShortcut keys="⌘." class={menuShortcutClass} />
+						</Menubar.Item>
+						<Menubar.Sub>
+							<Menubar.SubTrigger class={menuItemClass}>Position</Menubar.SubTrigger>
+							<Menubar.SubContent class={menuContentClassExt}>
+								<Menubar.Item
+									class={menuCheckIndicatorClass}
+									onSelect={() => (barPosition = 'top')}
+								>
+									<span class="vela:absolute vela:left-2">
+										{barPosition === 'top' ? '✓' : ''}
+									</span>
+									Top
+								</Menubar.Item>
+								<Menubar.Item
+									class={menuCheckIndicatorClass}
+									onSelect={() => (barPosition = 'bottom')}
+								>
+									<span class="vela:absolute vela:left-2">
+										{barPosition === 'bottom' ? '✓' : ''}
+									</span>
+									Bottom
+								</Menubar.Item>
+							</Menubar.SubContent>
+						</Menubar.Sub>
 
-					<Menubar.Label class={menuLabelClass}>Appearance</Menubar.Label>
-					<Menubar.Sub>
-						<Menubar.SubTrigger class={menuItemClass}>Theme</Menubar.SubTrigger>
-						<Menubar.SubContent class={menuContentClassExt}>
-							<Menubar.Item class={menuItemClass} disabled>System</Menubar.Item>
-							<Menubar.Item class={menuItemClass} disabled>Light</Menubar.Item>
-							<Menubar.Item class={menuItemClass} disabled>Dark</Menubar.Item>
-						</Menubar.SubContent>
-					</Menubar.Sub>
+						<Menubar.Label class={menuLabelClass}>Page indicators</Menubar.Label>
+						<Menubar.CheckboxItem class={menuCheckIndicatorClass} bind:checked={highlightSlots}>
+							Highlight Editable Areas
+							<KbdShortcut keys="⌘⇧E" class={menuShortcutClass} />
+						</Menubar.CheckboxItem>
+						<Menubar.CheckboxItem class={menuCheckIndicatorClass} bind:checked={showDraftMarkers}>
+							Show Draft Markers On Links
+						</Menubar.CheckboxItem>
 
-					<Menubar.Separator class={menuSeparatorClass} />
-					<Menubar.Item class={menuItemClass} onSelect={onShowKeyboardShortcuts} disabled>
-						Keyboard shortcuts…
-						<Menubar.Shortcut class={menuShortcutClass}>?</Menubar.Shortcut>
-					</Menubar.Item>
-				</Menubar.Content>
-			</Menubar.Menu>
-		</Menubar.Root>
+						<Menubar.Label class={menuLabelClass}>Preview As</Menubar.Label>
+						<Menubar.RadioGroup bind:value={previewAs}>
+							<Menubar.RadioItem class={menuCheckIndicatorClass} value="desktop">
+								Desktop
+							</Menubar.RadioItem>
+							<Menubar.RadioItem class={menuCheckIndicatorClass} value="tablet">
+								Tablet
+							</Menubar.RadioItem>
+							<Menubar.RadioItem class={menuCheckIndicatorClass} value="mobile">
+								Mobile
+							</Menubar.RadioItem>
+							<Menubar.RadioItem class={menuCheckIndicatorClass} value="signed-out">
+								Signed-out visitor
+							</Menubar.RadioItem>
+						</Menubar.RadioGroup>
 
-		<UserAvatar name={user.name} />
+						<Menubar.Label class={menuLabelClass}>Appearance</Menubar.Label>
+						<Menubar.Sub>
+							<Menubar.SubTrigger class={menuItemClass}>Theme</Menubar.SubTrigger>
+							<Menubar.SubContent class={menuContentClassExt}>
+								<Menubar.Item class={menuItemClass} disabled>System</Menubar.Item>
+								<Menubar.Item class={menuItemClass} disabled>Light</Menubar.Item>
+								<Menubar.Item class={menuItemClass} disabled>Dark</Menubar.Item>
+							</Menubar.SubContent>
+						</Menubar.Sub>
 
-		<Button
-			variant="ghost"
-			size="pill-icon"
-			aria-label="Close"
-			onclick={onClose}
-			class="vela:h-6 vela:w-6"
-		>
-			×
-		</Button>
+						<Menubar.Separator class={menuSeparatorClass} />
+						<Menubar.Item class={menuItemClass} onSelect={onShowKeyboardShortcuts}>
+							Keyboard Shortcuts…
+							<KbdShortcut keys="?" class={menuShortcutClass} />
+						</Menubar.Item>
+					</Menubar.Content>
+				</Menubar.Menu>
+			</Menubar.Root>
+
+			<UserAvatar name={user.name} />
+
+			<Button
+				variant="ghost"
+				size="pill-icon"
+				aria-label="Close"
+				onclick={onClose}
+				class="vela:h-6 vela:w-6"
+			>
+				×
+			</Button>
+		</div>
 	</div>
-</div>
 
-{#if seoOpen}
-	{#await import('./seo-panel.svelte') then { default: SeoPanel }}
-		<SeoPanel onClose={() => (seoOpen = false)} />
-	{/await}
-{/if}
+	{#if seoOpen}
+		{#await import('./seo-panel.svelte') then { default: SeoPanel }}
+			<SeoPanel onClose={() => (seoOpen = false)} onSave={onSaveSeo} />
+		{/await}
+	{/if}
 
-{#if historyOpen}
-	<HistoryPanel
-		{endpoint}
-		onClose={() => (historyOpen = false)}
-		onChanged={refreshAfterReleaseChange}
+	{#if historyOpen}
+		<HistoryPanel
+			{endpoint}
+			onClose={() => (historyOpen = false)}
+			onChanged={refreshAfterReleaseChange}
+		/>
+	{/if}
+
+	{#if pagesOpen}
+		<PagesPanel
+			{endpoint}
+			{creatablePages}
+			onClose={() => (pagesOpen = false)}
+			onChanged={refreshAfterReleaseChange}
+			onRequestNew={openNewPageDialog}
+			{onRequestDuplicate}
+		/>
+	{/if}
+
+	{#if cmsStore.openRelease}
+		<PublishDialog
+			open={publishOpen}
+			onOpenChange={(next) => (publishOpen = next)}
+			items={cmsStore.openRelease.items}
+			{publishing}
+			error={publishError}
+			{user}
+			{endpoint}
+			onConfirm={onConfirmPublish}
+		/>
+	{/if}
+
+	{#if newDialog}
+		<NewPageDialog
+			open={!!newDialog}
+			onOpenChange={(next) => {
+				if (!next) closeNewPageDialog();
+			}}
+			config={newDialog}
+			creating={newPageCreating}
+			error={newPageError}
+			onCreate={handleCreate}
+			mode={duplicateSource ? 'duplicate' : 'new'}
+			initialValues={duplicateSource
+				? Object.fromEntries(
+						Object.entries(duplicateSource.metadata).filter(([, v]) => typeof v === 'string') as [
+							string,
+							string
+						][]
+					)
+				: {}}
+		/>
+	{/if}
+
+	<NewPageChooserDialog
+		open={chooserOpen}
+		onOpenChange={(next) => (chooserOpen = next)}
+		{creatablePages}
+		onSelect={onNewFromTemplate}
 	/>
-{/if}
 
-{#if pagesOpen}
-	<PagesPanel
-		{endpoint}
-		{newPages}
-		onClose={() => (pagesOpen = false)}
-		onChanged={refreshAfterReleaseChange}
-		onRequestNew={openNewPageDialog}
+	<SharePreviewLinkDialog
+		open={shareLinkOpen}
+		onOpenChange={(next) => (shareLinkOpen = next)}
+		{previewUrl}
+		onRegenerate={onRegeneratePreviewKey}
 	/>
-{/if}
 
-{#if cmsStore.openRelease}
-	<PublishDialog
-		open={publishOpen}
-		onOpenChange={(next) => (publishOpen = next)}
-		items={cmsStore.openRelease.items}
-		{publishing}
-		error={publishError}
-		{user}
-		{endpoint}
-		onConfirm={onConfirmPublish}
-	/>
-{/if}
-
-{#if newDialog}
-	<NewPageDialog
-		open={!!newDialog}
-		onOpenChange={(next) => {
-			if (!next) closeNewPageDialog();
-		}}
-		config={newDialog}
-		creating={newPageCreating}
-		error={newPageError}
-		onCreate={handleCreate}
-	/>
-{/if}
-
-<NewPageChooserDialog
-	open={chooserOpen}
-	onOpenChange={(next) => (chooserOpen = next)}
-	{newPages}
-	onSelect={onNewFromTemplate}
-/>
+	<KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={(next) => (shortcutsOpen = next)} />
 </div>

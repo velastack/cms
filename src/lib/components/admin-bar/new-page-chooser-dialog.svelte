@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
-	import type { CmsNewPageConfig } from './new-page-config.js';
+	import type { CmsCreatablePageConfigWithRouteId } from './page-config.js';
 	import { resolveRouteOnlyParams } from './resolve-route.js';
 	import { Button } from './ui/button/index.js';
 	import * as Dialog from './ui/dialog/index.js';
@@ -8,10 +8,10 @@
 	type Props = {
 		open: boolean;
 		onOpenChange: (open: boolean) => void;
-		newPages: CmsNewPageConfig[];
-		onSelect: (config: CmsNewPageConfig) => void;
+		creatablePages: CmsCreatablePageConfigWithRouteId[];
+		onSelect: (config: CmsCreatablePageConfigWithRouteId) => void;
 	};
-	let { open, onOpenChange, newPages, onSelect }: Props = $props();
+	let { open, onOpenChange, creatablePages, onSelect }: Props = $props();
 </script>
 
 <Dialog.Root {open} {onOpenChange}>
@@ -22,7 +22,7 @@
 		</Dialog.Header>
 
 		<ul class="vela:list-none vela:m-0 vela:px-3 vela:pb-2 vela:flex vela:flex-col vela:gap-1">
-			{#each newPages as cfg (cfg.routeId)}
+			{#each creatablePages as cfg (cfg.routeId)}
 				<li>
 					<button
 						type="button"

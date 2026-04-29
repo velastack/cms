@@ -3,12 +3,6 @@
 	import { beforeNavigate, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { cmsStore } from '../cms/cms-store.svelte.js';
-	import type { CmsNewPageConfig } from './new-page-config.js';
-
-	type Props = {
-		newPages?: CmsNewPageConfig[];
-	};
-	let { newPages = [] }: Props = $props();
 
 	const STORAGE_KEY = 'cms.editEnabled';
 
@@ -85,7 +79,7 @@
 {#if browser}
 	{#if barEnabled && authState === 'authed' && user}
 		{#await import('./admin-bar-internal.svelte') then { default: Internal }}
-			<Internal {user} {endpoint} {newPages} onClose={closeBar} />
+			<Internal {user} {endpoint} onClose={closeBar} />
 		{/await}
 	{:else if barEnabled && authState === 'unauthed'}
 		<div class="cms-signin">

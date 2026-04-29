@@ -14,6 +14,18 @@ export { default as CmsRepeater } from './components/cms/cms-repeater.svelte';
 // Admin bar (sync wrapper; admin-bar-internal + seo-panel are async chunks)
 export { default as AdminBar } from './components/admin-bar/admin-bar.svelte';
 
+// Per-route page configuration — declare in `page.cms.ts` next to `+page.svelte`.
+export { definePage } from './components/admin-bar/page-config.js';
+export type {
+	CmsPageConfig,
+	CmsCreatablePageConfig,
+	CmsStaticPageConfig,
+	CmsPageField,
+	CmsPageMetadataSchema,
+	MetadataFieldSchema,
+	MetadataPrimitive
+} from './components/admin-bar/page-config.js';
+
 // Edit-mode store
 export { cmsStore } from './components/cms/cms-store.svelte.js';
 

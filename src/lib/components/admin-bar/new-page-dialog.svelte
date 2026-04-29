@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { SvelteMap } from 'svelte/reactivity';
-	import { normalizeField, type CmsNewPageConfig } from './new-page-config.js';
+	import {
+		normalizeField,
+		type CmsCreatablePageConfigWithRouteId
+	} from './page-config.js';
 	import { Button } from './ui/button/index.js';
 	import * as Dialog from './ui/dialog/index.js';
 	import { Input } from './ui/input/index.js';
@@ -9,22 +12,36 @@
 	type Props = {
 		open: boolean;
 		onOpenChange: (open: boolean) => void;
-		config: CmsNewPageConfig;
+		config: CmsCreatablePageConfigWithRouteId;
 		creating: boolean;
 		error: string | null;
 		onCreate: (values: Record<string, string>) => void;
+		mode?: 'new' | 'duplicate';
+		initialValues?: Record<string, string>;
 	};
 
-	let { open, onOpenChange, config, creating, error, onCreate }: Props = $props();
+	let {
+		open,
+		onOpenChange,
+		config,
+		creating,
+		error,
+		onCreate,
+		mode = 'new',
+		initialValues = {}
+	}: Props = $props();
 
 	let values = new SvelteMap<string, string>();
 
 	const fields = $derived(config.fields.map(normalizeField));
 
+	// `open` switches to true when (re)opening — seed values from initialValues
+	// then. Without keying off `open`, the dialog keeps the previous session's
+	// values around (a duplicate from the same row would re-show them).
 	$effect.pre(() => {
-		for (const f of fields) {
-			if (!values.has(f.name)) values.set(f.name, '');
-		}
+		if (!open) return;
+		values.clear();
+		for (const f of fields) values.set(f.name, initialValues[f.name] ?? '');
 	});
 
 	const allFilled = $derived(fields.every((f) => (values.get(f.name) ?? '').trim() !== ''));
@@ -53,7 +70,10 @@
 			}}
 		>
 			<Dialog.Header>
-				<Dialog.Title>New {config.type}</Dialog.Title>
+				<Dialog.Title>
+					{mode === 'duplicate' ? 'Duplicate' : 'New'}
+					{config.type}
+				</Dialog.Title>
 			</Dialog.Header>
 
 			<div class="vela:px-6 vela:pb-2 vela:flex vela:flex-col vela:gap-3">
@@ -86,7 +106,13 @@
 					Cancel
 				</Button>
 				<Button type="submit" disabled={!allFilled || creating}>
-					{creating ? 'Creating…' : 'Create'}
+					{creating
+						? mode === 'duplicate'
+							? 'Duplicating…'
+							: 'Creating…'
+						: mode === 'duplicate'
+							? 'Duplicate'
+							: 'Create'}
 				</Button>
 			</Dialog.Footer>
 		</form>
