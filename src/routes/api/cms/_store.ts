@@ -663,6 +663,21 @@ const paramsKey = (params: Record<string, string>): string => {
 };
 
 /**
+ * Empty all four stores in place. The references in {@link layoutDocs},
+ * {@link pageDocs}, {@link openReleases}, and {@link releaseHistory} are
+ * preserved (the mockAdapter and route handlers captured them at import
+ * time). Tests call this in `beforeEach` to start from a known clean
+ * baseline, then seed whatever they need by mutating the same exported
+ * objects.
+ */
+export const __resetStoreForTests = (): void => {
+	for (const k of Object.keys(layoutDocs)) delete layoutDocs[k];
+	for (const k of Object.keys(pageDocs)) delete pageDocs[k];
+	for (const k of Object.keys(openReleases)) delete openReleases[k];
+	releaseHistory.length = 0;
+};
+
+/**
  * Walk every published page entry plus every `page` / `page-delete` item in
  * the user's open release, producing a per-route view of the editor's site
  * map. `isDraft` flags entries that exist only in the open release (not yet
