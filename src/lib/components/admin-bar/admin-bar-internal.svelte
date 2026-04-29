@@ -103,6 +103,11 @@
 	const counts = $derived(cmsStore.workingCopyCounts);
 	const previewKey = $derived(cmsStore.openRelease?.preview_key ?? null);
 
+	// Sub-bar (DESIGN.md §2) hangs below the main bar in edit/pending modes,
+	// holding the contextual status pill + action buttons. Only the clean state
+	// pill remains in the main bar.
+	const subBarVisible = $derived(cmsStore.isEditing || counts.total > 0);
+
 	const previewUrl = $derived.by(() => {
 		const key = previewKey;
 		if (!key) return '';
@@ -547,7 +552,10 @@
 	};
 </script>
 
-<div class="vela-admin-bar">
+<div
+	class="vela-admin-bar"
+	style:--cms-panel-top={subBarVisible && barPosition === 'top' ? '112px' : '72px'}
+>
 	<div
 		class="vela:fixed vela:left-1/2 vela:-translate-x-1/2 vela:z-[9999]
 		vela:flex vela:items-center vela:justify-between vela:gap-3
@@ -565,26 +573,12 @@
 				CMS
 			</span>
 
-			{#if cmsStore.isEditing}
-				<StatusPill variant="edit">Editing</StatusPill>
-			{:else if counts.total > 0}
-				<StatusPill variant="warn" onclick={onOpenPages}>
-					{counts.total}
-					{counts.total === 1 ? 'page draft' : 'pages draft'}
-				</StatusPill>
-			{:else}
+			{#if !subBarVisible}
 				<StatusPill variant="clean">All published</StatusPill>
 			{/if}
 		</div>
 
 		<div class="vela:flex vela:items-center vela:gap-2">
-			{#if cmsStore.isEditing}
-				<Button variant="ghost" size="pill" onclick={onToggleEdit}>Cancel</Button>
-				<Button size="pill" onclick={onSave}>Save</Button>
-			{:else if counts.total > 0}
-				<Button size="pill" onclick={onOpenPublish}>Publish…</Button>
-			{/if}
-
 			<Menubar.Root
 				class="vela:bg-transparent vela:border-0 vela:p-0 vela:gap-0.5 vela:h-auto vela:rounded-none"
 			>
@@ -780,6 +774,76 @@
 			</Button>
 		</div>
 	</div>
+
+	{#if subBarVisible}
+		<!-- Sub-bar: bg starts behind the main bar (same top, taller height) so it
+		     reads as a footer/extension. Top corners are square; bottom matches
+		     the main bar's pill curvature. Bg is mostly transparent so the page
+		     shows through. The visible band is the 40px below the main bar. -->
+		<div
+			class="vela:fixed vela:left-1/2 vela:-translate-x-1/2 vela:z-[9998]
+			vela:flex vela:justify-between vela:gap-3
+			vela:w-full vela:max-w-[560px] vela:mx-4 vela:sm:mx-auto
+			vela:h-16 vela:px-3
+			vela:text-bar-text
+			{barPosition === 'bottom'
+				? 'vela:bottom-10 vela:pt-2 vela:items-start vela:rounded-t-3xl'
+				: 'vela:top-10 vela:pb-2 vela:items-end vela:rounded-b-3xl'}"
+			style="background: rgba(46, 46, 46, 0.75);"
+		>
+			<div class="vela:flex vela:items-center">
+				{#if cmsStore.isEditing}
+					<StatusPill
+						variant="edit"
+						class="vela:h-5.5 vela:pl-2 vela:pr-2.5 vela:gap-1 vela:text-[11px]"
+					>
+						Editing
+					</StatusPill>
+				{:else}
+					<StatusPill
+						variant="warn"
+						onclick={onOpenPages}
+						class="vela:h-5.5 vela:pl-2 vela:pr-2.5 vela:gap-1 vela:text-[11px]"
+					>
+						{counts.total}
+						{counts.total === 1 ? 'page draft' : 'pages draft'}
+					</StatusPill>
+				{/if}
+			</div>
+
+			<div class="vela:flex vela:items-center vela:gap-1.5">
+				{#if cmsStore.isEditing}
+					<Button
+						variant="ghost"
+						size="pill"
+						onclick={onToggleEdit}
+						class="vela:h-5.5 vela:px-2.5 vela:text-[10px]"
+					>
+						Cancel
+					</Button>
+					<Button size="pill" onclick={onSave} class="vela:h-5.5 vela:px-2.5 vela:text-[10px]">
+						Save
+					</Button>
+				{:else}
+					<Button
+						variant="ghost"
+						size="pill"
+						onclick={onDiscardAllChanges}
+						class="vela:h-5.5 vela:px-2.5 vela:text-[10px]"
+					>
+						Discard all changes…
+					</Button>
+					<Button
+						size="pill"
+						onclick={onOpenPublish}
+						class="vela:h-5.5 vela:px-2.5 vela:text-[10px]"
+					>
+						Publish…
+					</Button>
+				{/if}
+			</div>
+		</div>
+	{/if}
 
 	{#if seoOpen}
 		{#await import('./seo-panel.svelte') then { default: SeoPanel }}

@@ -28,10 +28,10 @@
 	role="dialog"
 	aria-label={ariaLabel}
 	class={cn(
-		'vela:fixed vela:top-[72px] vela:left-1/2 vela:-translate-x-1/2 vela:z-[9998]',
+		'vela:fixed vela:top-[var(--cms-panel-top,72px)] vela:left-1/2 vela:-translate-x-1/2 vela:z-[9998]',
 		'vela:w-full vela:max-w-[560px] vela:mx-4 vela:sm:mx-auto',
 		'vela:flex vela:flex-col',
-		'vela:max-h-[calc(100vh-6rem)]',
+		'vela:max-h-[calc(100vh-var(--cms-panel-top,72px)-1rem)]',
 		'vela:rounded-xl vela:bg-bar-bg vela:text-bar-text',
 		'vela:shadow-[0_12px_32px_rgba(0,0,0,0.45)]',
 		className

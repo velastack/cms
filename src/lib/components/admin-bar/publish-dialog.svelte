@@ -16,16 +16,7 @@
 		endpoint: string;
 		onConfirm: (name: string | undefined) => void;
 	};
-	let {
-		open,
-		onOpenChange,
-		items,
-		publishing,
-		error,
-		user,
-		endpoint,
-		onConfirm
-	}: Props = $props();
+	let { open, onOpenChange, items, publishing, error, user, endpoint, onConfirm }: Props = $props();
 
 	const itemKey = (item: ReleaseItem): string => {
 		if (item.kind === 'layout') return `layout:${item.routeId}`;
@@ -177,10 +168,7 @@
 		onOpenChange(next);
 	}}
 >
-	<Dialog.Content
-		showCloseButton={false}
-		class="vela:max-w-[30rem] vela:p-0"
-	>
+	<Dialog.Content showCloseButton={false} class="vela:max-w-[30rem] vela:p-0">
 		<form
 			class="vela:flex vela:flex-col vela:gap-0"
 			onsubmit={(e) => {
@@ -194,20 +182,16 @@
 			</Dialog.Header>
 
 			<ul
-				class="vela:list-none vela:m-0 vela:pl-0 vela:px-6 vela:pb-4 vela:flex vela:flex-col vela:gap-3 vela:overflow-y-auto vela:max-h-[40vh]"
+				class="vela:list-none vela:m-0 vela:px-6 vela:pb-4 vela:flex vela:flex-col vela:gap-3 vela:overflow-y-auto vela:max-h-[40vh]"
 			>
 				{#each items as item (itemKey(item))}
 					{@const t = changeTypeOf(item)}
 					<li class="vela:flex vela:items-start vela:gap-3">
 						<span class="vela:flex vela:flex-col vela:min-w-0 vela:flex-1">
-							<span
-								class="vela:font-mono vela:text-[14px] vela:text-bar-text vela:truncate"
-							>
+							<span class="vela:font-mono vela:text-[14px] vela:text-bar-text vela:truncate">
 								{labelFor(item)}
 							</span>
-							<span
-								class="vela:mt-0.5 vela:text-[12px] vela:text-bar-text-secondary vela:truncate"
-							>
+							<span class="vela:mt-0.5 vela:text-[12px] vela:text-bar-text-secondary vela:truncate">
 								{metaTextFor(item)} · {formatRelative(item.addedAt)}
 							</span>
 						</span>
@@ -223,13 +207,12 @@
 					vela:border-t vela:border-[var(--cms-bar-divider)]"
 			>
 				<div class="vela:flex vela:items-baseline vela:justify-between">
-					<label
-						for="vela-release-name"
-						class="vela:text-[13px] vela:text-bar-text"
-					>
+					<label for="vela-release-name" class="vela:text-[13px] vela:text-bar-text">
 						Release name <span class="vela:text-bar-text-tertiary">(optional)</span>
 					</label>
-					<span class="vela:text-[12px] vela:text-bar-text-tertiary">Helps you find it in History</span>
+					<span class="vela:text-[12px] vela:text-bar-text-tertiary"
+						>Helps you find it in History</span
+					>
 				</div>
 				<Input
 					id="vela-release-name"
