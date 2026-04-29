@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { CmsImage, CmsRepeater, CmsText } from '$lib/components/cms/index.js';
+	import { CmsImage, CmsRepeater, CmsText } from '$lib/index.js';
 
 	type GalleryItem = { src: string; caption: string };
 </script>

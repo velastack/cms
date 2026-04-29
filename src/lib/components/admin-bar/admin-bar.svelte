@@ -2,7 +2,7 @@
 	import { browser } from '$app/environment';
 	import { beforeNavigate, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
-	import { cmsStore } from '../cms/cms-store.svelte.js';
+	import { cmsStore } from '$lib/components/cms/cms-store.svelte.js';
 
 	const STORAGE_KEY = 'cms.editEnabled';
 

@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { MetaTags, deepMerge } from 'svelte-meta-tags';
-	import { CmsRepeater, CmsText } from '$lib/components/cms/index.js';
-	import AdminBar from '$lib/components/admin-bar/admin-bar.svelte';
+	import { CmsRepeater, CmsText } from '$lib/index.js';
+	import { AdminBar, cms } from '$lib/index.js';
 	import { page } from '$app/state';
 
 	type FooterLink = { href: string; label: string };
 
-	let { data, children } = $props();
-	let metaTags = $derived(deepMerge(data.baseMetaTags, page.data.pageMetaTags));
+	let { children } = $props();
+	let metaTags = $derived(deepMerge(page.data.baseMetaTags, cms.metadata));
 </script>
 
 <AdminBar />

@@ -20,7 +20,8 @@
  * cannot be re-run; the SSR `?preview=KEY` path remains as a fallback for
  * shared preview links rendered on hosts that do have a Node backend.
  */
-import type { CmsScopeEntry } from './scope.js';
+import { page } from '$app/state';
+import type { CmsPagePointer, CmsPayload, CmsScopeEntry } from './scope.js';
 
 export type CmsScopeRef = {
 	scopeId: string;
@@ -290,3 +291,66 @@ class CmsStore {
 }
 
 export const cmsStore = new CmsStore();
+
+/**
+ * Public read view of the merged CMS payload: server-loaded `page.data.cms`
+ * with `cmsStore.overlay` / `cmsStore.metadataOverlay` applied on top, so
+ * authed editors see working-copy content without a server reload.
+ *
+ * Shape mirrors `CmsPayload` directly via getters (`cms.docs`, `cms.metadata`,
+ * `cms.page`, …). `docs` stays keyed by `scopeId` to match `CmsPayload`; the
+ * overlay buckets (which key by `composeKey` to disambiguate sibling-param
+ * navigations) are translated through `base.scopes` for each scope.
+ */
+class Cms {
+	#merged = $derived.by((): CmsPayload | null => {
+		const base = (page.data?.cms ?? null) as CmsPayload | null;
+		if (!base) return null;
+
+		const docs: Record<string, Record<string, unknown>> = {};
+		for (const [scopeId, scopeEntry] of Object.entries(base.scopes)) {
+			const overlayKey = composeKey({
+				scopeId: scopeEntry.scopeId,
+				routeId: scopeEntry.routeId,
+				params: scopeEntry.params
+			});
+			const overlayBucket = cmsStore.overlay[overlayKey];
+			const baseDoc = base.docs[scopeId] ?? {};
+			docs[scopeId] = overlayBucket ? { ...baseDoc, ...overlayBucket } : baseDoc;
+		}
+
+		let metadata = base.metadata;
+		if (base.page) {
+			const metaKey = composeKey({
+				scopeId: base.page.scopeId,
+				routeId: base.page.routeId,
+				params: base.page.params
+			});
+			const metaOverlay = cmsStore.metadataOverlay[metaKey];
+			if (metaOverlay) metadata = { ...base.metadata, ...metaOverlay };
+		}
+
+		return { ...base, docs, metadata };
+	});
+
+	get locale(): string {
+		return this.#merged?.locale ?? '';
+	}
+	get docs(): Record<string, Record<string, unknown>> {
+		return this.#merged?.docs ?? {};
+	}
+	get scopes(): Record<string, CmsScopeEntry> {
+		return this.#merged?.scopes ?? {};
+	}
+	get metadata(): Record<string, unknown> {
+		return this.#merged?.metadata ?? {};
+	}
+	get endpoint(): string {
+		return this.#merged?.endpoint ?? '';
+	}
+	get page(): CmsPagePointer | null {
+		return this.#merged?.page ?? null;
+	}
+}
+
+export const cms = new Cms();

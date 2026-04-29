@@ -29,13 +29,11 @@ export type {
 // Edit-mode store
 export { cmsStore } from './components/cms/cms-store.svelte.js';
 
+// Merged CMS read view (server payload + client overlay), shaped like CmsPayload
+export { cms } from './components/cms/cms-store.svelte.js';
+
 // Scope context + helpers (used by the Vite plugin's auto-injection)
-export {
-	CMS_SCOPE,
-	getCmsScope,
-	getCmsValue,
-	getPageScope
-} from './components/cms/scope.js';
+export { CMS_SCOPE, getCmsScope, getCmsValue, getPageScope } from './components/cms/scope.js';
 export { installCmsScope } from './components/cms/install-scope.svelte.js';
 
 // Types
@@ -47,3 +45,4 @@ export type {
 	CmsScope,
 	CmsScopeEntry
 } from './components/cms/scope.js';
+

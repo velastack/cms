@@ -1,5 +1,5 @@
 import { error, type ServerLoad } from '@sveltejs/kit';
-import { defineBaseMetaTags, definePageMetaTags } from 'svelte-meta-tags';
+import { defineBaseMetaTags } from 'svelte-meta-tags';
 import { loadCms } from '$lib/cms.js';
 
 export const load: ServerLoad = async (event) => {
@@ -12,11 +12,9 @@ export const load: ServerLoad = async (event) => {
 
 	const { cms, notFound } = await loadCms(event);
 	if (notFound) error(404, 'Not found');
-	const { pageMetaTags } = definePageMetaTags(cms.metadata);
 
 	return {
 		baseMetaTags,
-		pageMetaTags,
 		cms
 	};
 };

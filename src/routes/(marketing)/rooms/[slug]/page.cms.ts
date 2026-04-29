@@ -1,4 +1,4 @@
-import { definePage } from '$lib/components/admin-bar/page-config.js';
+import { definePage } from '$lib/index.js';
 
 export default definePage({
 	type: 'Room',

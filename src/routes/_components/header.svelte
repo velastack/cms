@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CmsText } from '$lib/components/cms/index.js';
+	import { CmsText } from '$lib/index.js';
 </script>
 
 <header class="header">

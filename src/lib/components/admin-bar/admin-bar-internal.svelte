@@ -2,8 +2,8 @@
 	import { afterNavigate, goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { pages } from 'virtual:vela-cms/pages';
-	import { cmsStore } from '../cms/cms-store.svelte.js';
-	import type { CmsPayload, CmsScopeEntry } from '../cms/scope.js';
+	import { cmsStore } from '$lib/components/cms/cms-store.svelte.js';
+	import type { CmsPayload, CmsScopeEntry } from '$lib/components/cms/scope.js';
 	import './admin-bar.css';
 	import HistoryPanel from './history-panel.svelte';
 	import KeyboardShortcutsDialog from './keyboard-shortcuts-dialog.svelte';
