@@ -1,6 +1,6 @@
-# `velacms/vite` — Vite plugin
+# `@velastack/cms/vite` — Vite plugin
 
-Build-time companion to [`velacms`](../README.md). Walks SvelteKit's `src/routes`
+Build-time companion to [`@velastack/cms`](../README.md). Walks SvelteKit's `src/routes`
 tree, scans every route file's static Svelte import graph, and exposes the
 result as virtual modules that the runtime CMS components and AdminBar consume.
 Also auto-injects two small bits of glue so authors don't repeat themselves at
@@ -12,21 +12,21 @@ every route.
 // vite.config.ts
 import { defineConfig } from 'vite';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { velacms } from 'velacms/vite';
+import { cms } from '@velastack/cms/vite';
 
 export default defineConfig({
-  plugins: [velacms(), sveltekit()]
+  plugins: [cms(), sveltekit()]
 });
 ```
 
-`velacms()` should be registered **before** `sveltekit()`. The plugin sets
+`cms()` should be registered **before** `sveltekit()`. The plugin sets
 `enforce: 'pre'` so its `transform` hook runs before vite-plugin-svelte
 compiles the route file.
 
 ## Options
 
 ```ts
-type VelacmsPluginOptions = {
+type CmsPluginOptions = {
   routesDir?: string;            // default: 'src/routes' (relative to vite root)
   libDir?: string;               // default: 'src/lib'
   components?: ExternalCmsComponentSpec[];
@@ -42,7 +42,7 @@ type ExternalCmsComponentSpec =
   SvelteKit defaults.
 - `components` — third-party CMS component packs the walker should recognize.
   Auto-discovered for everything inside `<libDir>/components/cms/` and the
-  `velacms` package itself; use this for components installed from npm.
+  `@velastack/cms` package itself; use this for components installed from npm.
 - `traverse` — bare specifiers whose `.svelte` files contain CMS usages but
   aren't themselves CMS components (wrapper packages). Strings match
   `source === pattern || source.startsWith(pattern + '/')`. Auto-populated with
@@ -111,8 +111,8 @@ Imports get classified as CMS components by:
    Named imports are CMS components; default isn't.
 2. **In-tree files** — `.svelte` files directly under `<libDir>/components/cms/`.
    Default imports are CMS components.
-3. **`velacms` package** — any import resolving inside the velacms package
-   itself (named exports, plus `.svelte` default imports).
+3. **`@velastack/cms` package** — any import resolving inside the `@velastack/cms`
+   package itself (named exports, plus `.svelte` default imports).
 4. **External `components` spec** — user-declared packs.
 
 Component usages with a `name=<static>` prop are recorded as field

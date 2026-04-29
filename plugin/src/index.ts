@@ -17,14 +17,14 @@ import {
 	parsePageCmsIndex
 } from './transforms.js';
 
-export type VelacmsPluginOptions = {
+export type CmsPluginOptions = {
 	/** Defaults to `src/routes` (relative to Vite root). */
 	routesDir?: string;
 	/** Defaults to `src/lib` (relative to Vite root). */
 	libDir?: string;
 	/**
 	 * Third-party CMS components beyond the auto-discovered ones in
-	 * `<libDir>/components/cms/` and the velacms package itself.
+	 * `<libDir>/components/cms/` and the @velastack/cms package itself.
 	 */
 	components?: ExternalCmsComponentSpec[];
 	/**
@@ -76,21 +76,22 @@ const matchPackageName = (dir: string, name: string): string | null => {
  * Auto-discovers CMS components from:
  *   - `<libDir>/components/cms/*.svelte` (default imports)
  *   - `<libDir>/components/cms/index.{ts,js}` (every named export)
- *   - any import resolving inside the velacms package itself
+ *   - any import resolving inside the @velastack/cms package itself
  *
  * Use `components` to declare third-party CMS component packs. Use `traverse`
  * to walk into wrapper packages whose `.svelte` files contain CMS usages but
  * aren't themselves CMS components.
  */
-export const velacms = (options: VelacmsPluginOptions = {}): Plugin => {
+export const cms = (options: CmsPluginOptions = {}): Plugin => {
 	let routesDir = '';
 	let libDir = '';
 	let viteRoot = '';
 	let config: ResolvedConfig;
 
-	// The plugin ships inside the velacms package. From its own file location we
-	// can identify the package's repo (in dev) or installed (in node_modules)
-	// root so we can classify any import resolving inside that subtree.
+	// The plugin ships inside the @velastack/cms package. From its own file
+	// location we can identify the package's repo (in dev) or installed (in
+	// node_modules) root so we can classify any import resolving inside that
+	// subtree.
 	const ownPackageRoot = findPackageRoot(dirname(fileURLToPath(import.meta.url)));
 
 	let cached: Promise<BuildManifestResult> | null = null;
@@ -100,16 +101,17 @@ export const velacms = (options: VelacmsPluginOptions = {}): Plugin => {
 	const ensureManifest = (resolver: ImportResolver): Promise<BuildManifestResult> => {
 		if (cached) return cached;
 		cached = (async () => {
-			// Resolve velacms package roots once: the plugin's own location plus
-			// (if installed elsewhere) the consumer-resolved package.
+			// Resolve @velastack/cms package roots once: the plugin's own
+			// location plus (if installed elsewhere) the consumer-resolved
+			// package.
 			if (velacmsRoots === null) {
 				const roots = new Set<string>();
 				if (ownPackageRoot) roots.add(ownPackageRoot);
 				try {
-					const resolved = await resolver('velacms', undefined);
+					const resolved = await resolver('@velastack/cms', undefined);
 					if (resolved) {
 						const dir = findPackageRoot(dirname(resolved));
-						if (dir && matchPackageName(dir, 'velacms')) roots.add(dir);
+						if (dir && matchPackageName(dir, '@velastack/cms')) roots.add(dir);
 					}
 				} catch {
 					// Swallow — self-resolution is best-effort.
@@ -149,7 +151,7 @@ export const velacms = (options: VelacmsPluginOptions = {}): Plugin => {
 	};
 
 	return {
-		name: 'velacms',
+		name: '@velastack/cms',
 		enforce: 'pre',
 
 		configResolved(resolved) {

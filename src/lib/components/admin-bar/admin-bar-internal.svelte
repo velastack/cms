@@ -231,15 +231,14 @@
 				publishError = (await res.text()) || 'Could not publish release.';
 				return;
 			}
-			await cmsStore.fetchOpenRelease(endpoint);
+			cmsStore.setOpenRelease(null);
 			publishOpen = false;
-			const newKey = cmsStore.openRelease?.preview_key ?? null;
-			await setPreviewParam(newKey, { replace: true });
+			await setPreviewParam(null, { replace: true });
 			// Refetch `/docs` to pick up the just-published content as overlay.
 			// `page.data.cms.docs` was loaded against the pre-publish published
 			// state and we can't re-run server load on static-export sites; the
 			// fresh overlay masks that staleness.
-			await cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), newKey, { reset: true });
+			await cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), null, { reset: true });
 		} finally {
 			publishing = false;
 		}

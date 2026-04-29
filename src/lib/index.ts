@@ -2,7 +2,7 @@
  * Public client-side API for Velastack CMS.
  *
  * Server entry points (`loadCms`, `mockAdapter`, the `CmsAdapter` interface)
- * live at `velacms/server`. The Vite plugin lives at `velacms/vite`.
+ * live at `@velastack/cms/server`. The Vite plugin lives at `@velastack/cms/vite`.
  */
 
 // Display components

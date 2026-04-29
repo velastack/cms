@@ -1,7 +1,7 @@
 {
-	"name": "velacms",
+	"name": "@velastack/cms",
 	"version": "0.1.0",
-	"description": "Manifest-driven, scope-aware CMS for SvelteKit. Author content with <CmsText/> components, edit in place, ship with any backend.",
+	"description": "A scope-aware CMS for SvelteKit, for static or dynamic sites.",
 	"keywords": [
 		"svelte",
 		"sveltekit",

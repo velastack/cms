@@ -151,7 +151,7 @@ export const resolveCmsPayload = async (
  *
  * ```ts
  * import { error } from '@sveltejs/kit';
- * import { loadCms, mockAdapter } from 'velacms/server';
+ * import { loadCms, mockAdapter } from '@velastack/cms/server';
  *
  * const adapter = mockAdapter({ layoutDocs: {}, pageDocs: {} });
  *

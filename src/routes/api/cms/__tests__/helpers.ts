@@ -1,7 +1,7 @@
 import type { RequestEvent } from '@sveltejs/kit';
 
 /**
- * Synthesize the minimum {@link RequestEvent} shape velacms's API handlers
+ * Synthesize the minimum {@link RequestEvent} shape @velastack/cms's API handlers
  * read: `url`, `request`, `cookies.get`, `params`. We intentionally don't
  * mock fields the handlers don't touch — if a handler later needs more,
  * extend this helper instead of growing the type to a full event.

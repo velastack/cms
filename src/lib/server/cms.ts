@@ -26,12 +26,15 @@ export type Cms = {
 	 * Generic in the route id: pass a literal route (e.g.
 	 * `'/(marketing)/rooms/[slug]' satisfies RouteId`) and `params` is typed
 	 * as that route's `RouteParams` (e.g. `{ slug: string }`). When called
-	 * with no `routeId`, the velacms Vite plugin substitutes the importing
+	 * with no `routeId`, the @velastack/cms Vite plugin substitutes the importing
 	 * `+page.{ts,server.ts}`'s route id at build time; the static type then
 	 * widens to the union of all routes, so prefer passing the route id
 	 * explicitly when you need typed `params`.
 	 */
-	generateEntries: <R extends RouteId>(routeId?: R) => Promise<CmsEntry<RouteParams<R>>[]>;
+	generateEntries: {
+		(): Promise<CmsEntry<RouteParams<RouteId>>[]>;
+		<R extends RouteId>(routeId: R): Promise<CmsEntry<RouteParams<R>>[]>;
+	};
 };
 
 /**
@@ -43,7 +46,7 @@ export type Cms = {
  *
  * ```ts
  * // $lib/cms.ts
- * import { createCms, mockAdapter } from 'velacms/server';
+ * import { createCms, mockAdapter } from '@velastack/cms/server';
  * export const { load: loadCms, generateEntries } = createCms({
  *   adapter: mockAdapter({ layoutDocs, pageDocs }),
  *   locale: 'en'
@@ -54,12 +57,12 @@ export const createCms = (options: CreateCmsOptions): Cms => {
 	const { adapter, locale } = options;
 	return {
 		load: (event) => loadCms(event, { adapter, locale }),
-		generateEntries: async <R extends RouteId>(routeId?: R) => {
+		generateEntries: (async <R extends RouteId>(routeId?: R) => {
 			if (!routeId) {
-				throw new Error('generateEntries: routeId not injected. Did the velacms Vite plugin run?');
+				throw new Error('generateEntries: routeId not injected. Did the @velastack/cms Vite plugin run?');
 			}
 			const entries = await adapter.fetchEntries(routeId, { fetch });
 			return entries as CmsEntry<RouteParams<R>>[];
-		}
+		}) as Cms['generateEntries']
 	};
 };

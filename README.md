@@ -1,11 +1,11 @@
-# velacms
+# VelaStack CMS
 
 A scope-aware CMS for SvelteKit, for static or dynamic sites.
 
 ```svelte
 <!-- src/routes/(marketing)/about/+page.svelte -->
 <script>
-	import { CmsText, CmsRichText } from 'velacms';
+	import { CmsText, CmsRichText } from '@velastack/cms';
 </script>
 
 <h1>
@@ -39,7 +39,7 @@ CMS identity therefore can't be `(component file + field name)`. It has to be `(
 ## Install
 
 ```sh
-npm install velacms
+npm install @velastack/cms
 ```
 
 ## Quick start
@@ -50,64 +50,70 @@ npm install velacms
 // vite.config.ts
 import { defineConfig } from 'vite';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { velacms } from 'velacms/vite';
+import { cms } from '@velastack/cms/vite';
 
 export default defineConfig({
-	plugins: [velacms(), sveltekit()]
+	plugins: [cms(), sveltekit()]
 });
 ```
 
-The plugin reads `src/routes/` and `src/lib/` by default. Override with `velacms({ routesDir, libDir })` if your project is laid out differently.
+The plugin reads `src/routes/` and `src/lib/` by default. Override with `cms({ routesDir, libDir })` if your project is laid out differently.
 
-### 2. Wire `loadCms` into the root `+layout.server.ts`
+### 2. Create the CMS in `$lib/cms.ts`
+
+```ts
+// src/lib/cms.ts
+import { createCms } from '@velastack/cms/server';
+
+export const { load: loadCms, generateEntries } = createCms({
+	adapter: mockAdapter()
+});
+```
+
+Swap `mockAdapter` for your real adapter once you have a backend (see [Adapters](#adapters)).
+
+### 3. Wire `loadCms` into the root `+layout.server.ts`
 
 Optionally include `svelte-meta-tags` for easy page metadata handling, but it isn't a requirement.
 
 ```ts
 // src/routes/+layout.server.ts
-import type { ServerLoad } from '@sveltejs/kit';
-import { loadCms, mockAdapter } from 'velacms/server';
-import { defineBaseMetaTags, definePageMetaTags } from 'svelte-meta-tags';
-
-const adapter = mockAdapter({
-	docs: {
-		'layout:/(marketing)': { 'header.title': 'Climb Angola' },
-		'page:/(marketing)/about': {
-			'hero.title': 'About us',
-			body: '<p>…</p>',
-			_metadata: { title: 'About us', description: '…' }
-		}
-	}
-});
+import { error, type ServerLoad } from '@sveltejs/kit';
+import { defineBaseMetaTags } from 'svelte-meta-tags';
+import { loadCms } from '$lib/cms.js';
 
 export const load: ServerLoad = async (event) => {
 	const { baseMetaTags } = defineBaseMetaTags({
 		title: 'My site',
 		titleTemplate: '%s · My site'
 	});
-	const cms = await loadCms(event, { locale: 'en', adapter });
-	const { pageMetaTags } = definePageMetaTags(cms.metadata);
-	return { baseMetaTags, pageMetaTags, cms };
+
+	const { cms, notFound } = await loadCms(event);
+	if (notFound) error(404, 'Not found');
+
+	return {
+		baseMetaTags,
+		cms
+	};
 };
 ```
 
-Swap `mockAdapter` for your real adapter once you have a backend (see [Adapters](#adapters)).
+### 4. Render `<AdminBar/>` in the root layout
 
-### 3. Render `<AdminBar/>` in the root layout
+Along with optional `<MetaTags />` handling.
 
 ```svelte
 <!-- src/routes/+layout.svelte -->
 <script lang="ts">
-	import { page } from '$app/state';
 	import { MetaTags, deepMerge } from 'svelte-meta-tags';
-	import { AdminBar } from 'velacms';
+	import { AdminBar, cms } from '@velastack/cms';
 
 	let { data, children } = $props();
-	let metaTags = $derived(deepMerge(data.baseMetaTags, page.data.pageMetaTags));
+	let metaTags = $derived(deepMerge(data.baseMetaTags, cms.metadata));
 </script>
 
-<MetaTags {...metaTags} />
 <AdminBar />
+<MetaTags {...metaTags} />
 
 {@render children()}
 ```
@@ -119,7 +125,7 @@ Swap `mockAdapter` for your real adapter once you have a backend (see [Adapters]
 ```svelte
 <!-- src/routes/(marketing)/about/+page.svelte -->
 <script lang="ts">
-	import { CmsText, CmsRichText } from 'velacms';
+	import { CmsText, CmsRichText } from '@velastack/cms';
 </script>
 
 <h1>
@@ -184,7 +190,7 @@ Iterates an array stored at `name`. Inside the snippet, pass per-item values via
 
 ## Custom CMS components
 
-Velacms discovers your custom or third-party CMS components by convention.
+VelaStack CMS discovers your custom or third-party CMS components by convention.
 
 ### Auto-discovery (zero config)
 
@@ -195,7 +201,7 @@ A component is treated as a CMS component if **any** of the following hold:
    ```svelte
    <!-- src/lib/components/cms/cms-link.svelte -->
    <script lang="ts">
-   	import { CmsText } from 'velacms';
+   	import { CmsText } from '@velastack/cms';
    	let { name, fallback, value } = $props();
    </script>
 
@@ -208,17 +214,17 @@ A component is treated as a CMS component if **any** of the following hold:
 
 2. **It's a named export from your local `src/lib/components/cms/index.{ts,js}` barrel.** Re-export your component there if you prefer a single import path..
 
-3. **It's imported from the `velacms` package itself.** The four built-ins (`CmsText`, `CmsRichText`, `CmsImage`, `CmsRepeater`) work this way: any import resolving inside the installed `velacms` package is auto-classified.
+3. **It's imported from the `@velastack/cms` package itself.** The four built-ins (`CmsText`, `CmsRichText`, `CmsImage`, `CmsRepeater`) work this way: any import resolving inside the installed `@velastack/cms` package is auto-classified.
 
 ### Third-party packs (opt-in)
 
-For CMS components published in npm packages outside velacms, declare them with the plugin's `components` option:
+For CMS components published in npm packages outside @velastack/cms, declare them with the plugin's `components` option:
 
 ```ts
 // vite.config.ts
-import { velacms } from 'velacms/vite';
+import { cms } from '@velastack/cms/vite';
 
-velacms({
+cms({
 	components: [
 		// Named exports — `import { Hero, Quote } from 'my-cms-pack'`
 		{ source: 'my-cms-pack', names: ['Hero', 'Quote'] },
@@ -233,7 +239,7 @@ Listed sources are auto-registered for traversal; the plugin walks `.svelte` fil
 If you want the walker to descend into a package whose `.svelte` files **contain** CMS usages but aren't themselves CMS components (a wrapper / design-system scenario), add it to `traverse`:
 
 ```ts
-velacms({
+cms({
 	traverse: ['my-design-system', /^@my-org\//]
 });
 ```
@@ -245,7 +251,7 @@ String patterns match `source === pattern || source.startsWith(pattern + '/')`. 
 A CMS component should:
 
 - Accept `{ name: string; fallback?: string; value?: unknown }` props (and any extras you need).
-- Call `getCmsScope()` from `velacms` to find its scope.
+- Call `getCmsScope()` from `cms` to find its scope.
 - Read drafts via `cmsStore.hasDraft(scopeKey, name)` / `cmsStore.getValue(scopeKey, name)` when `cmsStore.isEditing` is true; fall back to `page.data.cms.docs[scopeKey][name]` otherwise.
 - Skip scope lookup when `value !== undefined` — that prop is the per-item override used inside `<CmsRepeater/>`.
 - Optionally provide an editable sibling that's dynamically `import()`'d when `cmsStore.isEditing` flips on, so editing code doesn't ship to public visitors.
@@ -282,7 +288,7 @@ Components read from this via `getContext(CMS_SCOPE)` + `page.data.cms`.
 The Vite plugin transforms every `+layout.svelte` and `+page.svelte` by inserting:
 
 ```ts
-import { installCmsScope } from 'velacms';
+import { installCmsScope } from '@velastack/cms';
 
 installCmsScope({
 	scopeId: 'page:/(marketing)/rooms/[slug]',
@@ -340,7 +346,7 @@ Page-kind docs may carry a reserved `_metadata` field. `loadCms` lifts it onto `
 Useful for tests, demos, and pre-backend development:
 
 ```ts
-import { mockAdapter } from 'velacms/server';
+import { mockAdapter } from '@velastack/cms/server';
 
 const adapter = mockAdapter({
 	docs: {
@@ -358,7 +364,7 @@ const adapter = mockAdapter({
 A skeleton sketch:
 
 ```ts
-import type { CmsAdapter, CmsScopeQuery } from 'velacms/server';
+import type { CmsAdapter, CmsScopeQuery } from '@velastack/cms/server';
 
 export const myAdapter = (config: { project: string; client: MyClient }): CmsAdapter => ({
 	async fetchDocs(queries, { fetch }) {
@@ -375,7 +381,7 @@ export const myAdapter = (config: { project: string; client: MyClient }): CmsAda
 ## Plugin options
 
 ```ts
-velacms({
+cms({
 	routesDir: 'src/routes', // path to SvelteKit routes (default)
 	libDir: 'src/lib', // path to project lib (default)
 	components: [
@@ -396,7 +402,7 @@ The plugin also exposes `virtual:vela-cms/manifest` (typed via the package's amb
 Static analysis is conservative on purpose:
 
 - `name=` props must be string literals or `name={'literal'}`. Computed names are not extracted.
-- Only static `import` of `.svelte` files is followed when walking the component graph. Bare specifiers (npm packages) are skipped unless they're the velacms package itself, are listed under `components`, or match a `traverse` pattern.
+- Only static `import` of `.svelte` files is followed when walking the component graph. Bare specifiers (npm packages) are skipped unless they're the @velastack/cms package itself, are listed under `components`, or match a `traverse` pattern.
 - `<svelte:component this={…} />` and dynamic component selection are not traced.
 - Layout reset segments (`+page@layout.svelte`) are not yet supported.
 

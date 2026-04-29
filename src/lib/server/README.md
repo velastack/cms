@@ -1,19 +1,19 @@
-# `velacms/server` — server-side runtime
+# `@velastack/cms/server` — server-side runtime
 
 The piece that runs inside SvelteKit's server load. Reads the build-time
-manifest produced by [`velacms/vite`](../../../plugin/README.md), asks a
+manifest produced by [`@velastack/cms/vite`](../../../plugin/README.md), asks a
 backend-agnostic adapter for the relevant docs, and shapes a `CmsPayload`
 the runtime CMS components consume via `getContext(CMS_SCOPE)`.
 
 ```ts
-import { createCms, mockAdapter } from 'velacms/server';
+import { createCms, mockAdapter } from '@velastack/cms/server';
 ```
 
 ## Quick start
 
 ```ts
 // src/lib/cms.ts
-import { createCms, mockAdapter } from 'velacms/server';
+import { createCms, mockAdapter } from '@velastack/cms/server';
 
 const adapter = mockAdapter({
   layoutDocs: { /* keyed by routeId */ },
@@ -64,7 +64,7 @@ Lower-level form of `createCms({...}).load`. Use when you want a different
 locale per request without re-binding the adapter:
 
 ```ts
-import { loadCms } from 'velacms/server';
+import { loadCms } from '@velastack/cms/server';
 
 export const load = (event) => loadCms(event, { adapter, locale: 'es-MX' });
 ```
