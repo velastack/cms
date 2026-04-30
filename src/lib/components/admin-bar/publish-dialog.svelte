@@ -42,7 +42,7 @@
 		if (!open) return;
 		void (async () => {
 			try {
-				const res = await fetch(`${endpoint}/pages`);
+				const res = await fetch(`${endpoint}/pages`, { credentials: 'include' });
 				if (!res.ok) return;
 				const data = (await res.json()) as {
 					routes: Array<{

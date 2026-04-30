@@ -1,4 +1,4 @@
-import type { CmsScopeEntry } from '../components/cms/scope.js';
+import type { CmsScopeEntry } from '../components/cms/scope.ts';
 
 /**
  * One scope's request, expanded from the build-time manifest with the locale
@@ -58,6 +58,15 @@ export type CmsEntry<Params extends Record<string, string> = Record<string, stri
  * doc before exposing the rest to components.
  */
 export interface CmsAdapter {
+	/**
+	 * URL prefix the frontend uses for client-side admin-bar fetches and that
+	 * gets surfaced in `CmsPayload.endpoint`. HTTP-backed adapters set this to
+	 * their base URL (e.g. `https://cms.example/v1/projects/p1/cms`); adapters
+	 * with no remote (`mockAdapter`) leave it unset and the loader falls back
+	 * to `'/api/cms'`.
+	 */
+	readonly endpoint?: string;
+
 	/**
 	 * Resolve documents for every scope in `queries`. The result map is keyed
 	 * by `query.scopeId`; missing entries are treated as "no document yet"

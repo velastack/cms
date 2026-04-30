@@ -131,7 +131,7 @@ class CmsStore {
 				params: JSON.stringify(scope.params)
 			});
 			if (previewKey) qs.set('preview', previewKey);
-			const res = await fetch(`${endpoint}/docs?${qs}`);
+			const res = await fetch(`${endpoint}/docs?${qs}`, { credentials: 'include' });
 			if (!res.ok) return null;
 			const data = (await res.json()) as { contents: Record<string, unknown> };
 			return { scope, contents: data.contents };
@@ -228,7 +228,7 @@ class CmsStore {
 	}
 
 	async fetchOpenRelease(endpoint: string): Promise<void> {
-		const res = await fetch(`${endpoint}/release`);
+		const res = await fetch(`${endpoint}/release`, { credentials: 'include' });
 		if (!res.ok) {
 			this.openRelease = null;
 			return;
@@ -245,7 +245,12 @@ class CmsStore {
 	 */
 	async save(endpoint: string): Promise<{ ok: boolean; release?: OpenRelease }> {
 		type SaveInput =
-			| { kind: 'page'; routeId: string; params: Record<string, string>; fields: Record<string, unknown> }
+			| {
+					kind: 'page';
+					routeId: string;
+					params: Record<string, string>;
+					fields: Record<string, unknown>;
+			  }
 			| { kind: 'layout'; routeId: string; fields: Record<string, unknown> };
 		const itemsByKey = new Map<string, SaveInput>();
 
@@ -278,6 +283,7 @@ class CmsStore {
 		if (items.length === 0) return { ok: true, release: this.openRelease ?? undefined };
 
 		const res = await fetch(`${endpoint}/release/items`, {
+			credentials: 'include',
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ items })

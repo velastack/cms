@@ -227,6 +227,7 @@
 			const body: { name?: string } = {};
 			if (name) body.name = name;
 			const res = await fetch(`${endpoint}/release/publish`, {
+				credentials: 'include',
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(body)
@@ -290,7 +291,10 @@
 	};
 
 	const onRegeneratePreviewKey = async () => {
-		const res = await fetch(`${endpoint}/release/preview-key`, { method: 'POST' });
+		const res = await fetch(`${endpoint}/release/preview-key`, {
+			method: 'POST',
+			credentials: 'include'
+		});
 		if (!res.ok) return;
 		await cmsStore.fetchOpenRelease(endpoint);
 		await refreshAfterReleaseChange();
@@ -298,7 +302,10 @@
 
 	const onDiscardAllChanges = async () => {
 		if (!confirm('Discard all unpublished changes in your working copy?')) return;
-		const res = await fetch(`${endpoint}/release/discard`, { method: 'POST' });
+		const res = await fetch(`${endpoint}/release/discard`, {
+			method: 'POST',
+			credentials: 'include'
+		});
 		if (!res.ok) return;
 		cmsStore.setOpenRelease(null);
 		cmsStore.clearDrafts();
@@ -312,6 +319,7 @@
 			if (item.kind !== 'page') continue;
 			await fetch(`${endpoint}/release/items`, {
 				method: 'DELETE',
+				credentials: 'include',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ kind: 'page', routeId: item.routeId, params: item.params })
 			});
@@ -402,13 +410,16 @@
 					void onSave();
 				} else if (k === 'p' || k === 'k') {
 					e.preventDefault();
-					onOpenPages();
+					if (pagesOpen) pagesOpen = false;
+					else onOpenPages();
 				} else if (k === 'h') {
 					e.preventDefault();
-					onOpenHistory();
+					if (historyOpen) historyOpen = false;
+					else onOpenHistory();
 				} else if (k === 'i') {
 					e.preventDefault();
-					onOpenSeo();
+					if (seoOpen) seoOpen = false;
+					else onOpenSeo();
 				} else if (k === 'n') {
 					e.preventDefault();
 					onNewPage();
@@ -435,7 +446,8 @@
 				onToggleEdit();
 			} else if (e.key === '/') {
 				e.preventDefault();
-				onOpenPages();
+				if (pagesOpen) pagesOpen = false;
+				else onOpenPages();
 			} else if (e.key === '?') {
 				e.preventDefault();
 				onShowKeyboardShortcuts();
@@ -462,7 +474,7 @@
 		});
 		const previewKey = cmsStore.openRelease?.preview_key;
 		if (previewKey) qs.set('preview', previewKey);
-		const res = await fetch(`${endpoint}/docs?${qs}`);
+		const res = await fetch(`${endpoint}/docs?${qs}`, { credentials: 'include' });
 		const sourceContents: Record<string, unknown> = res.ok
 			? ((await res.json()) as { contents: Record<string, unknown> }).contents
 			: {};
@@ -511,6 +523,7 @@
 
 			const createRes = await fetch(`${endpoint}/pages`, {
 				method: 'POST',
+				credentials: 'include',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ routeId: target.routeId, params: newParams, metadata })
 			});
@@ -525,6 +538,7 @@
 
 			if (dup && Object.keys(dup.fields).length > 0) {
 				await fetch(`${endpoint}/release/items`, {
+					credentials: 'include',
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify({
@@ -780,10 +794,7 @@
 									</span>
 									Light
 								</Menubar.Item>
-								<Menubar.Item
-									class={menuCheckIndicatorClass}
-									onSelect={() => setThemePref('dark')}
-								>
+								<Menubar.Item class={menuCheckIndicatorClass} onSelect={() => setThemePref('dark')}>
 									<span class="vela:absolute vela:left-2">
 										{themePref === 'dark' ? '✓' : ''}
 									</span>

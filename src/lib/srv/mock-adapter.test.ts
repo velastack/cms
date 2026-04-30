@@ -4,8 +4,8 @@ import {
 	mockAdapter,
 	type PageEntry,
 	type ReleaseSnapshot
-} from './mock-adapter.js';
-import type { CmsScopeQuery } from './types.js';
+} from './mock-adapter.ts';
+import type { CmsScopeQuery } from './types.ts';
 
 const ctx = { fetch: globalThis.fetch };
 
@@ -107,9 +107,7 @@ describe('mockAdapter.fetchDocs', () => {
 		};
 		const adapter = mockAdapter({
 			pageDocs: {
-				'/(marketing)/about': [
-					{ params: {}, published: { hero: 'OLD', body: 'unchanged' } }
-				]
+				'/(marketing)/about': [{ params: {}, published: { hero: 'OLD', body: 'unchanged' } }]
 			},
 			resolvePreview: () => release
 		});

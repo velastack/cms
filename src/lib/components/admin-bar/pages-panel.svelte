@@ -64,7 +64,7 @@
 	const fetchList = async (): Promise<void> => {
 		loading = true;
 		try {
-			const res = await fetch(`${endpoint}/pages`);
+			const res = await fetch(`${endpoint}/pages`, { credentials: 'include' });
 			if (!res.ok) {
 				error = 'Could not load pages.';
 				return;
@@ -81,20 +81,6 @@
 
 	$effect(() => {
 		void fetchList();
-	});
-
-	// Escape is handled by Panel; here we only own the `/` to-focus-search shortcut.
-	$effect(() => {
-		const onKeydown = (e: KeyboardEvent) => {
-			if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
-			const t = e.target as HTMLElement | null;
-			if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-			e.preventDefault();
-			searchEl?.focus();
-			searchEl?.select();
-		};
-		window.addEventListener('keydown', onKeydown);
-		return () => window.removeEventListener('keydown', onKeydown);
 	});
 
 	$effect(() => {
@@ -228,6 +214,7 @@
 		try {
 			const res = await fetch(`${endpoint}/release/items`, {
 				method: 'DELETE',
+				credentials: 'include',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ kind: 'page', routeId, params })
 			});
@@ -255,6 +242,7 @@
 		try {
 			const res = await fetch(`${endpoint}/pages`, {
 				method: 'DELETE',
+				credentials: 'include',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ routeId, params })
 			});
@@ -300,6 +288,7 @@
 		try {
 			const res = await fetch(`${endpoint}/release/items`, {
 				method: 'DELETE',
+				credentials: 'include',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ kind: 'page-delete', routeId, params })
 			});
@@ -408,18 +397,10 @@
 										{mutating === k ? '…' : 'Discard'}
 									</Button>
 								{/if}
-								<Button
-									variant="outline"
-									size="xs"
-									onclick={() => onView(routeId, entry.params)}
-								>
+								<Button variant="outline" size="xs" onclick={() => onView(routeId, entry.params)}>
 									View
 								</Button>
-								<Button
-									variant="outline"
-									size="xs"
-									onclick={() => onEdit(routeId, entry.params)}
-								>
+								<Button variant="outline" size="xs" onclick={() => onEdit(routeId, entry.params)}>
 									Edit
 								</Button>
 							{/if}

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { browser } from '$app/environment';
+	import { browser, building } from '$app/environment';
 	import { beforeNavigate, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { cmsStore } from '$lib/components/cms/cms-store.svelte.js';
@@ -76,7 +76,7 @@
 
 	$effect(() => {
 		if (!barEnabled) return;
-		fetch(`${endpoint}/user`)
+		fetch(`${endpoint}/user`, { credentials: 'include' })
 			.then(async (r) => {
 				if (r.status === 200) {
 					const data = await r.json();
@@ -116,20 +116,18 @@
 		barEnabled = false;
 		authState = 'idle';
 		user = null;
+		const url = new URL(page.url);
+		if (url.searchParams.has('preview')) {
+			url.searchParams.delete('preview');
+			replaceState(url.pathname + url.search + url.hash, page.state);
+		}
 	};
 </script>
 
 {#if browser}
 	{#if barEnabled && authState === 'authed' && user}
 		{#await import('./admin-bar-internal.svelte') then { default: Internal }}
-			<Internal
-				{user}
-				{endpoint}
-				onClose={closeBar}
-				{themePref}
-				{setThemePref}
-				{resolvedTheme}
-			/>
+			<Internal {user} {endpoint} onClose={closeBar} {themePref} {setThemePref} {resolvedTheme} />
 		{/await}
 	{:else if barEnabled && authState === 'unauthed'}
 		<div class="cms-signin">

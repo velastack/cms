@@ -10,6 +10,9 @@ const testManifestFixture = fileURLToPath(
 
 export default defineConfig({
 	plugins: [tailwindcss(), cms(), sveltekit()],
+	build: {
+		sourcemap: true
+	},
 	test: {
 		expect: { requireAssertions: true },
 		projects: [

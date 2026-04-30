@@ -179,7 +179,11 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 					makeResolver(this as unknown as { resolve: RollupResolver })
 				);
 				for (const f of result.visitedFiles) this.addWatchFile(f);
-				this.addWatchFile(routesDir);
+				// No `addWatchFile(routesDir)` — Vite's import-analysis treats
+				// every `addWatchFile` entry as an import and tries to resolve
+				// it (node.js:27797), and a directory path doesn't resolve.
+				// New files added under `routesDir` are picked up by Vite's
+				// project-root watcher and routed through `handleHotUpdate`.
 				return `export const cmsManifest = ${JSON.stringify(result.manifest)};\n`;
 			}
 			if (id === PAGES_RESOLVED_VIRTUAL_ID) {
@@ -282,8 +286,4 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 	};
 };
 
-export type {
-	CmsManifest,
-	CmsManifestScope,
-	ExternalCmsComponentSpec
-} from './manifest.js';
+export type { CmsManifest, CmsManifestScope, ExternalCmsComponentSpec } from './manifest.js';

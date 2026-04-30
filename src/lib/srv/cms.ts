@@ -1,4 +1,4 @@
-import type { ServerLoadEvent } from '@sveltejs/kit';
+import type { ServerLoadEvent, LoadEvent } from '@sveltejs/kit';
 import type { RouteId, RouteParams } from '$app/types';
 import { loadCms, type LoadCmsResult } from './load-cms.js';
 import type { CmsAdapter, CmsEntry } from './types.js';
@@ -59,7 +59,9 @@ export const createCms = (options: CreateCmsOptions): Cms => {
 		load: (event) => loadCms(event, { adapter, locale }),
 		generateEntries: (async <R extends RouteId>(routeId?: R) => {
 			if (!routeId) {
-				throw new Error('generateEntries: routeId not injected. Did the @velastack/cms Vite plugin run?');
+				throw new Error(
+					'generateEntries: routeId not injected. Did the @velastack/cms Vite plugin run?'
+				);
 			}
 			const entries = await adapter.fetchEntries(routeId, { fetch });
 			return entries as CmsEntry<RouteParams<R>>[];

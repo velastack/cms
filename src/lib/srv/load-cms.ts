@@ -5,8 +5,9 @@ import type {
 	CmsPagePointer,
 	CmsPayload,
 	CmsScopeEntry
-} from '../components/cms/scope.js';
-import type { CmsAdapter, CmsScopeQuery } from './types.js';
+} from '../components/cms/scope.ts';
+import type { CmsAdapter, CmsScopeQuery } from './types.ts';
+import { building } from '$app/environment';
 
 const builtManifest = cmsManifest as CmsManifest;
 
@@ -42,12 +43,14 @@ export type ResolveCmsPayloadArgs = {
 	fetch: typeof fetch;
 };
 
-const emptyPayload = (locale: string): CmsPayload => ({
+const DEFAULT_ENDPOINT = '/api/cms';
+
+const emptyPayload = (locale: string, endpoint: string): CmsPayload => ({
 	locale,
 	docs: {},
 	scopes: {},
 	metadata: {},
-	endpoint: '/api/cms',
+	endpoint,
 	page: null
 });
 
@@ -56,15 +59,14 @@ const emptyPayload = (locale: string): CmsPayload => ({
  * for documents, lift `_metadata` off the page-kind doc, and shape a
  * {@link CmsPayload}. No SvelteKit dependency — used directly by tests.
  */
-export const resolveCmsPayload = async (
-	args: ResolveCmsPayloadArgs
-): Promise<LoadCmsResult> => {
+export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<LoadCmsResult> => {
 	const { manifest, routeId, params, previewKey, locale, adapter, fetch } = args;
+	const endpoint = adapter.endpoint ?? DEFAULT_ENDPOINT;
 
-	if (!routeId) return { cms: emptyPayload(locale), notFound: false };
+	if (!routeId) return { cms: emptyPayload(locale, endpoint), notFound: false };
 
 	const route = manifest.routes[routeId];
-	if (!route) return { cms: emptyPayload(locale), notFound: false };
+	if (!route) return { cms: emptyPayload(locale, endpoint), notFound: false };
 
 	const queries: CmsScopeQuery[] = route.scopes.map((scope) => {
 		const scopeParams: Record<string, string> = {};
@@ -118,12 +120,10 @@ export const resolveCmsPayload = async (
 	}
 
 	const notFound =
-		!!pageQuery &&
-		Object.keys(pageQuery.params).length > 0 &&
-		!(pageQuery.scopeId in rawDocs);
+		!!pageQuery && Object.keys(pageQuery.params).length > 0 && !(pageQuery.scopeId in rawDocs);
 
 	return {
-		cms: { locale, docs, scopes, metadata, endpoint: '/api/cms', page: pagePointer },
+		cms: { locale, docs, scopes, metadata, endpoint, page: pagePointer },
 		notFound
 	};
 };
@@ -162,15 +162,12 @@ export const resolveCmsPayload = async (
  * };
  * ```
  */
-export const loadCms = (
-	event: ServerLoadEvent,
-	options: LoadCmsOptions
-): Promise<LoadCmsResult> =>
+export const loadCms = (event: ServerLoadEvent, options: LoadCmsOptions): Promise<LoadCmsResult> =>
 	resolveCmsPayload({
 		manifest: builtManifest,
 		routeId: event.route.id,
 		params: event.params as Record<string, string>,
-		previewKey: event.url.searchParams.get('preview'),
+		previewKey: building ? null : event.url.searchParams.get('preview'),
 		locale: options.locale,
 		adapter: options.adapter,
 		fetch: event.fetch

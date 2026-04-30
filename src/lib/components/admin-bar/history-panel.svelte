@@ -7,7 +7,12 @@
 	import { Button } from './ui/button/index.js';
 
 	type ReleaseItem =
-		| { kind: 'page'; routeId: string; params: Record<string, string>; fields: Record<string, unknown> }
+		| {
+				kind: 'page';
+				routeId: string;
+				params: Record<string, string>;
+				fields: Record<string, unknown>;
+		  }
 		| { kind: 'page-delete'; routeId: string; params: Record<string, string> }
 		| { kind: 'layout'; routeId: string; fields: Record<string, unknown> };
 
@@ -34,7 +39,7 @@
 	const load = async () => {
 		loading = true;
 		try {
-			const res = await fetch(`${endpoint}/release/history`);
+			const res = await fetch(`${endpoint}/release/history`, { credentials: 'include' });
 			if (!res.ok) return;
 			const data = (await res.json()) as { history: PublishedRelease[] };
 			history = data.history;
@@ -56,6 +61,7 @@
 		reverting = release.id;
 		try {
 			const res = await fetch(`${endpoint}/release/history/${release.id}/revert`, {
+				credentials: 'include',
 				method: 'POST'
 			});
 			if (!res.ok) return;
@@ -172,9 +178,7 @@
 							<div class="vela:flex vela:flex-col vela:min-w-0 vela:flex-1">
 								<div class="vela:flex vela:items-center vela:gap-2 vela:min-w-0">
 									{#if titleIsHash}
-										<span
-											class="vela:font-mono vela:text-[12px] vela:text-bar-text vela:truncate"
-										>
+										<span class="vela:font-mono vela:text-[12px] vela:text-bar-text vela:truncate">
 											{title}
 										</span>
 									{:else}
@@ -216,9 +220,7 @@
 								{/if}
 							</div>
 							<div class="vela:flex vela:items-center vela:gap-1.5 vela:shrink-0">
-								<Button variant="outline" size="pill" onclick={() => onView(release)}>
-									View
-								</Button>
+								<Button variant="outline" size="pill" onclick={() => onView(release)}>View</Button>
 								{#if !isLive}
 									<Button
 										variant="outline"

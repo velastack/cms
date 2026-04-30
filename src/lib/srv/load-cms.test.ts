@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { resolveCmsPayload } from './load-cms.js';
-import { mockAdapter } from './mock-adapter.js';
-import type { CmsManifest } from '../components/cms/scope.js';
+import { resolveCmsPayload } from './load-cms.ts';
+import { mockAdapter } from './mock-adapter.ts';
+import type { CmsManifest } from '../components/cms/scope.ts';
 
 const fixture: CmsManifest = {
 	version: 1,
@@ -145,9 +145,7 @@ describe('resolveCmsPayload — payload shape', () => {
 	it('emits page pointer with bound owned params only (no parent params)', async () => {
 		const adapter = mockAdapter({
 			pageDocs: {
-				'/(marketing)/rooms/[slug]': [
-					{ params: { slug: 'a' }, published: {} }
-				]
+				'/(marketing)/rooms/[slug]': [{ params: { slug: 'a' }, published: {} }]
 			}
 		});
 		const result = await resolveCmsPayload({
@@ -206,6 +204,52 @@ describe('resolveCmsPayload — payload shape', () => {
 	});
 });
 
+describe('resolveCmsPayload — adapter endpoint', () => {
+	it('falls back to /api/cms when the adapter has no endpoint set', async () => {
+		const adapter = mockAdapter({});
+		const result = await resolveCmsPayload({
+			...baseArgs,
+			routeId: '/',
+			params: {},
+			previewKey: null,
+			adapter
+		});
+		expect(result.cms.endpoint).toBe('/api/cms');
+	});
+
+	it('surfaces adapter.endpoint into payload.endpoint when set', async () => {
+		const adapter = {
+			endpoint: 'https://cms.example/v1/projects/p1/cms',
+			fetchDocs: () => ({}),
+			fetchEntries: () => []
+		};
+		const result = await resolveCmsPayload({
+			...baseArgs,
+			routeId: '/',
+			params: {},
+			previewKey: null,
+			adapter
+		});
+		expect(result.cms.endpoint).toBe('https://cms.example/v1/projects/p1/cms');
+	});
+
+	it('surfaces adapter.endpoint on degenerate routes too', async () => {
+		const adapter = {
+			endpoint: 'https://cms.example/v1/projects/p1/cms',
+			fetchDocs: () => ({}),
+			fetchEntries: () => []
+		};
+		const result = await resolveCmsPayload({
+			...baseArgs,
+			routeId: null,
+			params: {},
+			previewKey: null,
+			adapter
+		});
+		expect(result.cms.endpoint).toBe('https://cms.example/v1/projects/p1/cms');
+	});
+});
+
 describe('resolveCmsPayload — notFound semantics', () => {
 	it('flags notFound when a parameterized page has no doc for the requested params', async () => {
 		const adapter = mockAdapter({
@@ -238,9 +282,7 @@ describe('resolveCmsPayload — notFound semantics', () => {
 	it('does not flag notFound when the parameterized page has a doc', async () => {
 		const adapter = mockAdapter({
 			pageDocs: {
-				'/(marketing)/rooms/[slug]': [
-					{ params: { slug: 'a' }, published: { 'hero.title': 'H' } }
-				]
+				'/(marketing)/rooms/[slug]': [{ params: { slug: 'a' }, published: { 'hero.title': 'H' } }]
 			}
 		});
 		const result = await resolveCmsPayload({

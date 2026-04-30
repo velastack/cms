@@ -4,7 +4,7 @@ import type {
 	CmsAdapterDoc,
 	CmsEntry,
 	CmsScopeQuery
-} from './types.js';
+} from './types.ts';
 
 /**
  * One page-kind entry: a specific (`routeId`, `params`) pair and its

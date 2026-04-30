@@ -1,17 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import type { ServerLoadEvent } from '@sveltejs/kit';
-import { createCms } from './cms.js';
-import { mockAdapter } from './mock-adapter.js';
+import { createCms } from './cms.ts';
+import { mockAdapter } from './mock-adapter.ts';
 
 // The vitest server project aliases `virtual:vela-cms/manifest` to a stable
 // fixture. Route ids in these tests must exist there. See
 // `src/routes/api/cms/__tests__/__fixtures__/test-manifest.ts`.
 
-const fakeEvent = (overrides: Partial<{
-	routeId: string | null;
-	params: Record<string, string>;
-	previewKey: string | null;
-}>): ServerLoadEvent => {
+const fakeEvent = (
+	overrides: Partial<{
+		routeId: string | null;
+		params: Record<string, string>;
+		previewKey: string | null;
+	}>
+): ServerLoadEvent => {
 	const url = new URL('http://localhost/');
 	if (overrides.previewKey) url.searchParams.set('preview', overrides.previewKey);
 	return {
@@ -48,7 +50,7 @@ describe('createCms.load', () => {
 });
 
 describe('createCms.generateEntries', () => {
-	it('returns the adapter\'s entries for a given route id', async () => {
+	it("returns the adapter's entries for a given route id", async () => {
 		const adapter = mockAdapter({
 			pageDocs: {
 				'/(marketing)/rooms/[slug]': [
