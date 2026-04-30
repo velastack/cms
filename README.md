@@ -191,10 +191,8 @@ Iterates an array stored at `name`. Inside the snippet, pass per-item values via
 ### `<CmsEntries />`
 
 ```svelte
-<!-- src/lib/components/cms/cms-link.svelte -->
 <script lang="ts">
-	import { CmsText } from '@velastack/cms';
-	let { name, fallback, value } = $props();
+	import { CmsEntries } from '@velastack/cms';
 </script>
 
 <CmsEntries routeId="/(marketing)/rooms/[slug]">
