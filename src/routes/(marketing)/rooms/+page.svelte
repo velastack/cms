@@ -1,14 +1,23 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	let { data } = $props();
+	import { CmsEntries, CmsText } from '$lib/index.js';
 </script>
 
 <article>
-	<h1>Rooms</h1>
+	<h1>
+		<CmsText name="rooms.title">Rooms</CmsText>
+	</h1>
+	<CmsText name="rooms.description">We have so many rooms.</CmsText>
 	<ul class="rooms">
-		{#each data.pages as page (page.params.slug)}
-			<li><a href={resolve('/(marketing)/rooms/[slug]', page.params)}>{page.metadata.title}</a></li>
-		{/each}
+		<CmsEntries routeId="/(marketing)/rooms/[slug]">
+			{#snippet children(entry)}
+				<li>
+					<a href={resolve('/(marketing)/rooms/[slug]', entry.params)}>
+						{entry.metadata.title}
+					</a>
+				</li>
+			{/snippet}
+		</CmsEntries>
 	</ul>
 </article>
 

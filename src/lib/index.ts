@@ -10,6 +10,7 @@ export { default as CmsText } from './components/cms/cms-text.svelte';
 export { default as CmsRichText } from './components/cms/cms-rich-text.svelte';
 export { default as CmsImage } from './components/cms/cms-image.svelte';
 export { default as CmsRepeater } from './components/cms/cms-repeater.svelte';
+export { default as CmsEntries } from './components/cms/cms-entries.svelte';
 
 // Admin bar (sync wrapper; admin-bar-internal + seo-panel are async chunks)
 export { default as AdminBar } from './components/admin-bar/admin-bar.svelte';
@@ -38,6 +39,7 @@ export { installCmsScope } from './components/cms/install-scope.svelte.js';
 
 // Types
 export type {
+	CmsEntry,
 	CmsManifest,
 	CmsManifestRoute,
 	CmsManifestScope,

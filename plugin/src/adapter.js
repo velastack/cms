@@ -2,9 +2,39 @@ import staticAdapter from '@sveltejs/adapter-static';
 import * as devalue from 'devalue';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { minifySync } from 'vite';
 import { getPageCmsModules } from './build-state.js';
 
 const ROUTE_GROUP_RE = /^\([^)]+\)$/;
+
+const SHIM_PATH = fileURLToPath(new URL('./fallback-shim.js', import.meta.url));
+
+/**
+ * Read `fallback-shim.js` from disk and minify it via oxc (vite's bundled
+ * minifier). Cached for the lifetime of the process — the shim source is
+ * static, and the adapter may be invoked more than once during
+ * tooling-driven workflows.
+ *
+ * @returns {string}
+ */
+let __cachedShim = /** @type {string | null} */ (null);
+const loadMinifiedShim = () => {
+	if (__cachedShim !== null) return __cachedShim;
+	const source = fs.readFileSync(SHIM_PATH, 'utf-8');
+	const result = minifySync(SHIM_PATH, source);
+	if (result.errors && result.errors.length > 0) {
+		// Surface oxc parse errors loudly — silent fallback to raw source
+		// would ship unminified bytes on every page.
+		throw new Error(
+			`@velastack/cms-static: failed to minify fallback-shim.js: ${result.errors
+				.map((/** @type {any} */ e) => e.message ?? String(e))
+				.join('; ')}`
+		);
+	}
+	__cachedShim = result.code.trim();
+	return __cachedShim;
+};
 
 /**
  * @typedef {Parameters<typeof staticAdapter>[0]} StaticAdapterOptions
@@ -328,7 +358,8 @@ export default function adapter(options) {
 			}
 
 			const json = JSON.stringify(manifest).replace(/</g, '\\u003c');
-			const tag = `<script>var __velastack_manifest = ${json};</script>`;
+			const shim = loadMinifiedShim();
+			const tag = `<script>var __velastack_manifest = ${json};${shim}</script>`;
 			const next = fallbackHtml.slice(0, headIdx) + tag + fallbackHtml.slice(headIdx);
 			fs.writeFileSync(fallbackPath, next);
 

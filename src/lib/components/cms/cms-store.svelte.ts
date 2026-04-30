@@ -21,7 +21,7 @@
  * shared preview links rendered on hosts that do have a Node backend.
  */
 import { page } from '$app/state';
-import type { CmsPagePointer, CmsPayload, CmsScopeEntry } from './scope.js';
+import type { CmsEntry, CmsPagePointer, CmsPayload, CmsScopeEntry } from './scope.js';
 
 export type CmsScopeRef = {
 	scopeId: string;
@@ -75,7 +75,10 @@ class CmsStore {
 	openRelease = $state<OpenRelease | null>(null);
 	overlay = $state<Record<string, Record<string, unknown>>>({});
 	metadataOverlay = $state<Record<string, Record<string, unknown>>>({});
+	/** Per-routeId entries overlay populated by `loadAndApplyEntriesOverlay`. */
+	entriesOverlay = $state<Record<string, CmsEntry[]>>({});
 	private overlayFetchToken = 0;
+	private entriesFetchToken = 0;
 
 	toggleEdit(): void {
 		this.isEditing = !this.isEditing;
@@ -102,6 +105,7 @@ class CmsStore {
 	clearOverlay(): void {
 		this.overlay = {};
 		this.metadataOverlay = {};
+		this.entriesOverlay = {};
 	}
 
 	/**
@@ -165,6 +169,72 @@ class CmsStore {
 		} else {
 			this.overlay = { ...this.overlay, ...nextOverlay };
 			this.metadataOverlay = { ...this.metadataOverlay, ...nextMeta };
+		}
+	}
+
+	/**
+	 * Refresh the per-routeId entries overlay used by `<CmsEntries>`. One fetch
+	 * to `${endpoint}/pages?preview=…` covers all `routeIds`; we filter the
+	 * response per route. With `previewKey` set, draft and pending-delete
+	 * entries are kept (mirrors `apiAdapter.fetchEntries` preview behavior);
+	 * with `previewKey === null`, they're filtered out — used post-publish to
+	 * mask the now-stale `page.data.cms.entries` on static-export sites.
+	 */
+	async loadAndApplyEntriesOverlay(
+		endpoint: string,
+		routeIds: string[],
+		previewKey: string | null,
+		opts: { reset?: boolean } = {}
+	): Promise<void> {
+		const token = ++this.entriesFetchToken;
+		if (routeIds.length === 0) {
+			if (opts.reset) this.entriesOverlay = {};
+			return;
+		}
+
+		const previewSuffix = previewKey ? `?preview=${encodeURIComponent(previewKey)}` : '';
+		let res: Response;
+		try {
+			res = await fetch(`${endpoint}/pages${previewSuffix}`, { credentials: 'include' });
+		} catch {
+			return;
+		}
+		if (token !== this.entriesFetchToken) return;
+		if (!res.ok) return;
+
+		const body = (await res.json()) as {
+			routes: Array<{
+				routeId: string;
+				entries: Array<{
+					params: Record<string, string>;
+					isDraft?: boolean;
+					isDeletePending?: boolean;
+					metadata?: Record<string, unknown>;
+				}>;
+			}>;
+		};
+
+		const next: Record<string, CmsEntry[]> = {};
+		const wanted = new Set(routeIds);
+		for (const r of body.routes) {
+			if (!wanted.has(r.routeId)) continue;
+			const filtered = previewKey
+				? r.entries
+				: r.entries.filter((e) => !e.isDraft && !e.isDeletePending);
+			next[r.routeId] = filtered.map((e) => ({
+				params: e.params,
+				metadata: e.metadata ?? {}
+			}));
+		}
+		// Routes asked for but not present in the response → empty list.
+		for (const rid of routeIds) {
+			if (!(rid in next)) next[rid] = [];
+		}
+
+		if (opts.reset) {
+			this.entriesOverlay = next;
+		} else {
+			this.entriesOverlay = { ...this.entriesOverlay, ...next };
 		}
 	}
 
@@ -336,7 +406,12 @@ class Cms {
 			if (metaOverlay) metadata = { ...base.metadata, ...metaOverlay };
 		}
 
-		return { ...base, docs, metadata };
+		const entries: Record<string, CmsEntry[]> = {
+			...(base.entries ?? {}),
+			...cmsStore.entriesOverlay
+		};
+
+		return { ...base, docs, metadata, entries };
 	});
 
 	get locale(): string {
@@ -350,6 +425,9 @@ class Cms {
 	}
 	get metadata(): Record<string, unknown> {
 		return this.#merged?.metadata ?? {};
+	}
+	get entries(): Record<string, CmsEntry[]> {
+		return this.#merged?.entries ?? {};
 	}
 	get endpoint(): string {
 		return this.#merged?.endpoint ?? '';

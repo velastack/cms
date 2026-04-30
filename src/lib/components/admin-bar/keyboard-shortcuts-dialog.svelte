@@ -8,7 +8,7 @@
 		{
 			heading: 'Editing',
 			entries: [
-				{ keys: 'E', label: 'Enter edit mode' },
+				{ keys: '⌘E', label: 'Enter edit mode' },
 				{ keys: '⌘S', label: 'Save' },
 				{ keys: 'esc', label: 'Cancel edit / close panel' },
 				{ keys: '⌘Z', label: 'Revert last edit' }
@@ -19,14 +19,13 @@
 			entries: [
 				{ keys: '⌘I', label: 'SEO & metadata for this page' },
 				{ keys: '⌘↵', label: 'Open current page in new tab' },
-				{ keys: '⌘⇧P', label: 'Review & publish' }
+				{ keys: '⌘P', label: 'Review & publish' }
 			]
 		},
 		{
 			heading: 'Navigate',
 			entries: [
-				{ keys: '⌘P', label: 'All pages' },
-				{ keys: '⌘K', label: 'Go to page' },
+				{ keys: '⌘K', label: 'All pages' },
 				{ keys: '⌘H', label: 'Recent releases' },
 				{ keys: '/', label: 'Focus search (when a panel is open)' }
 			]

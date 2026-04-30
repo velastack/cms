@@ -1,4 +1,6 @@
-import type { CmsScopeEntry } from '../components/cms/scope.ts';
+import type { CmsEntry, CmsScopeEntry } from '../components/cms/scope.ts';
+
+export type { CmsEntry };
 
 /**
  * One scope's request, expanded from the build-time manifest with the locale
@@ -29,22 +31,6 @@ export type CmsAdapterDoc = {
 export type CmsAdapterContext = {
 	fetch: typeof fetch;
 	previewKey?: string | null;
-};
-
-/**
- * One publishable page-kind entry, as returned by
- * {@link CmsAdapter.fetchEntries}. `params` is the bound owned-param map for
- * the route (e.g. `{ slug: 'suite-1' }`) — feed this directly to SvelteKit's
- * prerender `entries()` export. `metadata` is the entry's `_metadata` field
- * (or `{}` if the doc has none) so listing pages can render a title or
- * description per entry without a second fetch.
- *
- * Parameterized by the params shape so `generateEntries(routeId)` can return
- * route-typed params (e.g. `{ slug: string }`) instead of a generic record.
- */
-export type CmsEntry<Params extends Record<string, string> = Record<string, string>> = {
-	params: Params;
-	metadata: Record<string, unknown>;
 };
 
 /**

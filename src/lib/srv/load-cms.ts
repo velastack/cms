@@ -1,6 +1,7 @@
 import type { ServerLoadEvent } from '@sveltejs/kit';
 import { cmsManifest } from 'virtual:vela-cms/manifest';
 import type {
+	CmsEntry,
 	CmsManifest,
 	CmsPagePointer,
 	CmsPayload,
@@ -50,6 +51,7 @@ const emptyPayload = (locale: string, endpoint: string): CmsPayload => ({
 	docs: {},
 	scopes: {},
 	metadata: {},
+	entries: {},
 	endpoint,
 	page: null
 });
@@ -84,7 +86,17 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
 		};
 	});
 
-	const rawDocs = await adapter.fetchDocs(queries, { fetch, previewKey });
+	const entriesRouteIds = route.entriesRouteIds ?? [];
+	const [rawDocs, entriesPairs] = await Promise.all([
+		adapter.fetchDocs(queries, { fetch, previewKey }),
+		Promise.all(
+			entriesRouteIds.map(async (rid): Promise<[string, CmsEntry[]]> => [
+				rid,
+				await adapter.fetchEntries(rid, { fetch, previewKey })
+			])
+		)
+	]);
+	const entries: Record<string, CmsEntry[]> = Object.fromEntries(entriesPairs);
 
 	const pageQuery = queries.find((q) => q.kind === 'page');
 	let metadata: Record<string, unknown> = {};
@@ -123,7 +135,7 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
 		!!pageQuery && Object.keys(pageQuery.params).length > 0 && !(pageQuery.scopeId in rawDocs);
 
 	return {
-		cms: { locale, docs, scopes, metadata, endpoint, page: pagePointer },
+		cms: { locale, docs, scopes, metadata, entries, endpoint, page: pagePointer },
 		notFound
 	};
 };

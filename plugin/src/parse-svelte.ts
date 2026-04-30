@@ -13,6 +13,8 @@ export type ComponentUsage = {
 	fieldName: string | null;
 	/** Whether a `value=` prop was present (marks per-item overrides). */
 	hasValueAttr: boolean;
+	/** Static value of the `routeId=` prop, or `null` if absent / non-static. */
+	routeIdAttr: string | null;
 };
 
 export type InstanceScriptRange = {
@@ -126,10 +128,15 @@ export const parseSvelteSource = (code: string, filename?: string): ParsedSvelte
 			const attr = a as { type?: string; name?: string };
 			return attr.type === 'Attribute' && attr.name === 'value';
 		});
+		const routeIdAttr = attrs.find((a) => {
+			const attr = a as { type?: string; name?: string };
+			return attr.type === 'Attribute' && attr.name === 'routeId';
+		}) as { value?: unknown } | undefined;
 		componentUsages.push({
 			componentName,
 			fieldName: nameAttr ? staticAttributeValue(nameAttr.value) : null,
-			hasValueAttr
+			hasValueAttr,
+			routeIdAttr: routeIdAttr ? staticAttributeValue(routeIdAttr.value) : null
 		});
 	});
 

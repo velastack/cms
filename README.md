@@ -188,29 +188,42 @@ Renders an `<img>`. Edit mode shows the current image plus a URL input.
 
 Iterates an array stored at `name`. Inside the snippet, pass per-item values via `value=` to bypass scope lookup. Edit mode renders the same snippet for each item plus add/remove controls and per-key inputs.
 
-## Custom CMS components
+### `<CmsEntries />`
 
-VelaStack CMS discovers your custom or third-party CMS components by convention.
+```svelte
+<!-- src/lib/components/cms/cms-link.svelte -->
+<script lang="ts">
+	import { CmsText } from '@velastack/cms';
+	let { name, fallback, value } = $props();
+</script>
 
-### Auto-discovery (zero config)
+<CmsEntries routeId="/(marketing)/rooms/[slug]">
+	{#snippet children(entry)}
+		<li>
+			<a href={resolve('/(marketing)/rooms/[slug]', entry.params)}>
+				{entry.metadata.title}
+			</a>
+		</li>
+	{/snippet}
+</CmsEntries>
+```
 
-A component is treated as a CMS component if **any** of the following hold:
+Iterates over a set of pages by route ID. Useful for index pages.
 
-1. **It lives in your app's `src/lib/components/cms/`.** Drop a new `.svelte` file there and it's registered automatically:
+## Custom CMS components VelaStack
 
-   ```svelte
-   <!-- src/lib/components/cms/cms-link.svelte -->
-   <script lang="ts">
-   	import { CmsText } from '@velastack/cms';
-   	let { name, fallback, value } = $props();
-   </script>
+CMS discovers your custom or third-party CMS components by convention. ### Auto-discovery (zero
+config) A component is treated as a CMS component if **any** of the following hold: 1. **It lives in
+your app's `src/lib/components/cms/`.** Drop a new `.svelte` file there and it's registered
+automatically: ```svelte
 
-   <a href={typeof value === 'string' ? value : undefined}>
-   	<CmsText name={`${name}.label`} {fallback} />
-   </a>
-   ```
+<a href={typeof value === 'string' ? value : undefined}>
+<CmsText name={`${name}.label`} {fallback} />
+</a>
 
-   Use it from any route: `<CmsLink name="hero.cta" />`. The plugin picks up `hero.cta` as a field on the page's scope; no plugin config edit required.
+````
+
+Use it from any route: `<CmsLink name="hero.cta" />`. The plugin picks up `hero.cta` as a field on the page's scope; no plugin config edit required.
 
 2. **It's a named export from your local `src/lib/components/cms/index.{ts,js}` barrel.** Re-export your component there if you prefer a single import path..
 
@@ -422,3 +435,4 @@ src/routes/      Test harness / showcase
 ## License
 
 MIT
+````

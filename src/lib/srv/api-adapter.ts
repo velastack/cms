@@ -61,12 +61,21 @@ export const apiAdapter = (options: ApiAdapterOptions): CmsAdapter => {
 		},
 
 		async fetchEntries(routeId: string, context: CmsAdapterContext): Promise<CmsEntry[]> {
-			// `/pages` is unauthenticated for read; the backend returns
-			// published entries only when no `cms_session` cookie is present
-			// (and full draft state when authed). For prerender we don't pass
-			// a cookie — we get published-only by construction. Filtering
-			// `isDraft` / `isDeletePending` is a defensive belt-and-suspenders.
-			const res = await context.fetch(`${endpoint}/pages`, { credentials: 'include' });
+			// Without `previewKey`: `/pages` is read-public; the backend returns
+			// published entries only when no `cms_session` cookie is present.
+			// For prerender we don't pass a cookie — we get published-only by
+			// construction. We still filter `isDraft` / `isDeletePending` as a
+			// defensive belt-and-suspenders.
+			//
+			// With `previewKey`: forward as `?preview=…` so the backend overlays
+			// the matching open release, and skip the filter so the editor sees
+			// staged additions/deletions.
+			const previewSuffix = context.previewKey
+				? `?preview=${encodeURIComponent(context.previewKey)}`
+				: '';
+			const res = await context.fetch(`${endpoint}/pages${previewSuffix}`, {
+				credentials: 'include'
+			});
 			if (!res.ok) throw new Error(`apiAdapter.fetchEntries: ${res.status}`);
 			const body = (await res.json()) as {
 				routes: Array<{
@@ -81,9 +90,10 @@ export const apiAdapter = (options: ApiAdapterOptions): CmsAdapter => {
 			};
 			const route = body.routes.find((r) => r.routeId === routeId);
 			if (!route) return [];
-			return route.entries
-				.filter((e) => !e.isDraft && !e.isDeletePending)
-				.map((e) => ({ params: e.params, metadata: e.metadata ?? {} }));
+			const entries = context.previewKey
+				? route.entries
+				: route.entries.filter((e) => !e.isDraft && !e.isDeletePending);
+			return entries.map((e) => ({ params: e.params, metadata: e.metadata ?? {} }));
 		}
 	};
 };

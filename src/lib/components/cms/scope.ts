@@ -34,6 +34,16 @@ export type CmsPagePointer = {
 	params: Record<string, string>;
 };
 
+/**
+ * One publishable page-kind entry. Mirrored from `srv/types.ts` so client-only
+ * code (`<CmsEntries>`, the merged `cms` view) can read entries without
+ * importing server modules. The server type re-exports this one.
+ */
+export type CmsEntry<Params extends Record<string, string> = Record<string, string>> = {
+	params: Params;
+	metadata: Record<string, unknown>;
+};
+
 export type CmsPayload = {
 	locale: string;
 	/** Keyed by `scopeId`. */
@@ -42,6 +52,8 @@ export type CmsPayload = {
 	scopes: Record<string, CmsScopeEntry>;
 	/** Page-scoped metadata for the current route (top-level by design — see PLAN.md). */
 	metadata: Record<string, unknown>;
+	/** Entries for routes referenced by `<CmsEntries routeId="…">` on this route. Keyed by routeId. */
+	entries: Record<string, CmsEntry[]>;
 	endpoint: string;
 	page: CmsPagePointer | null;
 };
@@ -58,6 +70,8 @@ export type CmsManifestScope = {
 
 export type CmsManifestRoute = {
 	scopes: CmsManifestScope[];
+	/** Route ids referenced by `<CmsEntries routeId="…">` anywhere in this route's chain. */
+	entriesRouteIds: string[];
 };
 
 export type CmsManifest = {

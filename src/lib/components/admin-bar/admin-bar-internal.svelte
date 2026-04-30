@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { afterNavigate, goto, replaceState } from '$app/navigation';
+	import { afterNavigate, beforeNavigate, goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { pages } from 'virtual:vela-cms/pages';
 	import { cmsStore } from '$lib/components/cms/cms-store.svelte.js';
@@ -125,6 +125,11 @@
 		return cms ? Object.values(cms.scopes) : [];
 	};
 
+	const currentEntriesRouteIds = (): string[] => {
+		const cms = page.data.cms as CmsPayload | undefined;
+		return cms ? Object.keys(cms.entries ?? {}) : [];
+	};
+
 	const setPreviewParam = async (key: string | null, opts: { replace?: boolean } = {}) => {
 		const url = new URL(page.url);
 		const current = url.searchParams.get('preview');
@@ -160,11 +165,38 @@
 				await setPreviewParam(null, { replace: true });
 			}
 			if (key) {
-				await cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), key, { reset: true });
+				await Promise.all([
+					cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), key, { reset: true }),
+					cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), key, {
+						reset: true
+					})
+				]);
 			} else {
 				cmsStore.clearOverlay();
 			}
 		})();
+	});
+
+	// Carry `?preview=…` into every internal navigation so the editor's
+	// release overlay survives link clicks (and any `goto()` in app code).
+	// We cancel the in-flight nav and re-issue it with the param appended;
+	// already-correct nav targets pass through unchanged. Full-page unloads
+	// (`willUnload`) and external/hash-only navs bypass.
+	beforeNavigate((nav) => {
+		const key = cmsStore.openRelease?.preview_key ?? null;
+		if (!key) return;
+		if (nav.type === 'leave' || nav.willUnload) return;
+		if (!nav.to) return;
+		if (nav.to.url.origin !== location.origin) return;
+		if (nav.to.url.searchParams.get('preview') === key) return;
+
+		nav.cancel();
+		const url = new URL(nav.to.url);
+		url.searchParams.set('preview', key);
+		void goto(url.pathname + url.search + url.hash, {
+			keepFocus: true,
+			noScroll: true
+		});
 	});
 
 	// Re-apply the overlay on every internal navigation. SvelteKit may strip
@@ -180,6 +212,7 @@
 			replaceState(url.pathname + url.search + url.hash, page.state);
 		}
 		void cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), key);
+		void cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), key);
 	});
 
 	const onSave = async () => {
@@ -189,7 +222,10 @@
 		seoOpen = false;
 		const newKey = result.release?.preview_key ?? null;
 		if (newKey) await setPreviewParam(newKey, { replace: true });
-		await cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), newKey);
+		await Promise.all([
+			cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), newKey),
+			cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), newKey)
+		]);
 	};
 
 	const onToggleEdit = () => {
@@ -239,11 +275,16 @@
 			cmsStore.setOpenRelease(null);
 			publishOpen = false;
 			await setPreviewParam(null, { replace: true });
-			// Refetch `/docs` to pick up the just-published content as overlay.
-			// `page.data.cms.docs` was loaded against the pre-publish published
-			// state and we can't re-run server load on static-export sites; the
-			// fresh overlay masks that staleness.
-			await cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), null, { reset: true });
+			// Refetch `/docs` and `/pages` to pick up the just-published content
+			// as overlay. `page.data.cms.{docs,entries}` was loaded against the
+			// pre-publish published state and we can't re-run server load on
+			// static-export sites; the fresh overlays mask that staleness.
+			await Promise.all([
+				cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), null, { reset: true }),
+				cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), null, {
+					reset: true
+				})
+			]);
 		} finally {
 			publishing = false;
 		}
@@ -252,7 +293,12 @@
 	const refreshAfterReleaseChange = async () => {
 		const key = cmsStore.openRelease?.preview_key ?? null;
 		await setPreviewParam(key, { replace: true });
-		await cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), key, { reset: true });
+		await Promise.all([
+			cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), key, { reset: true }),
+			cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), key, {
+				reset: true
+			})
+		]);
 	};
 
 	// View toggles + bar position. Local state — Highlight/DraftMarkers/Grid have
@@ -363,17 +409,12 @@
 		seoOpen = false;
 		const newKey = result.release?.preview_key ?? null;
 		if (newKey) await setPreviewParam(newKey, { replace: true });
-		await cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), newKey);
+		await Promise.all([
+			cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), newKey),
+			cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), newKey)
+		]);
 	};
 
-	// Stubs for actions whose backing UIs don't exist yet. Wired so the menu
-	// items aren't dead-on-arrival — they'll be hooked up in later steps.
-	const onGoToPage = () => {
-		// Step 4: command-palette page jumper.
-	};
-	const onSiteSettings = () => {
-		// Future: site-settings panel.
-	};
 	const onShowKeyboardShortcuts = () => {
 		closeAllPanels();
 		shortcutsOpen = true;
@@ -392,23 +433,20 @@
 
 		const handler = (e: KeyboardEvent) => {
 			const meta = e.metaKey || e.ctrlKey;
-			const shift = e.shiftKey;
 			const editable = isEditableTarget(e.target);
 
-			if (meta && shift) {
-				const k = e.key.toLowerCase();
-				if (k === 'p') {
-					e.preventDefault();
-					onOpenPublish();
-				}
-				return;
-			}
 			if (meta) {
 				const k = e.key.toLowerCase();
 				if (k === 's' && cmsStore.isEditing) {
 					e.preventDefault();
 					void onSave();
-				} else if (k === 'p' || k === 'k') {
+				} else if (k === 'e') {
+					e.preventDefault();
+					onToggleEdit();
+				} else if (k === 'p') {
+					e.preventDefault();
+					onOpenPublish();
+				} else if (k === 'k') {
 					e.preventDefault();
 					if (pagesOpen) pagesOpen = false;
 					else onOpenPages();
@@ -439,9 +477,6 @@
 				// When a panel is open, Escape closes the panel (each panel
 				// owns its own listener); the bar should not also exit edit
 				// mode out from under it.
-				e.preventDefault();
-				onToggleEdit();
-			} else if (e.key === 'e' || e.key === 'E') {
 				e.preventDefault();
 				onToggleEdit();
 			} else if (e.key === '/') {
@@ -621,7 +656,7 @@
 							disabled={cmsStore.isEditing}
 						>
 							Edit
-							<KbdShortcut keys="E" class={menuShortcutClass} />
+							<KbdShortcut keys="⌘E" class={menuShortcutClass} />
 						</Menubar.Item>
 						<Menubar.Item class={menuItemClass} onSelect={onOpenSeo}>
 							SEO &amp; Metadata
@@ -649,7 +684,7 @@
 							disabled={!hasCurrentPageDrafts}
 						>
 							Publish…
-							<KbdShortcut keys="⌘⇧P" class={menuShortcutClass} />
+							<KbdShortcut keys="⌘P" class={menuShortcutClass} />
 						</Menubar.Item>
 					</Menubar.Content>
 				</Menubar.Menu>
@@ -667,10 +702,6 @@
 						</Menubar.Item>
 						<Menubar.Item class={menuItemClass} onSelect={onOpenPages}>
 							All Pages
-							<KbdShortcut keys="⌘P" class={menuShortcutClass} />
-						</Menubar.Item>
-						<Menubar.Item class={menuItemClass} onSelect={onOpenPages}>
-							Go To Page
 							<KbdShortcut keys="⌘K" class={menuShortcutClass} />
 						</Menubar.Item>
 
@@ -690,10 +721,10 @@
 										vela:bg-[var(--cms-status-warn-bg)]
 										vela:text-[var(--cms-status-warn-text)]">{counts.total}</span
 									>
-									<KbdShortcut keys="⌘⇧P" />
+									<KbdShortcut keys="⌘P" />
 								</span>
 							{:else}
-								<KbdShortcut keys="⌘⇧P" class={menuShortcutClass} />
+								<KbdShortcut keys="⌘P" class={menuShortcutClass} />
 							{/if}
 						</Menubar.Item>
 						<Menubar.Item class={menuItemClass} onSelect={onShareLink} disabled={!previewUrl}>

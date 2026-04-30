@@ -63,8 +63,30 @@ describe('parseSvelteSource — component usages', () => {
 			`\n<CmsText name="hero.title" />`;
 		const { componentUsages } = parseSvelteSource(code);
 		expect(componentUsages).toEqual([
-			{ componentName: 'CmsText', fieldName: 'hero.title', hasValueAttr: false }
+			{
+				componentName: 'CmsText',
+				fieldName: 'hero.title',
+				hasValueAttr: false,
+				routeIdAttr: null
+			}
 		]);
+	});
+
+	it('captures `routeId` static value', () => {
+		const code =
+			`<script>\nimport { CmsEntries } from '$lib/components/cms';\n</script>` +
+			`\n<CmsEntries routeId="/(marketing)/rooms/[slug]" />`;
+		const { componentUsages } = parseSvelteSource(code);
+		expect(componentUsages[0].routeIdAttr).toBe('/(marketing)/rooms/[slug]');
+		expect(componentUsages[0].fieldName).toBeNull();
+	});
+
+	it('returns null routeIdAttr when routeId is dynamic', () => {
+		const code =
+			`<script>\nimport { CmsEntries } from '$lib/components/cms';\nlet r = '/x';\n</script>` +
+			`\n<CmsEntries routeId={r} />`;
+		const { componentUsages } = parseSvelteSource(code);
+		expect(componentUsages[0].routeIdAttr).toBeNull();
 	});
 
 	it('returns null fieldName when name is dynamic', () => {

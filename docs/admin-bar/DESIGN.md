@@ -58,7 +58,7 @@ The amber pulse is a gentle nudge — not an alarm. The `…` ellipsis on `Publi
 
 ### 2.3 Editing this page
 
-The user has clicked `Edit` (or pressed `E`) and is actively editing the page.
+The user has clicked `Edit` (or pressed `⌘E`) and is actively editing the page.
 
 - Status pill: blue dot + `Editing /` (the path of the page being edited)
 - Promoted action buttons: `Cancel` (ghost, with `esc` shortcut) + `Save` (primary, with `⌘S` shortcut)
@@ -117,29 +117,28 @@ Scoped to the current URL.
 
 | Item | Shortcut | Notes |
 |---|---|---|
-| Edit | `E` | Primary action; enters edit mode |
+| Edit | `⌘E` | Primary action; enters edit mode |
 | Edit SEO & metadata | `⌘I` | Opens SEO panel |
 | — divider — | | |
 | Copy preview link | | Copies the working-copy preview URL |
 | Open in new tab | `⌘↵` | |
 | — divider — | | |
 | Discard changes | | Disabled if no unpublished changes on this page |
-| Publish this page… | `⌘⇧P` | Disabled if no unpublished changes; opens publish modal scoped to this page only |
+| Publish this page… | `⌘P` | Disabled if no unpublished changes; opens publish modal scoped to this page only |
 
 ### 5.2 Site menu
 
 Site-wide actions, grouped into five sections.
 
 **Navigate**
-- All pages… (`⌘P`) — opens the All pages panel
-- Go to page… (`⌘K`) — opens a command-palette-style page jumper
+- All pages… (`⌘K`) — opens the All pages panel
 
 **Create**
 - New page… (`⌘N`)
 - New from /rooms/[slug] ▸ — submenu, one entry per dynamic route template
 
 **Working copy**
-- Review & publish… (`⌘⇧P`) — opens the publish modal, with an amber count badge if there are pending changes
+- Review & publish… (`⌘P`) — opens the publish modal, with an amber count badge if there are pending changes
 - Share preview link
 - Regenerate preview key
 - Discard all changes… — destructive (red text), opens confirmation
@@ -292,7 +291,7 @@ The modal publishes **everything** in the working copy as a single atomic releas
 
 ## 7. Editing experience
 
-When the user enters edit mode (`E` or the `Edit` button), the bar transitions to the editing state and the page itself becomes interactive.
+When the user enters edit mode (`⌘E` or the `Edit` button), the bar transitions to the editing state and the page itself becomes interactive.
 
 ### 7.1 Editable slot model
 
@@ -361,15 +360,14 @@ Single-letter shortcuts only fire when no input is focused.
 
 | Shortcut | Action |
 |---|---|
-| `E` | Enter edit mode |
+| `⌘E` | Enter edit mode |
 | `esc` | Cancel edit / close panel |
 | `⌘S` | Save |
-| `⌘P` | Open All pages panel |
-| `⌘K` | Open page jumper (command palette) |
+| `⌘K` | Open All pages panel |
 | `⌘N` | New page |
 | `⌘H` | Open Recent releases panel |
 | `⌘I` | Open SEO panel for current page |
-| `⌘⇧P` | Open Review & publish modal |
+| `⌘P` | Open Review & publish modal |
 | `⌘⇧E` | Toggle highlight editable areas |
 | `⌘G` | Toggle grid & spacing overlay |
 | `⌘.` | Hide/show bar |

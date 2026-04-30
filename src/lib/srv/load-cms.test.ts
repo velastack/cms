@@ -23,7 +23,8 @@ const fixture: CmsManifest = {
 					fields: ['welcome.title'],
 					metadata: ['title']
 				}
-			]
+			],
+			entriesRouteIds: []
 		},
 		'/(marketing)/rooms/[slug]': {
 			scopes: [
@@ -49,7 +50,8 @@ const fixture: CmsManifest = {
 					fields: ['hero.title'],
 					metadata: ['title']
 				}
-			]
+			],
+			entriesRouteIds: []
 		}
 	}
 };

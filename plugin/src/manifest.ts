@@ -26,9 +26,15 @@ export type CmsManifestScope = {
  */
 const DEFAULT_PAGE_METADATA: string[] = ['title', 'description', 'canonical', 'robots'];
 
+export type CmsManifestRoute = {
+	scopes: CmsManifestScope[];
+	/** Route ids referenced by `<CmsEntries routeId="…">` anywhere in this route's chain. */
+	entriesRouteIds: string[];
+};
+
 export type CmsManifest = {
 	version: 1;
-	routes: Record<string, { scopes: CmsManifestScope[] }>;
+	routes: Record<string, CmsManifestRoute>;
 };
 
 /**
@@ -246,8 +252,9 @@ const resolveOrExternal = async (
 
 /**
  * Walk one entrypoint's static import graph (only `.svelte` files), collecting
- * field names referenced by CMS component usages. Classification iterates
- * three rule sets per import: in-tree barrel/file, velacms package, then
+ * field names referenced by CMS component usages plus any `routeId=` literals
+ * that `<CmsEntries>`-shaped components carry. Classification iterates three
+ * rule sets per import: in-tree barrel/file, velacms package, then
  * user-supplied spec map.
  */
 const collectFieldsForEntry = async (
@@ -262,7 +269,7 @@ const collectFieldsForEntry = async (
 		cache: Map<string, ParsedSvelte>;
 		allVisited: Set<string>;
 	}
-): Promise<string[]> => {
+): Promise<{ fields: string[]; entriesRouteIds: string[] }> => {
 	const {
 		libDir,
 		velacmsRoots,
@@ -276,6 +283,7 @@ const collectFieldsForEntry = async (
 
 	const visited = new Set<string>();
 	const fields: string[] = [];
+	const entriesRouteIds: string[] = [];
 
 	const classify = (
 		spec: ExternalCmsComponentSpec,
@@ -353,6 +361,7 @@ const collectFieldsForEntry = async (
 
 		for (const usage of parsed.componentUsages) {
 			if (!cmsLocals.has(usage.componentName)) continue;
+			if (usage.routeIdAttr) entriesRouteIds.push(usage.routeIdAttr);
 			if (usage.hasValueAttr || !usage.fieldName) continue;
 			fields.push(usage.fieldName);
 		}
@@ -364,33 +373,42 @@ const collectFieldsForEntry = async (
 	};
 
 	await walk(entry);
-	return [...new Set(fields)];
+	return {
+		fields: [...new Set(fields)],
+		entriesRouteIds: [...new Set(entriesRouteIds)]
+	};
 };
 
 const buildScopeChain = async (
 	leaf: RouteNode,
 	byRouteId: Map<string, RouteNode>,
 	collectOptions: Parameters<typeof collectFieldsForEntry>[1]
-): Promise<CmsManifestScope[]> => {
+): Promise<{ scopes: CmsManifestScope[]; entriesRouteIds: string[] }> => {
 	const scopes: CmsManifestScope[] = [];
+	const entriesRouteIds: string[] = [];
+
 	for (const dir of ancestorRouteIds(leaf.routeId)) {
 		const dirNode = byRouteId.get(dir);
 		if (!dirNode?.layoutPath) continue;
+		const collected = await collectFieldsForEntry(dirNode.layoutPath, collectOptions);
+		entriesRouteIds.push(...collected.entriesRouteIds);
 		scopes.push({
 			scopeId: 'layout:' + dir,
 			kind: 'layout',
 			routeId: dir,
 			ownedParams: extractRouteParams(dir),
-			fields: await collectFieldsForEntry(dirNode.layoutPath, collectOptions)
+			fields: collected.fields
 		});
 	}
 
+	const pageCollected = await collectFieldsForEntry(leaf.pagePath as string, collectOptions);
+	entriesRouteIds.push(...pageCollected.entriesRouteIds);
 	scopes.push({
 		scopeId: 'page:' + leaf.routeId,
 		kind: 'page',
 		routeId: leaf.routeId,
 		ownedParams: extractRouteParams(leaf.routeId),
-		fields: await collectFieldsForEntry(leaf.pagePath as string, collectOptions),
+		fields: pageCollected.fields,
 		metadata: DEFAULT_PAGE_METADATA
 	});
 
@@ -401,7 +419,7 @@ const buildScopeChain = async (
 		for (const p of owned) seen.add(p);
 	}
 
-	return scopes;
+	return { scopes, entriesRouteIds: [...new Set(entriesRouteIds)] };
 };
 
 export const buildManifest = async (
@@ -454,8 +472,8 @@ export const buildManifest = async (
 	const pageCmsModules: BuildManifestResult['pageCmsModules'] = [];
 	for (const node of nodes) {
 		if (!node.pagePath) continue;
-		const scopes = await buildScopeChain(node, byRouteId, collectOptions);
-		routes[node.routeId] = { scopes };
+		const { scopes, entriesRouteIds } = await buildScopeChain(node, byRouteId, collectOptions);
+		routes[node.routeId] = { scopes, entriesRouteIds };
 
 		// Index every entry path encountered while walking this leaf's chain so
 		// the transform hook can look up scope info by file path. Layouts may be

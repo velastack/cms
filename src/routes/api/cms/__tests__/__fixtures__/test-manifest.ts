@@ -20,7 +20,8 @@ export const cmsManifest: CmsManifest = {
 					fields: ['welcome.title'],
 					metadata: ['title']
 				}
-			]
+			],
+			entriesRouteIds: []
 		},
 		'/(marketing)/rooms/[slug]': {
 			scopes: [
@@ -46,7 +47,8 @@ export const cmsManifest: CmsManifest = {
 					fields: ['hero.title'],
 					metadata: ['title']
 				}
-			]
+			],
+			entriesRouteIds: []
 		}
 	}
 };
