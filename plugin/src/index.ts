@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { transformWithOxc, type Plugin, type ResolvedConfig } from 'vite';
+import { setPageCmsModules } from './build-state.js';
 import {
 	buildManifest,
 	type BuildManifestResult,
@@ -128,6 +129,7 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 				resolveExternal: resolver
 			});
 			cachedSync = result;
+			setPageCmsModules(result.pageCmsModules);
 			return result;
 		})();
 		return cached;

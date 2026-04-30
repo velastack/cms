@@ -30,6 +30,7 @@
 		"!dist/**/*.test.*",
 		"!dist/**/*.spec.*",
 		"plugin/src/**/*.ts",
+		"plugin/src/**/*.js",
 		"README.md",
 		"LICENSE"
 	],
@@ -51,6 +52,9 @@
 		"./vite": {
 			"types": "./plugin/src/index.ts",
 			"default": "./plugin/src/index.ts"
+		},
+		"./adapter": {
+			"default": "./plugin/src/adapter.js"
 		}
 	},
 	"peerDependencies": {

@@ -1,5 +1,6 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
+import { parseAstAsync } from 'vite';
 import { parseSvelteFile, type ParsedSvelte } from './parse-svelte.js';
 import {
 	ancestorRouteIds,
@@ -78,9 +79,11 @@ export type BuildManifestResult = {
 	/**
 	 * `page.cms.ts` files discovered during the route walk, paired with
 	 * their leaf route id. Used by the `virtual:vela-cms/pages` virtual
-	 * module to aggregate `definePage(...)` configs at runtime.
+	 * module to aggregate `definePage(...)` configs at runtime, and shared
+	 * with the `@velastack/cms-static` adapter (via `build-state.js`) so it
+	 * knows which routes are creatable without re-walking `src/routes/`.
 	 */
-	pageCmsModules: Array<{ routeId: string; path: string }>;
+	pageCmsModules: Array<{ routeId: string; path: string; creatable: boolean }>;
 };
 
 const tryStatFile = (path: string): boolean => {
@@ -89,6 +92,78 @@ const tryStatFile = (path: string): boolean => {
 	} catch {
 		return false;
 	}
+};
+
+/**
+ * Parse a `page.cms.ts` file and return whether its default export declares
+ * `creatable: true`. Robust against `satisfies`/`as` type assertions and the
+ * `definePage(...)` wrapper form. Returns `false` on parse failure or when
+ * the export is shaped in a way we don't recognize — the static-adapter
+ * post-pass treats `false` as "not in the manifest", which is the safe
+ * default.
+ */
+const parsePageCmsCreatable = async (filePath: string): Promise<boolean> => {
+	let source: string;
+	try {
+		source = readFileSync(filePath, 'utf-8');
+	} catch {
+		return false;
+	}
+
+	let program: { body: unknown[] };
+	try {
+		program = (await parseAstAsync(source, { lang: 'ts' })) as { body: unknown[] };
+	} catch {
+		return false;
+	}
+
+	const defaultExport = (program.body as Array<{ type: string }>).find(
+		(n) => n.type === 'ExportDefaultDeclaration'
+	) as { declaration: unknown } | undefined;
+	if (!defaultExport) return false;
+
+	type AnyNode = {
+		type: string;
+		expression?: AnyNode;
+		arguments?: AnyNode[];
+		properties?: Array<{
+			type: string;
+			key?: { type: string; name?: string; value?: unknown };
+			value?: { type: string; value?: unknown };
+		}>;
+	};
+
+	let expr = defaultExport.declaration as AnyNode;
+	for (let i = 0; i < 8 && expr; i++) {
+		if (
+			expr.type === 'TSSatisfiesExpression' ||
+			expr.type === 'TSAsExpression' ||
+			expr.type === 'TSTypeAssertion' ||
+			expr.type === 'ParenthesizedExpression'
+		) {
+			expr = expr.expression as AnyNode;
+			continue;
+		}
+		if (expr.type === 'CallExpression' && expr.arguments && expr.arguments.length > 0) {
+			expr = expr.arguments[0];
+			continue;
+		}
+		break;
+	}
+
+	if (!expr || expr.type !== 'ObjectExpression' || !expr.properties) return false;
+
+	for (const prop of expr.properties) {
+		if (prop.type !== 'Property') continue;
+		const k = prop.key;
+		const isCreatableKey =
+			(k?.type === 'Identifier' && k.name === 'creatable') ||
+			(k?.type === 'Literal' && k.value === 'creatable');
+		if (!isCreatableKey) continue;
+		if (prop.value?.type === 'Literal' && prop.value.value === true) return true;
+		return false;
+	}
+	return false;
 };
 
 /**
@@ -122,11 +197,7 @@ const resolveLocal = (source: string, fromFile: string, libDir: string): string 
 
 const isCmsBarrelPath = (libDir: string, path: string): boolean => {
 	const barrel = join(libDir, 'components', 'cms');
-	return (
-		path === join(barrel, 'index.ts') ||
-		path === join(barrel, 'index.js') ||
-		path === barrel
-	);
+	return path === join(barrel, 'index.ts') || path === join(barrel, 'index.js') || path === barrel;
 };
 
 const isCmsComponentFile = (libDir: string, path: string): boolean => {
@@ -380,7 +451,7 @@ export const buildManifest = async (
 	};
 
 	const routes: CmsManifest['routes'] = {};
-	const pageCmsModules: Array<{ routeId: string; path: string }> = [];
+	const pageCmsModules: BuildManifestResult['pageCmsModules'] = [];
 	for (const node of nodes) {
 		if (!node.pagePath) continue;
 		const scopes = await buildScopeChain(node, byRouteId, collectOptions);
@@ -392,8 +463,7 @@ export const buildManifest = async (
 		// so the writes are idempotent.
 		for (const scope of scopes) {
 			const entryNode = byRouteId.get(scope.routeId);
-			const entryPath =
-				scope.kind === 'layout' ? entryNode?.layoutPath : entryNode?.pagePath;
+			const entryPath = scope.kind === 'layout' ? entryNode?.layoutPath : entryNode?.pagePath;
 			if (!entryPath) continue;
 			scopeByEntryPath.set(entryPath, {
 				scopeId: scope.scopeId,
@@ -404,9 +474,11 @@ export const buildManifest = async (
 		}
 
 		if (node.pageScriptPath) routeIdByScriptPath.set(node.pageScriptPath, node.routeId);
-		if (node.pageServerScriptPath)
-			routeIdByScriptPath.set(node.pageServerScriptPath, node.routeId);
-		if (node.pageCmsPath) pageCmsModules.push({ routeId: node.routeId, path: node.pageCmsPath });
+		if (node.pageServerScriptPath) routeIdByScriptPath.set(node.pageServerScriptPath, node.routeId);
+		if (node.pageCmsPath) {
+			const creatable = await parsePageCmsCreatable(node.pageCmsPath);
+			pageCmsModules.push({ routeId: node.routeId, path: node.pageCmsPath, creatable });
+		}
 	}
 
 	return {

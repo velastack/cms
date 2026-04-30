@@ -31,7 +31,7 @@ describe('buildManifest', () => {
 		expect(kinds).toEqual(['layout:/', 'page:/']);
 	});
 
-	it("collects fields from `<libDir>/components/cms` barrel imports and dedups", async () => {
+	it('collects fields from `<libDir>/components/cms` barrel imports and dedups', async () => {
 		const result = await buildManifest({ routesDir: ROUTES_DIR, libDir: LIB_DIR });
 		const pageScope = result.manifest.routes['/'].scopes.find((s) => s.kind === 'page')!;
 		// The +page.svelte uses welcome.title twice — must appear once.
@@ -93,6 +93,12 @@ describe('buildManifest', () => {
 			([, routeId]) => routeId === '/(marketing)/rooms/[slug]'
 		);
 		expect(scriptPath?.[0]).toContain('+page.ts');
+	});
+
+	it('flags page.cms.ts entries as creatable based on the default-export `creatable: true` literal', async () => {
+		const result = await buildManifest({ routesDir: ROUTES_DIR, libDir: LIB_DIR });
+		const slug = result.pageCmsModules.find((m) => m.routeId === '/(marketing)/rooms/[slug]');
+		expect(slug?.creatable).toBe(true);
 	});
 
 	it('records every visited svelte file', async () => {
