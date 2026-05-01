@@ -35,12 +35,56 @@
 
 	const display = $derived(typeof resolved === 'string' ? resolved : (fallback ?? ''));
 	const editable = $derived(cmsStore.isEditing && value === undefined && !!ref);
+
+	let el = $state<HTMLSpanElement>();
+	let composing = false;
+
+	// Drive textContent imperatively. Svelte 5 caches the last value it wrote
+	// to a text expression, so `<span>{display}</span>` re-applies on every
+	// store update and resets the caret to start. Skip while focused so live
+	// typing is left alone; external reverts (cancel/discard) land on blur.
+	$effect(() => {
+		if (!el) return;
+		const target = display;
+		if (document.activeElement === el) return;
+		if (el.textContent === target) return;
+		el.textContent = target;
+	});
+
+	const onInput = (e: Event) => {
+		if (composing || !ref) return;
+		cmsStore.setValue(ref, name, (e.currentTarget as HTMLElement).textContent ?? '');
+	};
+
+	const onKeydown = (e: KeyboardEvent) => {
+		if (e.key === 'Enter') e.preventDefault();
+	};
+
+	const onCompositionEnd = (e: CompositionEvent) => {
+		composing = false;
+		if (!ref) return;
+		cmsStore.setValue(ref, name, (e.currentTarget as HTMLElement).textContent ?? '');
+	};
 </script>
 
 {#if editable && ref}
-	{#await import('./cms-text-editable.svelte') then { default: Editable }}
-		<Editable scope={ref} {name} initial={display} />
-	{/await}
+	<span
+		bind:this={el}
+		class="cms-text-editable"
+		contenteditable="plaintext-only"
+		data-placeholder={name}
+		data-cms-name={name}
+		data-cms-scope={scope?.scopeId ?? '?'}
+		role="textbox"
+		tabindex="0"
+		aria-multiline="false"
+		aria-label={name}
+		spellcheck="true"
+		oninput={onInput}
+		onkeydown={onKeydown}
+		oncompositionstart={() => (composing = true)}
+		oncompositionend={onCompositionEnd}
+	></span>
 {:else if display}
 	{display}
 {:else if children}
@@ -50,6 +94,21 @@
 {/if}
 
 <style>
+	.cms-text-editable {
+		border-radius: 0.125rem;
+		outline: 1px dashed rgba(127, 127, 127, 0.6);
+		outline-offset: 2px;
+	}
+	.cms-text-editable:focus {
+		outline: 2px solid rgb(99, 102, 241);
+		outline-offset: 2px;
+	}
+	.cms-text-editable:empty::before {
+		content: attr(data-placeholder);
+		color: rgba(127, 127, 127, 0.6);
+		font-style: italic;
+	}
+
 	.cms-missing {
 		display: inline-block;
 		padding: 0 0.25rem;

@@ -308,6 +308,30 @@ class CmsStore {
 	}
 
 	/**
+	 * Upload an image file to the CMS backend and return its public URL.
+	 * Sends multipart/form-data with a single `file` field. Server is expected
+	 * to respond with `{ url: string }`. Throws on non-2xx responses or when
+	 * the response body doesn't contain a string `url`.
+	 */
+	async uploadImage(endpoint: string, file: File): Promise<string> {
+		const formData = new FormData();
+		formData.append('file', file);
+		const res = await fetch(`${endpoint}/upload`, {
+			method: 'POST',
+			body: formData,
+			credentials: 'include'
+		});
+		if (!res.ok) {
+			throw new Error(`Upload failed (${res.status})`);
+		}
+		const data = (await res.json()) as { url?: unknown };
+		if (typeof data.url !== 'string') {
+			throw new Error('Upload response missing url');
+		}
+		return data.url;
+	}
+
+	/**
 	 * Flush dirty drafts and metadata to the server's open release. Layout
 	 * and page edits are sent in one batch — the server merges them into the
 	 * editor's working copy without publishing. Metadata edits ride along on

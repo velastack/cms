@@ -10,6 +10,7 @@
 		<a href="/about">About</a>
 		<a href="/rooms/suite-1">Suite 1</a>
 		<a href="/rooms/suite-2">Suite 2</a>
+		<a href="/contact">Contact</a>
 		<a href="/dashboard">Dashboard</a>
 	</nav>
 </header>

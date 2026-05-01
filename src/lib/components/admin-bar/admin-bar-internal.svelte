@@ -4,7 +4,8 @@
 	import { pages } from 'virtual:vela-cms/pages';
 	import { cmsStore } from '$lib/components/cms/cms-store.svelte.js';
 	import type { CmsPayload, CmsScopeEntry } from '$lib/components/cms/scope.js';
-	import './admin-bar.css';
+	import CssRoot from './css-root.svelte';
+	import { adminBarTheme, type AdminBarTheme } from './theme.svelte.js';
 	import HistoryPanel from './history-panel.svelte';
 	import KeyboardShortcutsDialog from './keyboard-shortcuts-dialog.svelte';
 	import NewPageChooserDialog from './new-page-chooser-dialog.svelte';
@@ -44,16 +45,14 @@
 	const menuCheckIndicatorClass =
 		'vela:flex vela:items-center vela:gap-2 vela:px-2 vela:py-1.5 vela:pl-7 vela:rounded-md vela:text-[13px] vela:cursor-pointer vela:outline-none vela:focus:bg-[var(--cms-bar-bg-hover)] vela:focus:text-bar-text vela:data-disabled:opacity-40';
 
-	type ThemePref = 'system' | 'light' | 'dark';
 	type Props = {
 		user: { id: string; name: string };
 		endpoint: string;
 		onClose: () => void;
-		themePref: ThemePref;
-		setThemePref: (next: ThemePref) => void;
-		resolvedTheme: 'light' | 'dark';
 	};
-	let { user, endpoint, onClose, themePref, setThemePref, resolvedTheme }: Props = $props();
+	let { user, endpoint, onClose }: Props = $props();
+
+	const setThemePref = (next: AdminBarTheme) => adminBarTheme.setPref(next);
 
 	// Auto-discovered from `page.cms.ts` files via the Vite plugin's
 	// `virtual:vela-cms/pages` module — consumers don't pass these.
@@ -604,11 +603,8 @@
 	};
 </script>
 
-<div
-	class="vela-admin-bar"
-	data-vela-theme={resolvedTheme}
-	style:--cms-panel-top={subBarVisible && barPosition === 'top' ? '112px' : '72px'}
->
+<CssRoot>
+<div style:--cms-panel-top={subBarVisible && barPosition === 'top' ? '112px' : '72px'}>
 	<!-- Shadow ghost: same shape and position as the bar pill but at a lower
 	     z-index than the sub-bar (9998) and panels (9998). The pill itself
 	     carries no shadow, so the bar's drop shadow is occluded by anything
@@ -812,7 +808,7 @@
 									onSelect={() => setThemePref('system')}
 								>
 									<span class="vela:absolute vela:left-2">
-										{themePref === 'system' ? '✓' : ''}
+										{adminBarTheme.pref === 'system' ? '✓' : ''}
 									</span>
 									System
 								</Menubar.Item>
@@ -821,13 +817,13 @@
 									onSelect={() => setThemePref('light')}
 								>
 									<span class="vela:absolute vela:left-2">
-										{themePref === 'light' ? '✓' : ''}
+										{adminBarTheme.pref === 'light' ? '✓' : ''}
 									</span>
 									Light
 								</Menubar.Item>
 								<Menubar.Item class={menuCheckIndicatorClass} onSelect={() => setThemePref('dark')}>
 									<span class="vela:absolute vela:left-2">
-										{themePref === 'dark' ? '✓' : ''}
+										{adminBarTheme.pref === 'dark' ? '✓' : ''}
 									</span>
 									Dark
 								</Menubar.Item>
@@ -1004,3 +1000,4 @@
 
 	<KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={(next) => (shortcutsOpen = next)} />
 </div>
+</CssRoot>

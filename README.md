@@ -267,7 +267,7 @@ A CMS component should:
 - Skip scope lookup when `value !== undefined` — that prop is the per-item override used inside `<CmsRepeater/>`.
 - Optionally provide an editable sibling that's dynamically `import()`'d when `cmsStore.isEditing` flips on, so editing code doesn't ship to public visitors.
 
-The four built-ins are reference implementations; copy `src/lib/components/cms/cms-text.svelte` + `cms-text-editable.svelte` as a starting point.
+The four built-ins are reference implementations; copy `src/lib/components/cms/cms-text.svelte` (or one of the other built-ins with a paired `*-editable.svelte` sibling) as a starting point.
 
 ## Architecture
 
