@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { tick as svelteTick } from 'svelte';
 	import { page } from '$app/state';
-	import { cmsStore, type CmsScopeRef } from './cms-store.svelte.js';
+	import { cmsStore, type CmsScopeRef, type MediaItem } from './cms-store.svelte.js';
 	import { Button } from '../admin-bar/ui/button/index.js';
 	import { Input } from '../admin-bar/ui/input/index.js';
 	import CssRoot from '../admin-bar/css-root.svelte';
+	import { clickOutside } from '../admin-bar/click-outside.js';
+	import CmsMediaPicker from './cms-media-picker.svelte';
 	import UploadIcon from '@lucide/svelte/icons/upload';
 	import LinkIcon from '@lucide/svelte/icons/link';
+	import ImagesIcon from '@lucide/svelte/icons/images';
 	import TrashIcon from '@lucide/svelte/icons/trash-2';
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import XIcon from '@lucide/svelte/icons/x';
@@ -31,6 +34,7 @@
 	let urlValue = $state('');
 	let urlInputEl: HTMLInputElement | null = $state(null);
 	let fileInputEl: HTMLInputElement | null = $state(null);
+	let libraryOpen = $state(false);
 
 	let dragDepth = $state(0);
 	const dragging = $derived(dragDepth > 0);
@@ -123,6 +127,25 @@
 		setValue('');
 	};
 
+	const toggleLibrary = (e: Event) => {
+		e.preventDefault();
+		e.stopPropagation();
+		libraryOpen = !libraryOpen;
+	};
+
+	const onLibrarySelect = (item: MediaItem) => {
+		setValue(item.url);
+		libraryOpen = false;
+	};
+
+	const onLibraryKey = (e: KeyboardEvent) => {
+		if (e.key === 'Escape' && libraryOpen) {
+			e.preventDefault();
+			e.stopPropagation();
+			libraryOpen = false;
+		}
+	};
+
 	const dismissError = (e: Event) => {
 		e.preventDefault();
 		e.stopPropagation();
@@ -176,6 +199,10 @@
 				<UploadIcon class="vela:size-3.5" />
 				Upload
 			</Button>
+			<Button size="xs" variant="ghost" onclick={toggleLibrary}>
+				<ImagesIcon class="vela:size-3.5" />
+				Library
+			</Button>
 			<Button size="xs" variant="ghost" onclick={enterUrlMode}>
 				<LinkIcon class="vela:size-3.5" />
 				URL
@@ -202,6 +229,20 @@
 			</Button>
 		{/if}
 	</div>
+
+	{#if libraryOpen}
+		<div
+			class="cms-image-edit__library"
+			role="dialog"
+			tabindex="-1"
+			aria-label="Choose from media library"
+			onmousedown={stopMouseDown}
+			onkeydown={onLibraryKey}
+			use:clickOutside={() => (libraryOpen = false)}
+		>
+			<CmsMediaPicker {endpoint} onSelect={onLibrarySelect} />
+		</div>
+	{/if}
 
 	{#if dragging}
 		<div class="cms-image-edit__overlay cms-image-edit__overlay--drop">
@@ -288,6 +329,19 @@
 	.cms-image-edit:hover .cms-image-edit__toolbar,
 	.cms-image-edit:focus-within .cms-image-edit__toolbar {
 		display: inline-flex;
+	}
+	.cms-image-edit__library {
+		position: absolute;
+		top: 0;
+		left: 0;
+		transform: translateY(calc(-100% - 0.5rem));
+		padding: 0.5rem;
+		background: var(--cms-bar-bg, #1f1f1f);
+		border: 1px solid var(--cms-bar-divider, #3a3a3a);
+		border-radius: 0.5rem;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+		color: var(--cms-bar-text, #f5f5f5);
+		z-index: 60;
 	}
 	.cms-image-edit__overlay {
 		position: absolute;

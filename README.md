@@ -1,6 +1,6 @@
 # VelaStack CMS
 
-A scope-aware CMS for SvelteKit, for static or dynamic sites.
+A scope-aware CMS for SvelteKit, for SSG and fullstack websites.
 
 ```svelte
 <!-- src/routes/(marketing)/about/+page.svelte -->
@@ -17,7 +17,7 @@ A scope-aware CMS for SvelteKit, for static or dynamic sites.
 
 That's the whole authoring API. No field paths, no manual wiring. The build-time Vite plugin discovers every `<CmsText/>` (and friends) reachable from each route, computes which route scope they belong to, and emits a manifest. At request time, `loadCms(event, …)` resolves the right documents for the current route. At edit time, the admin bar swaps display components for inline editors — without shipping a single byte of editing code to public visitors.
 
-## Why a manifest?
+## Why scope-aware?
 
 A reusable component like `Header.svelte` may be mounted from `(marketing)/+layout.svelte` and `(app)/+layout.svelte`. Its `<CmsText name="header.title" />` is **the same field name** in both places, but those should be **different stored values** — one for the marketing site, one for the app shell.
 

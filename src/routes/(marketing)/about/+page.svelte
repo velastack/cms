@@ -1,13 +1,17 @@
 <script lang="ts">
-	import { CmsRichText, CmsText } from '$lib/index.js';
+	import { CmsText, CmsRichText } from '$lib/index.js';
 </script>
 
 <article>
-	<h1><CmsText name="hero.title" fallback="About us" /></h1>
-	<CmsRichText
-		name="body"
-		fallback="<p>This page is rendered through the marketing layout, so its CMS fields live under the <code>page:/(marketing)/about</code> scope.</p>"
-	/>
+	<h1>
+		<CmsText name="metadata.title" />
+	</h1>
+	<CmsRichText name="body">
+		<p>
+			This page is rendered through the marketing layout, so its CMS fields live under the
+			<code>page:/(marketing)/about</code> scope.
+		</p>
+	</CmsRichText>
 </article>
 
 <style>

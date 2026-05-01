@@ -5,7 +5,7 @@
 
 <article>
 	<h1>
-		<CmsText name="rooms.title">Rooms</CmsText>
+		<CmsText name="rooms.title" fallback="Rooms"></CmsText>
 	</h1>
 	<CmsText name="rooms.description">We have so many rooms.</CmsText>
 	<ul class="rooms">

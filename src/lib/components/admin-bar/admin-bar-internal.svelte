@@ -8,6 +8,7 @@
 	import { adminBarTheme, type AdminBarTheme } from './theme.svelte.js';
 	import HistoryPanel from './history-panel.svelte';
 	import KeyboardShortcutsDialog from './keyboard-shortcuts-dialog.svelte';
+	import MediaPanel from './media-panel.svelte';
 	import NewPageChooserDialog from './new-page-chooser-dialog.svelte';
 	import NewPageDialog from './new-page-dialog.svelte';
 	import { isCreatable, type CmsCreatablePageConfigWithRouteId } from './page-config.js';
@@ -44,13 +45,16 @@
 	const menuSeparatorClass = 'vela:my-1 vela:h-px vela:bg-[var(--cms-bar-divider)]';
 	const menuCheckIndicatorClass =
 		'vela:flex vela:items-center vela:gap-2 vela:px-2 vela:py-1.5 vela:pl-7 vela:rounded-md vela:text-[13px] vela:cursor-pointer vela:outline-none vela:focus:bg-[var(--cms-bar-bg-hover)] vela:focus:text-bar-text vela:data-disabled:opacity-40';
+	const avatarTriggerClass =
+		'vela:bg-transparent vela:border-0 vela:p-0 vela:rounded-full vela:cursor-pointer vela:focus:outline-none vela:aria-expanded:ring-2 vela:aria-expanded:ring-[var(--cms-accent)] vela:aria-expanded:ring-offset-2 vela:aria-expanded:ring-offset-[var(--cms-bar-bg)]';
 
 	type Props = {
 		user: { id: string; name: string };
 		endpoint: string;
 		onClose: () => void;
+		onLogout: () => void;
 	};
-	let { user, endpoint, onClose }: Props = $props();
+	let { user, endpoint, onClose, onLogout }: Props = $props();
 
 	const setThemePref = (next: AdminBarTheme) => adminBarTheme.setPref(next);
 
@@ -61,6 +65,7 @@
 	let seoOpen = $state(false);
 	let historyOpen = $state(false);
 	let pagesOpen = $state(false);
+	let mediaOpen = $state(false);
 	let publishOpen = $state(false);
 	let chooserOpen = $state(false);
 	let shareLinkOpen = $state(false);
@@ -69,6 +74,7 @@
 		seoOpen ||
 			historyOpen ||
 			pagesOpen ||
+			mediaOpen ||
 			publishOpen ||
 			chooserOpen ||
 			shareLinkOpen ||
@@ -94,6 +100,7 @@
 		seoOpen = false;
 		historyOpen = false;
 		pagesOpen = false;
+		mediaOpen = false;
 		publishOpen = false;
 		chooserOpen = false;
 		shareLinkOpen = false;
@@ -115,6 +122,7 @@
 		const key = previewKey;
 		if (!key) return '';
 		const url = new URL(page.url);
+		url.searchParams.delete('edit');
 		url.searchParams.set('preview', key);
 		return url.toString();
 	});
@@ -132,6 +140,7 @@
 	const setPreviewParam = async (key: string | null, opts: { replace?: boolean } = {}) => {
 		const url = new URL(page.url);
 		const current = url.searchParams.get('preview');
+		url.searchParams.delete('edit');
 		if (key) {
 			if (current === key) return;
 			url.searchParams.set('preview', key);
@@ -248,6 +257,11 @@
 	const onOpenPages = () => {
 		closeAllPanels();
 		pagesOpen = true;
+	};
+
+	const onOpenMedia = () => {
+		closeAllPanels();
+		mediaOpen = true;
 	};
 
 	const onOpenHistory = () => {
@@ -604,262 +618,281 @@
 </script>
 
 <CssRoot>
-<div style:--cms-panel-top={subBarVisible && barPosition === 'top' ? '112px' : '72px'}>
-	<!-- Shadow ghost: same shape and position as the bar pill but at a lower
+	<div style:--cms-panel-top={subBarVisible && barPosition === 'top' ? '112px' : '72px'}>
+		<!-- Shadow ghost: same shape and position as the bar pill but at a lower
 	     z-index than the sub-bar (9998) and panels (9998). The pill itself
 	     carries no shadow, so the bar's drop shadow is occluded by anything
 	     sitting underneath the bar instead of being painted over the top. -->
-	<div
-		aria-hidden="true"
-		class="vela:fixed vela:left-1/2 vela:-translate-x-1/2 vela:z-[9997]
+		<div
+			aria-hidden="true"
+			class="vela:fixed vela:left-1/2 vela:-translate-x-1/2 vela:z-[9997]
 		vela:w-full vela:max-w-[560px] vela:mx-4 vela:sm:mx-auto
 		vela:h-12 vela:rounded-full
 		vela:shadow-[0_8px_24px_rgba(0,0,0,0.25)]
 		{barPosition === 'bottom' ? 'vela:bottom-4' : 'vela:top-4'}"
-	></div>
+		></div>
 
-	<div
-		class="vela:fixed vela:left-1/2 vela:-translate-x-1/2 vela:z-[9999]
+		<div
+			class="vela:fixed vela:left-1/2 vela:-translate-x-1/2 vela:z-[9999]
 		vela:flex vela:items-center vela:justify-between vela:gap-3
 		vela:w-full vela:max-w-[560px] vela:mx-4 vela:sm:mx-auto
 		vela:h-12 vela:px-3 vela:rounded-full
 		vela:bg-bar-bg vela:text-bar-text
 		{barPosition === 'bottom' ? 'vela:bottom-4' : 'vela:top-4'}"
-	>
-		<div class="vela:flex vela:items-center vela:gap-3">
-			<span
-				class="vela:text-[11px] vela:font-semibold vela:tracking-wider vela:uppercase
+		>
+			<div class="vela:flex vela:items-center vela:gap-3">
+				<span
+					class="vela:text-[11px] vela:font-semibold vela:tracking-wider vela:uppercase
 				vela:text-bar-text-tertiary"
-			>
-				CMS
-			</span>
+				>
+					CMS
+				</span>
 
-			{#if !subBarVisible}
-				<StatusPill variant="clean">All published</StatusPill>
-			{/if}
-		</div>
+				{#if !subBarVisible}
+					<StatusPill variant="clean">All published</StatusPill>
+				{/if}
+			</div>
 
-		<div class="vela:flex vela:items-center vela:gap-2">
-			<Menubar.Root
-				class="vela:bg-transparent vela:border-0 vela:p-0 vela:gap-0.5 vela:h-auto vela:rounded-none"
-			>
-				<Menubar.Menu>
-					<Menubar.Trigger class={menubarTriggerClass}>Page</Menubar.Trigger>
-					<Menubar.Content class={menuContentClassExt} align="end">
-						<Menubar.Item
-							class={menuItemClass}
-							onSelect={onToggleEdit}
-							disabled={cmsStore.isEditing}
-						>
-							Edit
-							<KbdShortcut keys="⌘E" class={menuShortcutClass} />
-						</Menubar.Item>
-						<Menubar.Item class={menuItemClass} onSelect={onOpenSeo}>
-							SEO &amp; Metadata
-							<KbdShortcut keys="⌘I" class={menuShortcutClass} />
-						</Menubar.Item>
-						<Menubar.Separator class={menuSeparatorClass} />
-						<Menubar.Item class={menuItemClass} onSelect={onCopyPreviewLink} disabled={!previewUrl}>
-							Copy Preview Link
-						</Menubar.Item>
-						<Menubar.Item class={menuItemClass} onSelect={onOpenInNewTab}>
-							Open In New Tab
-							<KbdShortcut keys="⌘↵" class={menuShortcutClass} />
-						</Menubar.Item>
-						<Menubar.Separator class={menuSeparatorClass} />
-						<Menubar.Item
-							class={menuItemClass}
-							onSelect={onDiscardCurrentPage}
-							disabled={!hasCurrentPageDrafts}
-						>
-							Discard Draft…
-						</Menubar.Item>
-						<Menubar.Item
-							class={menuItemClass}
-							onSelect={onPublishThisPage}
-							disabled={!hasCurrentPageDrafts}
-						>
-							Publish…
-							<KbdShortcut keys="⌘P" class={menuShortcutClass} />
-						</Menubar.Item>
-					</Menubar.Content>
-				</Menubar.Menu>
+			<div class="vela:flex vela:items-center vela:gap-2">
+				<Menubar.Root
+					class="vela:bg-transparent vela:border-0 vela:p-0 vela:gap-0.5 vela:h-auto vela:rounded-none"
+				>
+					<Menubar.Menu>
+						<Menubar.Trigger class={menubarTriggerClass}>Page</Menubar.Trigger>
+						<Menubar.Content class={menuContentClassExt} align="end">
+							<Menubar.Item
+								class={menuItemClass}
+								onSelect={onToggleEdit}
+								disabled={cmsStore.isEditing}
+							>
+								Edit
+								<KbdShortcut keys="⌘E" class={menuShortcutClass} />
+							</Menubar.Item>
+							<Menubar.Item class={menuItemClass} onSelect={onOpenSeo}>
+								SEO &amp; Metadata
+								<KbdShortcut keys="⌘I" class={menuShortcutClass} />
+							</Menubar.Item>
+							<Menubar.Separator class={menuSeparatorClass} />
+							<Menubar.Item
+								class={menuItemClass}
+								onSelect={onCopyPreviewLink}
+								disabled={!previewUrl}
+							>
+								Copy Preview Link
+							</Menubar.Item>
+							<Menubar.Item class={menuItemClass} onSelect={onOpenInNewTab}>
+								Open In New Tab
+								<KbdShortcut keys="⌘↵" class={menuShortcutClass} />
+							</Menubar.Item>
+							<Menubar.Separator class={menuSeparatorClass} />
+							<Menubar.Item
+								class={menuItemClass}
+								onSelect={onDiscardCurrentPage}
+								disabled={!hasCurrentPageDrafts}
+							>
+								Discard Draft…
+							</Menubar.Item>
+							<Menubar.Item
+								class={menuItemClass}
+								onSelect={onPublishThisPage}
+								disabled={!hasCurrentPageDrafts}
+							>
+								Publish…
+								<KbdShortcut keys="⌘P" class={menuShortcutClass} />
+							</Menubar.Item>
+						</Menubar.Content>
+					</Menubar.Menu>
 
-				<Menubar.Menu>
-					<Menubar.Trigger class={menubarTriggerClass}>Site</Menubar.Trigger>
-					<Menubar.Content class={menuContentClassExt} align="end">
-						<Menubar.Item
-							class={menuItemClass}
-							onSelect={onNewPage}
-							disabled={creatablePages.length === 0}
-						>
-							New Page…
-							<KbdShortcut keys="⌘N" class={menuShortcutClass} />
-						</Menubar.Item>
-						<Menubar.Item class={menuItemClass} onSelect={onOpenPages}>
-							All Pages
-							<KbdShortcut keys="⌘K" class={menuShortcutClass} />
-						</Menubar.Item>
+					<Menubar.Menu>
+						<Menubar.Trigger class={menubarTriggerClass}>Site</Menubar.Trigger>
+						<Menubar.Content class={menuContentClassExt} align="end">
+							<Menubar.Item
+								class={menuItemClass}
+								onSelect={onNewPage}
+								disabled={creatablePages.length === 0}
+							>
+								New Page…
+								<KbdShortcut keys="⌘N" class={menuShortcutClass} />
+							</Menubar.Item>
+							<Menubar.Item class={menuItemClass} onSelect={onOpenPages}>
+								All Pages
+								<KbdShortcut keys="⌘K" class={menuShortcutClass} />
+							</Menubar.Item>
+							<Menubar.Item class={menuItemClass} onSelect={onOpenMedia}>
+								Media Library
+							</Menubar.Item>
 
-						<Menubar.Label class={menuLabelClass}>Working copy</Menubar.Label>
-						<Menubar.Item
-							class={menuItemClass}
-							onSelect={onOpenPublish}
-							disabled={counts.total === 0}
-						>
-							Review &amp; Publish…
-							{#if counts.total > 0}
-								<span class="vela:ml-auto vela:flex vela:items-center vela:gap-2">
-									<span
-										class="vela:inline-flex vela:items-center vela:justify-center
+							<Menubar.Label class={menuLabelClass}>Working copy</Menubar.Label>
+							<Menubar.Item
+								class={menuItemClass}
+								onSelect={onOpenPublish}
+								disabled={counts.total === 0}
+							>
+								Review &amp; Publish…
+								{#if counts.total > 0}
+									<span class="vela:ml-auto vela:flex vela:items-center vela:gap-2">
+										<span
+											class="vela:inline-flex vela:items-center vela:justify-center
 										vela:min-w-[18px] vela:h-[18px] vela:px-1 vela:rounded-full
 										vela:text-[10px] vela:font-semibold
 										vela:bg-[var(--cms-status-warn-bg)]
 										vela:text-[var(--cms-status-warn-text)]">{counts.total}</span
+										>
+										<KbdShortcut keys="⌘P" />
+									</span>
+								{:else}
+									<KbdShortcut keys="⌘P" class={menuShortcutClass} />
+								{/if}
+							</Menubar.Item>
+							<Menubar.Item class={menuItemClass} onSelect={onShareLink} disabled={!previewUrl}>
+								Share Preview Link…
+							</Menubar.Item>
+							<Menubar.Item
+								class={menuItemDestructiveClass}
+								onSelect={onDiscardAllChanges}
+								disabled={counts.total === 0}
+							>
+								Discard All Changes…
+							</Menubar.Item>
+
+							<Menubar.Label class={menuLabelClass}>History</Menubar.Label>
+							<Menubar.Item class={menuItemClass} onSelect={onOpenHistory}>
+								Recent Releases
+								<KbdShortcut keys="⌘H" class={menuShortcutClass} />
+							</Menubar.Item>
+						</Menubar.Content>
+					</Menubar.Menu>
+
+					<Menubar.Menu>
+						<Menubar.Trigger class={menubarTriggerClass}>View</Menubar.Trigger>
+						<Menubar.Content class={menuContentClassExt} align="end">
+							<Menubar.Label class={menuLabelClass}>Bar</Menubar.Label>
+							<Menubar.Item class={menuItemClass} onSelect={onHideBar}>
+								Hide Bar
+								<KbdShortcut keys="⌘." class={menuShortcutClass} />
+							</Menubar.Item>
+							<Menubar.Sub>
+								<Menubar.SubTrigger class={menuItemClass}>Position</Menubar.SubTrigger>
+								<Menubar.SubContent class={menuContentClassExt}>
+									<Menubar.Item
+										class={menuCheckIndicatorClass}
+										onSelect={() => (barPosition = 'top')}
 									>
-									<KbdShortcut keys="⌘P" />
-								</span>
-							{:else}
-								<KbdShortcut keys="⌘P" class={menuShortcutClass} />
-							{/if}
-						</Menubar.Item>
-						<Menubar.Item class={menuItemClass} onSelect={onShareLink} disabled={!previewUrl}>
-							Share Preview Link…
-						</Menubar.Item>
-						<Menubar.Item
-							class={menuItemDestructiveClass}
-							onSelect={onDiscardAllChanges}
-							disabled={counts.total === 0}
-						>
-							Discard All Changes…
-						</Menubar.Item>
+										<span class="vela:absolute vela:left-2">
+											{barPosition === 'top' ? '✓' : ''}
+										</span>
+										Top
+									</Menubar.Item>
+									<Menubar.Item
+										class={menuCheckIndicatorClass}
+										onSelect={() => (barPosition = 'bottom')}
+									>
+										<span class="vela:absolute vela:left-2">
+											{barPosition === 'bottom' ? '✓' : ''}
+										</span>
+										Bottom
+									</Menubar.Item>
+								</Menubar.SubContent>
+							</Menubar.Sub>
 
-						<Menubar.Label class={menuLabelClass}>History</Menubar.Label>
-						<Menubar.Item class={menuItemClass} onSelect={onOpenHistory}>
-							Recent Releases
-							<KbdShortcut keys="⌘H" class={menuShortcutClass} />
-						</Menubar.Item>
-					</Menubar.Content>
-				</Menubar.Menu>
+							<Menubar.Label class={menuLabelClass}>Page indicators</Menubar.Label>
+							<Menubar.CheckboxItem class={menuCheckIndicatorClass} bind:checked={highlightSlots}>
+								Highlight Editable Areas
+								<KbdShortcut keys="⌘⇧E" class={menuShortcutClass} />
+							</Menubar.CheckboxItem>
+							<Menubar.CheckboxItem class={menuCheckIndicatorClass} bind:checked={showDraftMarkers}>
+								Show Draft Markers On Links
+							</Menubar.CheckboxItem>
 
-				<Menubar.Menu>
-					<Menubar.Trigger class={menubarTriggerClass}>View</Menubar.Trigger>
-					<Menubar.Content class={menuContentClassExt} align="end">
-						<Menubar.Label class={menuLabelClass}>Bar</Menubar.Label>
-						<Menubar.Item class={menuItemClass} onSelect={onHideBar}>
-							Hide Bar
-							<KbdShortcut keys="⌘." class={menuShortcutClass} />
-						</Menubar.Item>
-						<Menubar.Sub>
-							<Menubar.SubTrigger class={menuItemClass}>Position</Menubar.SubTrigger>
-							<Menubar.SubContent class={menuContentClassExt}>
-								<Menubar.Item
-									class={menuCheckIndicatorClass}
-									onSelect={() => (barPosition = 'top')}
-								>
-									<span class="vela:absolute vela:left-2">
-										{barPosition === 'top' ? '✓' : ''}
-									</span>
-									Top
-								</Menubar.Item>
-								<Menubar.Item
-									class={menuCheckIndicatorClass}
-									onSelect={() => (barPosition = 'bottom')}
-								>
-									<span class="vela:absolute vela:left-2">
-										{barPosition === 'bottom' ? '✓' : ''}
-									</span>
-									Bottom
-								</Menubar.Item>
-							</Menubar.SubContent>
-						</Menubar.Sub>
+							<Menubar.Label class={menuLabelClass}>Preview As</Menubar.Label>
+							<Menubar.RadioGroup bind:value={previewAs}>
+								<Menubar.RadioItem class={menuCheckIndicatorClass} value="desktop">
+									Desktop
+								</Menubar.RadioItem>
+								<Menubar.RadioItem class={menuCheckIndicatorClass} value="tablet">
+									Tablet
+								</Menubar.RadioItem>
+								<Menubar.RadioItem class={menuCheckIndicatorClass} value="mobile">
+									Mobile
+								</Menubar.RadioItem>
+								<Menubar.RadioItem class={menuCheckIndicatorClass} value="signed-out">
+									Signed-out visitor
+								</Menubar.RadioItem>
+							</Menubar.RadioGroup>
 
-						<Menubar.Label class={menuLabelClass}>Page indicators</Menubar.Label>
-						<Menubar.CheckboxItem class={menuCheckIndicatorClass} bind:checked={highlightSlots}>
-							Highlight Editable Areas
-							<KbdShortcut keys="⌘⇧E" class={menuShortcutClass} />
-						</Menubar.CheckboxItem>
-						<Menubar.CheckboxItem class={menuCheckIndicatorClass} bind:checked={showDraftMarkers}>
-							Show Draft Markers On Links
-						</Menubar.CheckboxItem>
+							<Menubar.Label class={menuLabelClass}>Appearance</Menubar.Label>
+							<Menubar.Sub>
+								<Menubar.SubTrigger class={menuItemClass}>Theme</Menubar.SubTrigger>
+								<Menubar.SubContent class={menuContentClassExt}>
+									<Menubar.Item
+										class={menuCheckIndicatorClass}
+										onSelect={() => setThemePref('system')}
+									>
+										<span class="vela:absolute vela:left-2">
+											{adminBarTheme.pref === 'system' ? '✓' : ''}
+										</span>
+										System
+									</Menubar.Item>
+									<Menubar.Item
+										class={menuCheckIndicatorClass}
+										onSelect={() => setThemePref('light')}
+									>
+										<span class="vela:absolute vela:left-2">
+											{adminBarTheme.pref === 'light' ? '✓' : ''}
+										</span>
+										Light
+									</Menubar.Item>
+									<Menubar.Item
+										class={menuCheckIndicatorClass}
+										onSelect={() => setThemePref('dark')}
+									>
+										<span class="vela:absolute vela:left-2">
+											{adminBarTheme.pref === 'dark' ? '✓' : ''}
+										</span>
+										Dark
+									</Menubar.Item>
+								</Menubar.SubContent>
+							</Menubar.Sub>
 
-						<Menubar.Label class={menuLabelClass}>Preview As</Menubar.Label>
-						<Menubar.RadioGroup bind:value={previewAs}>
-							<Menubar.RadioItem class={menuCheckIndicatorClass} value="desktop">
-								Desktop
-							</Menubar.RadioItem>
-							<Menubar.RadioItem class={menuCheckIndicatorClass} value="tablet">
-								Tablet
-							</Menubar.RadioItem>
-							<Menubar.RadioItem class={menuCheckIndicatorClass} value="mobile">
-								Mobile
-							</Menubar.RadioItem>
-							<Menubar.RadioItem class={menuCheckIndicatorClass} value="signed-out">
-								Signed-out visitor
-							</Menubar.RadioItem>
-						</Menubar.RadioGroup>
+							<Menubar.Separator class={menuSeparatorClass} />
+							<Menubar.Item class={menuItemClass} onSelect={onShowKeyboardShortcuts}>
+								Keyboard Shortcuts…
+								<KbdShortcut keys="?" class={menuShortcutClass} />
+							</Menubar.Item>
+						</Menubar.Content>
+					</Menubar.Menu>
 
-						<Menubar.Label class={menuLabelClass}>Appearance</Menubar.Label>
-						<Menubar.Sub>
-							<Menubar.SubTrigger class={menuItemClass}>Theme</Menubar.SubTrigger>
-							<Menubar.SubContent class={menuContentClassExt}>
-								<Menubar.Item
-									class={menuCheckIndicatorClass}
-									onSelect={() => setThemePref('system')}
-								>
-									<span class="vela:absolute vela:left-2">
-										{adminBarTheme.pref === 'system' ? '✓' : ''}
-									</span>
-									System
-								</Menubar.Item>
-								<Menubar.Item
-									class={menuCheckIndicatorClass}
-									onSelect={() => setThemePref('light')}
-								>
-									<span class="vela:absolute vela:left-2">
-										{adminBarTheme.pref === 'light' ? '✓' : ''}
-									</span>
-									Light
-								</Menubar.Item>
-								<Menubar.Item class={menuCheckIndicatorClass} onSelect={() => setThemePref('dark')}>
-									<span class="vela:absolute vela:left-2">
-										{adminBarTheme.pref === 'dark' ? '✓' : ''}
-									</span>
-									Dark
-								</Menubar.Item>
-							</Menubar.SubContent>
-						</Menubar.Sub>
+					<Menubar.Menu>
+						<Menubar.Trigger class={avatarTriggerClass} aria-label="Account menu">
+							<UserAvatar name={user.name} />
+						</Menubar.Trigger>
+						<Menubar.Content class={menuContentClassExt} align="end">
+							<Menubar.Item class={menuItemClass} onSelect={onLogout}
+								>Log Out {user.name}</Menubar.Item
+							>
+						</Menubar.Content>
+					</Menubar.Menu>
+				</Menubar.Root>
 
-						<Menubar.Separator class={menuSeparatorClass} />
-						<Menubar.Item class={menuItemClass} onSelect={onShowKeyboardShortcuts}>
-							Keyboard Shortcuts…
-							<KbdShortcut keys="?" class={menuShortcutClass} />
-						</Menubar.Item>
-					</Menubar.Content>
-				</Menubar.Menu>
-			</Menubar.Root>
-
-			<UserAvatar name={user.name} />
-
-			<Button
-				variant="ghost"
-				size="pill-icon"
-				aria-label="Close"
-				onclick={onClose}
-				class="vela:h-6 vela:w-6"
-			>
-				×
-			</Button>
+				<Button
+					variant="ghost"
+					size="pill-icon"
+					aria-label="Close"
+					onclick={onClose}
+					class="vela:h-6 vela:w-6"
+				>
+					×
+				</Button>
+			</div>
 		</div>
-	</div>
 
-	{#if subBarVisible}
-		<!-- Sub-bar: bg starts behind the main bar (same top, taller height) so it
+		{#if subBarVisible}
+			<!-- Sub-bar: bg starts behind the main bar (same top, taller height) so it
 		     reads as a footer/extension. Top corners are square; bottom matches
 		     the main bar's pill curvature. Bg is mostly transparent so the page
 		     shows through. The visible band is the 40px below the main bar. -->
-		<div
-			class="vela:fixed vela:left-1/2 vela:-translate-x-1/2 vela:z-[9998]
+			<div
+				class="vela:fixed vela:left-1/2 vela:-translate-x-1/2 vela:z-[9998]
 			vela:flex vela:justify-between vela:gap-3
 			vela:w-full vela:max-w-[560px] vela:mx-4 vela:sm:mx-auto
 			vela:h-16 vela:px-3
@@ -867,137 +900,141 @@
 			vela:bg-[var(--cms-sub-bar-bg)]
 			vela:border vela:border-[var(--cms-sub-bar-border)]
 			{barPosition === 'bottom'
-				? 'vela:bottom-10 vela:pt-2 vela:items-start vela:rounded-t-3xl'
-				: 'vela:top-10 vela:pb-2 vela:items-end vela:rounded-b-3xl'}"
-		>
-			<div class="vela:flex vela:items-center">
-				{#if cmsStore.isEditing}
-					<StatusPill
-						variant="edit"
-						class="vela:h-5.5 vela:pl-2 vela:pr-2.5 vela:gap-1 vela:text-[11px]"
-					>
-						Editing
-					</StatusPill>
-				{:else}
-					<StatusPill
-						variant="warn"
-						onclick={onOpenPages}
-						class="vela:h-5.5 vela:pl-2 vela:pr-2.5 vela:gap-1 vela:text-[11px]"
-					>
-						{counts.total}
-						{counts.total === 1 ? 'page draft' : 'pages draft'}
-					</StatusPill>
-				{/if}
+					? 'vela:bottom-10 vela:pt-2 vela:items-start vela:rounded-t-3xl'
+					: 'vela:top-10 vela:pb-2 vela:items-end vela:rounded-b-3xl'}"
+			>
+				<div class="vela:flex vela:items-center">
+					{#if cmsStore.isEditing}
+						<StatusPill
+							variant="edit"
+							class="vela:h-5.5 vela:pl-2 vela:pr-2.5 vela:gap-1 vela:text-[11px]"
+						>
+							Editing
+						</StatusPill>
+					{:else}
+						<StatusPill
+							variant="warn"
+							onclick={onOpenPages}
+							class="vela:h-5.5 vela:pl-2 vela:pr-2.5 vela:gap-1 vela:text-[11px]"
+						>
+							{counts.total}
+							{counts.total === 1 ? 'page draft' : 'pages draft'}
+						</StatusPill>
+					{/if}
+				</div>
+
+				<div class="vela:flex vela:items-center vela:gap-1.5">
+					{#if cmsStore.isEditing}
+						<Button
+							variant="ghost"
+							size="pill"
+							onclick={onToggleEdit}
+							class="vela:h-5.5 vela:px-2.5 vela:text-[10px]"
+						>
+							Cancel
+						</Button>
+						<Button size="pill" onclick={onSave} class="vela:h-5.5 vela:px-2.5 vela:text-[10px]">
+							Save
+						</Button>
+					{:else}
+						<Button
+							variant="ghost"
+							size="pill"
+							onclick={onDiscardAllChanges}
+							class="vela:h-5.5 vela:px-2.5 vela:text-[10px]"
+						>
+							Discard all changes…
+						</Button>
+						<Button
+							size="pill"
+							onclick={onOpenPublish}
+							class="vela:h-5.5 vela:px-2.5 vela:text-[10px]"
+						>
+							Publish…
+						</Button>
+					{/if}
+				</div>
 			</div>
+		{/if}
 
-			<div class="vela:flex vela:items-center vela:gap-1.5">
-				{#if cmsStore.isEditing}
-					<Button
-						variant="ghost"
-						size="pill"
-						onclick={onToggleEdit}
-						class="vela:h-5.5 vela:px-2.5 vela:text-[10px]"
-					>
-						Cancel
-					</Button>
-					<Button size="pill" onclick={onSave} class="vela:h-5.5 vela:px-2.5 vela:text-[10px]">
-						Save
-					</Button>
-				{:else}
-					<Button
-						variant="ghost"
-						size="pill"
-						onclick={onDiscardAllChanges}
-						class="vela:h-5.5 vela:px-2.5 vela:text-[10px]"
-					>
-						Discard all changes…
-					</Button>
-					<Button
-						size="pill"
-						onclick={onOpenPublish}
-						class="vela:h-5.5 vela:px-2.5 vela:text-[10px]"
-					>
-						Publish…
-					</Button>
-				{/if}
-			</div>
-		</div>
-	{/if}
+		{#if seoOpen}
+			{#await import('./seo-panel.svelte') then { default: SeoPanel }}
+				<SeoPanel onClose={() => (seoOpen = false)} onSave={onSaveSeo} />
+			{/await}
+		{/if}
 
-	{#if seoOpen}
-		{#await import('./seo-panel.svelte') then { default: SeoPanel }}
-			<SeoPanel onClose={() => (seoOpen = false)} onSave={onSaveSeo} />
-		{/await}
-	{/if}
+		{#if historyOpen}
+			<HistoryPanel
+				{endpoint}
+				onClose={() => (historyOpen = false)}
+				onChanged={refreshAfterReleaseChange}
+			/>
+		{/if}
 
-	{#if historyOpen}
-		<HistoryPanel
-			{endpoint}
-			onClose={() => (historyOpen = false)}
-			onChanged={refreshAfterReleaseChange}
-		/>
-	{/if}
+		{#if pagesOpen}
+			<PagesPanel
+				{endpoint}
+				{creatablePages}
+				onClose={() => (pagesOpen = false)}
+				onChanged={refreshAfterReleaseChange}
+				onRequestNew={openNewPageDialog}
+				{onRequestDuplicate}
+			/>
+		{/if}
 
-	{#if pagesOpen}
-		<PagesPanel
-			{endpoint}
+		{#if mediaOpen}
+			<MediaPanel {endpoint} onClose={() => (mediaOpen = false)} />
+		{/if}
+
+		{#if cmsStore.openRelease}
+			<PublishDialog
+				open={publishOpen}
+				onOpenChange={(next) => (publishOpen = next)}
+				items={cmsStore.openRelease.items}
+				{publishing}
+				error={publishError}
+				{user}
+				{endpoint}
+				onConfirm={onConfirmPublish}
+			/>
+		{/if}
+
+		{#if newDialog}
+			<NewPageDialog
+				open={!!newDialog}
+				onOpenChange={(next) => {
+					if (!next) closeNewPageDialog();
+				}}
+				config={newDialog}
+				creating={newPageCreating}
+				error={newPageError}
+				onCreate={handleCreate}
+				mode={duplicateSource ? 'duplicate' : 'new'}
+				initialValues={duplicateSource
+					? Object.fromEntries(
+							Object.entries(duplicateSource.metadata).filter(([, v]) => typeof v === 'string') as [
+								string,
+								string
+							][]
+						)
+					: {}}
+			/>
+		{/if}
+
+		<NewPageChooserDialog
+			open={chooserOpen}
+			onOpenChange={(next) => (chooserOpen = next)}
 			{creatablePages}
-			onClose={() => (pagesOpen = false)}
-			onChanged={refreshAfterReleaseChange}
-			onRequestNew={openNewPageDialog}
-			{onRequestDuplicate}
+			onSelect={onNewFromTemplate}
 		/>
-	{/if}
 
-	{#if cmsStore.openRelease}
-		<PublishDialog
-			open={publishOpen}
-			onOpenChange={(next) => (publishOpen = next)}
-			items={cmsStore.openRelease.items}
-			{publishing}
-			error={publishError}
-			{user}
-			{endpoint}
-			onConfirm={onConfirmPublish}
+		<SharePreviewLinkDialog
+			open={shareLinkOpen}
+			onOpenChange={(next) => (shareLinkOpen = next)}
+			{previewUrl}
+			onRegenerate={onRegeneratePreviewKey}
 		/>
-	{/if}
 
-	{#if newDialog}
-		<NewPageDialog
-			open={!!newDialog}
-			onOpenChange={(next) => {
-				if (!next) closeNewPageDialog();
-			}}
-			config={newDialog}
-			creating={newPageCreating}
-			error={newPageError}
-			onCreate={handleCreate}
-			mode={duplicateSource ? 'duplicate' : 'new'}
-			initialValues={duplicateSource
-				? Object.fromEntries(
-						Object.entries(duplicateSource.metadata).filter(([, v]) => typeof v === 'string') as [
-							string,
-							string
-						][]
-					)
-				: {}}
-		/>
-	{/if}
-
-	<NewPageChooserDialog
-		open={chooserOpen}
-		onOpenChange={(next) => (chooserOpen = next)}
-		{creatablePages}
-		onSelect={onNewFromTemplate}
-	/>
-
-	<SharePreviewLinkDialog
-		open={shareLinkOpen}
-		onOpenChange={(next) => (shareLinkOpen = next)}
-		{previewUrl}
-		onRegenerate={onRegeneratePreviewKey}
-	/>
-
-	<KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={(next) => (shortcutsOpen = next)} />
-</div>
+		<KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={(next) => (shortcutsOpen = next)} />
+	</div>
 </CssRoot>

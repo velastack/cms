@@ -65,8 +65,37 @@ export type OpenRelease = {
 	items: ReleaseItem[];
 };
 
+/**
+ * Wire shape of a media library item, mirroring the server's `MediaItem`.
+ * `url` is the public path served by the static handler (e.g. `/uploads/abc.png`)
+ * and is what gets written into image field values.
+ */
+export type MediaItem = {
+	id: string;
+	filename: string;
+	originalName: string;
+	mime: string;
+	size: number;
+	url: string;
+	uploadedAt: string;
+	uploadedBy: string;
+};
+
 const scopeKindFromId = (scopeId: string): 'page' | 'layout' =>
 	scopeId.startsWith('layout:') ? 'layout' : 'page';
+
+/**
+ * Origin where uploaded media files are served. The backend writes files to
+ * `static/uploads/` and returns relative paths like `/uploads/<slug>.png`; the
+ * frontend lives on a different origin in dev, so we prefix each URL here at
+ * the wire boundary so display components and persisted field values both get
+ * a fully-qualified URL. v2 will replace this with config-driven resolution
+ * (per-environment origins, CDN/S3 base URL, etc.).
+ */
+export const MEDIA_URL_PREFIX = 'http://localhost:5174';
+
+const resolveMediaItem = (item: MediaItem): MediaItem =>
+	item.url.startsWith('/') ? { ...item, url: `${MEDIA_URL_PREFIX}${item.url}` } : item;
 
 class CmsStore {
 	isEditing = $state(false);
@@ -308,15 +337,15 @@ class CmsStore {
 	}
 
 	/**
-	 * Upload an image file to the CMS backend and return its public URL.
-	 * Sends multipart/form-data with a single `file` field. Server is expected
-	 * to respond with `{ url: string }`. Throws on non-2xx responses or when
-	 * the response body doesn't contain a string `url`.
+	 * Upload a media file (image-only on the MVP backend) to `${endpoint}/media`
+	 * and return the full `MediaItem`. The library panel and inline picker both
+	 * call this so newly-uploaded items can be prepended to local state without
+	 * a re-list.
 	 */
-	async uploadImage(endpoint: string, file: File): Promise<string> {
+	async uploadMedia(endpoint: string, file: File): Promise<MediaItem> {
 		const formData = new FormData();
 		formData.append('file', file);
-		const res = await fetch(`${endpoint}/upload`, {
+		const res = await fetch(`${endpoint}/media`, {
 			method: 'POST',
 			body: formData,
 			credentials: 'include'
@@ -324,11 +353,37 @@ class CmsStore {
 		if (!res.ok) {
 			throw new Error(`Upload failed (${res.status})`);
 		}
-		const data = (await res.json()) as { url?: unknown };
-		if (typeof data.url !== 'string') {
+		const item = (await res.json()) as MediaItem;
+		if (typeof item?.url !== 'string') {
 			throw new Error('Upload response missing url');
 		}
-		return data.url;
+		return resolveMediaItem(item);
+	}
+
+	/** Back-compat wrapper around `uploadMedia` that returns just the URL. */
+	async uploadImage(endpoint: string, file: File): Promise<string> {
+		return (await this.uploadMedia(endpoint, file)).url;
+	}
+
+	async listMedia(
+		endpoint: string,
+		params: { offset?: number; limit?: number } = {}
+	): Promise<{ items: MediaItem[]; total: number }> {
+		const qs = new URLSearchParams();
+		if (params.offset != null) qs.set('offset', String(params.offset));
+		if (params.limit != null) qs.set('limit', String(params.limit));
+		const res = await fetch(`${endpoint}/media?${qs}`, { credentials: 'include' });
+		if (!res.ok) throw new Error(`List failed (${res.status})`);
+		const data = (await res.json()) as { items: MediaItem[]; total: number };
+		return { ...data, items: data.items.map(resolveMediaItem) };
+	}
+
+	async deleteMedia(endpoint: string, id: string): Promise<void> {
+		const res = await fetch(`${endpoint}/media/${id}`, {
+			method: 'DELETE',
+			credentials: 'include'
+		});
+		if (!res.ok) throw new Error(`Delete failed (${res.status})`);
 	}
 
 	/**
