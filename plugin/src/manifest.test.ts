@@ -31,17 +31,24 @@ describe('buildManifest', () => {
 		expect(kinds).toEqual(['layout:/', 'page:/']);
 	});
 
+	const stripDefaultMeta = (fields: string[]): string[] =>
+		fields.filter((f) => !f.startsWith('metadata.')).sort();
+
 	it('collects fields from `<libDir>/components/cms` barrel imports and dedups', async () => {
 		const result = await buildManifest({ routesDir: ROUTES_DIR, libDir: LIB_DIR });
 		const pageScope = result.manifest.routes['/'].scopes.find((s) => s.kind === 'page')!;
 		// The +page.svelte uses welcome.title twice — must appear once.
-		expect(pageScope.fields.sort()).toEqual(['welcome.body', 'welcome.hero', 'welcome.title']);
+		expect(stripDefaultMeta(pageScope.fields)).toEqual([
+			'welcome.body',
+			'welcome.hero',
+			'welcome.title'
+		]);
 	});
 
 	it('collects fields from individual `cms/<Name>.svelte` default imports', async () => {
 		const result = await buildManifest({ routesDir: ROUTES_DIR, libDir: LIB_DIR });
 		const aboutScope = result.manifest.routes['/about'].scopes.find((s) => s.kind === 'page')!;
-		expect(aboutScope.fields).toEqual(['about.cover']);
+		expect(stripDefaultMeta(aboutScope.fields)).toEqual(['about.cover']);
 	});
 
 	it('walks through wrapper packages and inherits their CMS field references', async () => {
@@ -58,7 +65,7 @@ describe('buildManifest', () => {
 		const slugScope = result.manifest.routes['/(marketing)/rooms/[slug]'].scopes.find(
 			(s) => s.kind === 'page'
 		)!;
-		expect(slugScope.fields).toEqual(['hero.title']);
+		expect(stripDefaultMeta(slugScope.fields)).toEqual(['hero.title']);
 		expect(slugScope.fields).not.toContain('overridden');
 	});
 
@@ -74,15 +81,21 @@ describe('buildManifest', () => {
 		}
 	});
 
-	it('attaches default editable metadata fields to every page scope', async () => {
+	it('includes default `metadata.*` paths in every page scope`s fields list', async () => {
 		const result = await buildManifest({ routesDir: ROUTES_DIR, libDir: LIB_DIR });
+		const expectedMeta = [
+			'metadata.title',
+			'metadata.description',
+			'metadata.canonical',
+			'metadata.robots'
+		];
 		for (const route of Object.values(result.manifest.routes)) {
 			const pageScope = route.scopes.find((s) => s.kind === 'page');
 			if (!pageScope) continue;
-			expect(pageScope.metadata).toEqual(['title', 'description', 'canonical', 'robots']);
+			for (const m of expectedMeta) expect(pageScope.fields).toContain(m);
 		}
 		const layoutScope = result.manifest.routes['/'].scopes.find((s) => s.kind === 'layout')!;
-		expect(layoutScope.metadata).toBeUndefined();
+		for (const m of expectedMeta) expect(layoutScope.fields).not.toContain(m);
 	});
 
 	it('collects pageCmsModules and routeIdByScriptPath for parameterized routes', async () => {

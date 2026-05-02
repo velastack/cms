@@ -12,9 +12,9 @@ export type CmsScopeQuery = CmsScopeEntry & {
 };
 
 /**
- * One resolved document from an adapter. `contents` is the raw field map
- * (page-kind docs may include a reserved `_metadata` key that `loadCms` lifts
- * onto `cms.metadata`).
+ * One resolved document from an adapter. `contents` is the doc's tree —
+ * lodash-style paths walk into nested branches. Page-kind docs own a
+ * `metadata` branch that `loadCms` aliases as `cms.metadata`.
  */
 export type CmsAdapterDoc = {
 	contents: Record<string, unknown>;
@@ -39,9 +39,9 @@ export type CmsAdapterContext = {
  * scope queries map to documents.
  *
  * `fetchDocs` is called once per request with every applicable scope. May be
- * sync or async. Page-kind docs may include a reserved `_metadata` key whose
- * value becomes `cms.metadata` for the request; `loadCms` strips it from the
- * doc before exposing the rest to components.
+ * sync or async. Page-kind docs own a `metadata` branch on their tree;
+ * `loadCms` aliases it as `cms.metadata` for the request without removing it
+ * from the doc — components can address `metadata.title` like any other path.
  */
 export interface CmsAdapter {
 	/**
@@ -71,7 +71,7 @@ export interface CmsAdapter {
 	/**
 	 * Enumerate the publishable entries the adapter has at a given
 	 * `routeId`. Each entry carries its bound owned `params` (for SvelteKit's
-	 * prerender `entries()`) plus the doc's `_metadata` map (for index pages
+	 * prerender `entries()`) plus the doc's `metadata` branch (for index pages
 	 * that render a list with titles).
 	 */
 	fetchEntries(routeId: string, context: CmsAdapterContext): Promise<CmsEntry[]> | CmsEntry[];

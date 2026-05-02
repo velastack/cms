@@ -19,9 +19,11 @@ export type CmsScopeEntry = {
 	kind: 'layout' | 'page';
 	routeId: string;
 	params: Record<string, string>;
+	/**
+	 * Lodash-style paths used by Cms* components in this scope. For pages the
+	 * `metadata` branch shows up here too (e.g. `'metadata.title'`).
+	 */
 	fields: string[];
-	/** Editable metadata field names. Present only for `kind === 'page'`. */
-	metadata?: string[];
 };
 
 /**
@@ -63,9 +65,11 @@ export type CmsManifestScope = {
 	kind: 'layout' | 'page';
 	routeId: string;
 	ownedParams: string[];
+	/**
+	 * Lodash-style paths used by Cms* components in this scope. For pages the
+	 * `metadata` branch shows up here too (e.g. `'metadata.title'`).
+	 */
 	fields: string[];
-	/** Editable metadata field names. Present only for `kind === 'page'`. */
-	metadata?: string[];
 };
 
 export type CmsManifestRoute = {

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { page } from '$app/state';
-	import { getCmsScope, type CmsPayload } from './scope.js';
+	import { getCmsScope } from './scope.js';
 	import { cmsStore, type CmsScopeRef } from './cms-store.svelte.js';
 
 	type Props = {
@@ -15,43 +14,13 @@
 	let { name, fallback, value, children }: Props = $props();
 
 	const scope = getCmsScope();
-
-	// `name="metadata.<key>"` reads/writes page-scoped metadata via the metadata
-	// API, ignoring the local (possibly layout) scope. Resolved through `cms.page`
-	// so the same component can sit in a layout and still target the page leaf.
-	const isMeta = $derived(name.startsWith('metadata.'));
-	const metaKey = $derived(isMeta ? name.slice('metadata.'.length) : '');
-
-	const cms = $derived(page.data.cms as CmsPayload | undefined);
-	const ref = $derived.by<CmsScopeRef | null>(() => {
-		if (isMeta) {
-			return cms?.page
-				? { scopeId: cms.page.scopeId, routeId: cms.page.routeId, params: cms.page.params }
-				: null;
-		}
-		return scope
-			? { scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params }
-			: null;
-	});
+	const ref = $derived<CmsScopeRef | null>(
+		scope ? { scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params } : null
+	);
 
 	const resolved = $derived.by(() => {
 		if (value !== undefined) return value;
-		if (isMeta) {
-			if (cmsStore.isEditing && ref && cmsStore.hasMetadataDraft(ref, metaKey)) {
-				return cmsStore.getMetadataValue(ref, metaKey);
-			}
-			if (ref && cmsStore.hasMetadataOverlay(ref, metaKey)) {
-				return cmsStore.getMetadataOverlayValue(ref, metaKey);
-			}
-			return cms?.metadata[metaKey];
-		}
-		if (cmsStore.isEditing && ref && cmsStore.hasDraft(ref, name)) {
-			return cmsStore.getValue(ref, name);
-		}
-		if (ref && cmsStore.hasOverlay(ref, name)) {
-			return cmsStore.getOverlayValue(ref, name);
-		}
-		return scope ? cms?.docs[scope.scopeId]?.[name] : undefined;
+		return ref ? cmsStore.getValue(ref, name) : undefined;
 	});
 
 	const display = $derived(typeof resolved === 'string' ? resolved : (fallback ?? ''));
@@ -62,9 +31,6 @@
 	let initialFromChildren = $state<string | undefined>(undefined);
 	let composing = false;
 
-	// Capture the children-rendered text the instant edit mode turns on. The
-	// children block unmounts as soon as `editable` flips, so we read the DOM
-	// in `$effect.pre` (after state, before bindings update).
 	$effect.pre(() => {
 		if (editable && childrenEl && initialFromChildren === undefined) {
 			const text = childrenEl.textContent?.trim();
@@ -72,19 +38,12 @@
 		}
 	});
 
-	// Default text for the editable span: resolved value (incl. empty drafts)
-	// wins, then the explicit `fallback` prop, then the captured children text.
-	// An empty draft must stay empty — we don't want a revert to refill it.
 	const editValue = $derived.by(() => {
 		if (typeof resolved === 'string') return resolved;
 		if (fallback !== undefined) return fallback;
 		return initialFromChildren ?? '';
 	});
 
-	// Drive textContent imperatively. Svelte 5 caches the last value it wrote
-	// to a text expression, so `<span>{display}</span>` re-applies on every
-	// store update and resets the caret to start. Skip while focused so live
-	// typing is left alone; external reverts (cancel/discard) land on blur.
 	$effect(() => {
 		if (!el) return;
 		const target = editValue;
@@ -95,8 +54,7 @@
 
 	const writeValue = (text: string) => {
 		if (!ref) return;
-		if (isMeta) cmsStore.setMetadataValue(ref, metaKey, text);
-		else cmsStore.setValue(ref, name, text);
+		cmsStore.setValue(ref, name, text);
 	};
 
 	const onInput = (e: Event) => {

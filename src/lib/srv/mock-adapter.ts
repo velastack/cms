@@ -1,3 +1,4 @@
+import { mergeTree, type Tree } from '../components/cms/path.ts';
 import type {
 	CmsAdapter,
 	CmsAdapterContext,
@@ -26,16 +27,17 @@ export type PageEntry = {
  * One pending change in an open release, snapshot for adapter overlay. Items
  * with `kind: 'page'` carry `params`; layout items don't (layouts have no
  * owned params). `kind: 'page-delete'` signals a staged page removal — in
- * preview, the adapter omits the matching page so it appears removed.
+ * preview, the adapter omits the matching page so it appears removed. The
+ * `tree` is a partial tree that deep-merges over the published content.
  */
 export type ReleaseItemSnapshot =
 	| {
 			kind: 'page';
 			routeId: string;
 			params: Record<string, string>;
-			fields: Record<string, unknown>;
+			tree: Tree;
 	  }
-	| { kind: 'layout'; routeId: string; fields: Record<string, unknown> }
+	| { kind: 'layout'; routeId: string; tree: Tree }
 	| { kind: 'page-delete'; routeId: string; params: Record<string, string> };
 
 export type ReleaseSnapshot = {
@@ -121,29 +123,16 @@ const isPageDeleted = (
 };
 
 /**
- * Merge release-item field edits onto a published document. Page items may
- * include a `_metadata` key (treated like any field — shallow-merged into the
- * existing `_metadata` object so partial metadata edits don't drop other
- * keys). Only field-bearing variants (page / layout) reach this helper —
- * page-delete is handled separately by the caller.
+ * Merge a release item's tree onto a published document via deep-merge.
+ * Plain-object branches deep-merge; arrays replace wholesale (so a repeater
+ * reorder doesn't accidentally concat with the previous order). Only
+ * tree-bearing variants (page / layout) reach this helper — page-delete is
+ * handled separately by the caller.
  */
 type ReleaseFieldItem = Exclude<ReleaseItemSnapshot, { kind: 'page-delete' }>;
 
-const applyOverlay = (
-	base: Record<string, unknown> | undefined,
-	item: ReleaseFieldItem
-): Record<string, unknown> => {
-	const out: Record<string, unknown> = base ? { ...base } : {};
-	for (const [k, v] of Object.entries(item.fields)) {
-		if (k === '_metadata' && v && typeof v === 'object' && !Array.isArray(v)) {
-			const existing = (out._metadata as Record<string, unknown>) ?? {};
-			out._metadata = { ...existing, ...(v as Record<string, unknown>) };
-		} else {
-			out[k] = v;
-		}
-	}
-	return out;
-};
+const applyOverlay = (base: Tree | undefined, item: ReleaseFieldItem): Tree =>
+	mergeTree(base ?? {}, item.tree);
 
 /**
  * In-memory {@link CmsAdapter} useful for tests, demos, and local development
@@ -195,17 +184,21 @@ export const mockAdapter = (options: MockAdapterOptions = {}): CmsAdapter => {
 			const previewKey = context.previewKey;
 			const release = previewKey && resolvePreview ? resolvePreview(previewKey) : null;
 			const out: CmsEntry[] = [];
+			const metaOf = (tree: Tree | undefined): Record<string, unknown> => {
+				const m = tree?.metadata;
+				return m && typeof m === 'object' && !Array.isArray(m)
+					? (m as Record<string, unknown>)
+					: {};
+			};
 			for (const e of entries) {
 				if (release && isPageDeleted(release, routeId, e.params)) continue;
-				const metadata = (e.published._metadata as Record<string, unknown>) ?? {};
-				out.push({ params: { ...e.params }, metadata });
+				out.push({ params: { ...e.params }, metadata: metaOf(e.published as Tree) });
 			}
 			if (release) {
 				for (const item of release.items) {
 					if (item.kind !== 'page' || item.routeId !== routeId) continue;
 					if (findPageEntry(entries, item.params)) continue;
-					const meta = (item.fields._metadata as Record<string, unknown>) ?? {};
-					out.push({ params: { ...item.params }, metadata: meta });
+					out.push({ params: { ...item.params }, metadata: metaOf(item.tree) });
 				}
 			}
 			return out;

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { page } from '$app/state';
-	import { getCmsScope, type CmsPayload } from './scope.js';
+	import { getCmsScope } from './scope.js';
 	import { cmsStore, type CmsScopeRef } from './cms-store.svelte.js';
 
 	type Props = {
@@ -15,21 +14,12 @@
 
 	const scope = getCmsScope();
 	const ref = $derived<CmsScopeRef | null>(
-		scope
-			? { scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params }
-			: null
+		scope ? { scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params } : null
 	);
 
 	const resolved = $derived.by(() => {
 		if (value !== undefined) return value;
-		if (cmsStore.isEditing && ref && cmsStore.hasDraft(ref, name)) {
-			return cmsStore.getValue(ref, name);
-		}
-		if (ref && cmsStore.hasOverlay(ref, name)) {
-			return cmsStore.getOverlayValue(ref, name);
-		}
-		const cms = page.data.cms as CmsPayload | undefined;
-		return scope ? cms?.docs[scope.scopeId]?.[name] : undefined;
+		return ref ? cmsStore.getValue(ref, name) : undefined;
 	});
 
 	const html = $derived(typeof resolved === 'string' ? resolved : (fallback ?? ''));

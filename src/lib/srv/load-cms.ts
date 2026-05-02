@@ -58,8 +58,9 @@ const emptyPayload = (locale: string, endpoint: string): CmsPayload => ({
 
 /**
  * Pure resolver: build per-scope queries from the manifest, ask the adapter
- * for documents, lift `_metadata` off the page-kind doc, and shape a
- * {@link CmsPayload}. No SvelteKit dependency — used directly by tests.
+ * for documents, and shape a {@link CmsPayload}. The page-kind doc owns a
+ * `metadata` branch on its tree; `payload.metadata` aliases that branch for
+ * `definePageMetaTags(...)`. No SvelteKit dependency — used directly by tests.
  */
 export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<LoadCmsResult> => {
 	const { manifest, routeId, params, previewKey, locale, adapter, fetch } = args;
@@ -81,7 +82,6 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
 			routeId: scope.routeId,
 			params: scopeParams,
 			fields: scope.fields,
-			metadata: scope.metadata,
 			locale
 		};
 	});
@@ -99,30 +99,24 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
 	const entries: Record<string, CmsEntry[]> = Object.fromEntries(entriesPairs);
 
 	const pageQuery = queries.find((q) => q.kind === 'page');
-	let metadata: Record<string, unknown> = {};
 	let pagePointer: CmsPagePointer | null = null;
 	const docs: Record<string, Record<string, unknown>> = {};
 	for (const [scopeId, doc] of Object.entries(rawDocs)) {
-		const contents = doc.contents;
-		if (pageQuery && scopeId === pageQuery.scopeId) {
-			if ('_metadata' in contents) {
-				const { _metadata, ...rest } = contents;
-				metadata = (_metadata as Record<string, unknown>) ?? {};
-				docs[scopeId] = rest;
-			} else {
-				docs[scopeId] = contents;
-			}
-		} else {
-			docs[scopeId] = contents;
-		}
+		docs[scopeId] = doc.contents;
 	}
 
+	let metadata: Record<string, unknown> = {};
 	if (pageQuery) {
 		pagePointer = {
 			scopeId: pageQuery.scopeId,
 			routeId: pageQuery.routeId,
 			params: pageQuery.params
 		};
+		const pageDoc = docs[pageQuery.scopeId];
+		const meta = pageDoc?.metadata;
+		if (meta && typeof meta === 'object' && !Array.isArray(meta)) {
+			metadata = meta as Record<string, unknown>;
+		}
 	}
 
 	const scopes: Record<string, CmsScopeEntry> = {};
@@ -155,9 +149,9 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
  * release on top of the published content for each requested scope. Without
  * a preview key, only published content is returned.
  *
- * The page-kind doc may carry a reserved `_metadata` key; it's lifted onto
- * `payload.metadata` (for `definePageMetaTags(...)`) and removed from the
- * doc map before components see it.
+ * The page-kind doc owns a `metadata` branch on its tree; `payload.metadata`
+ * aliases it for `definePageMetaTags(...)`. The doc itself is unchanged —
+ * components addressing `metadata.title` etc. read straight through.
  *
  * Wire it into your root `+layout.server.ts`:
  *

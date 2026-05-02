@@ -29,14 +29,14 @@ describe('createCms.load', () => {
 	it('binds adapter + locale and returns a populated payload', async () => {
 		const adapter = mockAdapter({
 			pageDocs: {
-				'/': [{ params: {}, published: { 'welcome.title': 'Hi' } }]
+				'/': [{ params: {}, published: { welcome: { title: 'Hi' } } }]
 			}
 		});
 		const cms = createCms({ adapter, locale: 'en' });
 		const { cms: payload, notFound } = await cms.load(fakeEvent({ routeId: '/' }));
 		expect(notFound).toBe(false);
 		expect(payload.locale).toBe('en');
-		expect(payload.docs['page:/']).toEqual({ 'welcome.title': 'Hi' });
+		expect(payload.docs['page:/']).toEqual({ welcome: { title: 'Hi' } });
 	});
 
 	it('returns notFound for a parameterized route with no doc', async () => {
@@ -54,8 +54,8 @@ describe('createCms.generateEntries', () => {
 		const adapter = mockAdapter({
 			pageDocs: {
 				'/(marketing)/rooms/[slug]': [
-					{ params: { slug: 'a' }, published: { _metadata: { title: 'A' } } },
-					{ params: { slug: 'b' }, published: { _metadata: { title: 'B' } } }
+					{ params: { slug: 'a' }, published: { metadata: { title: 'A' } } },
+					{ params: { slug: 'b' }, published: { metadata: { title: 'B' } } }
 				]
 			}
 		});

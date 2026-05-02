@@ -1,26 +1,25 @@
 /**
  * Reactive edit-mode store for CMS components.
  *
- * `drafts` and `metadataDrafts` hold uncommitted, in-progress field edits
- * the editor is making locally. Each entry is tagged with the scope it
- * belongs to (`scopeId`, `routeId`, `params`) so navigation between sibling
- * param values (e.g. `slug=suite-1` → `slug=suite-2`) keeps each set of
- * edits separate. Display components prefer drafts over published values
- * when `isEditing` is on.
+ * Every scope owns one tree. `drafts[key].tree` holds the editor's local,
+ * uncommitted patch tree; `overlay[key]` holds merged published+release
+ * content fetched client-side from `${endpoint}/docs`. Display components
+ * read through `getValue(scope, path)`, which deep-merges
+ * `base ∪ overlay ∪ draft` (drafts only when `isEditing`) and returns the
+ * value at `path`.
  *
- * `save(endpoint)` flushes both buckets to `${endpoint}/release/items`,
- * which adds them to the editor's open release on the server. The release
- * is published atomically by the separate `/release/publish` action — saving
- * is cheap and reversible, publishing is the deliberate "go live" step.
+ * `save(endpoint)` flushes draft trees to `${endpoint}/release/items` as
+ * `{ items: [{ kind, routeId, [params], tree }] }`. The server deep-merges
+ * each tree into the editor's open release. Publishing is a separate
+ * deliberate step via `/release/publish`.
  *
- * `overlay` and `metadataOverlay` hold merged published+release content
- * fetched client-side from `${endpoint}/docs`. Display components prefer
- * overlay over `page.data.cms.docs`. This is how the authed editor sees
- * working-copy state on static-export sites where SvelteKit's server load
- * cannot be re-run; the SSR `?preview=KEY` path remains as a fallback for
- * shared preview links rendered on hosts that do have a Node backend.
+ * Paths are lodash-style: `welcome.title`, `gallery.0.caption`,
+ * `metadata.openGraph.image.url`. Numeric segments index arrays. There is no
+ * special envelope for metadata — `metadata` is just a branch on the page
+ * scope's tree.
  */
 import { page } from '$app/state';
+import { get, has, mergeTree, set, type Tree } from './path.js';
 import type { CmsEntry, CmsPagePointer, CmsPayload, CmsScopeEntry } from './scope.js';
 
 export type CmsScopeRef = {
@@ -31,7 +30,7 @@ export type CmsScopeRef = {
 
 type DraftBucket = {
 	scope: CmsScopeRef;
-	fields: Record<string, unknown>;
+	tree: Tree;
 };
 
 const composeKey = (scope: CmsScopeRef): string => {
@@ -46,10 +45,10 @@ export type ReleaseItem =
 			kind: 'page';
 			routeId: string;
 			params: Record<string, string>;
-			fields: Record<string, unknown>;
+			tree: Tree;
 			addedAt: string;
 	  }
-	| { kind: 'layout'; routeId: string; fields: Record<string, unknown>; addedAt: string }
+	| { kind: 'layout'; routeId: string; tree: Tree; addedAt: string }
 	| {
 			kind: 'page-delete';
 			routeId: string;
@@ -67,8 +66,7 @@ export type OpenRelease = {
 
 /**
  * Wire shape of a media library item, mirroring the server's `MediaItem`.
- * `url` is the public path served by the static handler (e.g. `/uploads/abc.png`)
- * and is what gets written into image field values.
+ * `url` is the public path served by the static handler (e.g. `/uploads/abc.png`).
  */
 export type MediaItem = {
 	id: string;
@@ -89,21 +87,26 @@ const scopeKindFromId = (scopeId: string): 'page' | 'layout' =>
  * `static/uploads/` and returns relative paths like `/uploads/<slug>.png`; the
  * frontend lives on a different origin in dev, so we prefix each URL here at
  * the wire boundary so display components and persisted field values both get
- * a fully-qualified URL. v2 will replace this with config-driven resolution
- * (per-environment origins, CDN/S3 base URL, etc.).
+ * a fully-qualified URL.
  */
 export const MEDIA_URL_PREFIX = 'http://localhost:5174';
 
 const resolveMediaItem = (item: MediaItem): MediaItem =>
 	item.url.startsWith('/') ? { ...item, url: `${MEDIA_URL_PREFIX}${item.url}` } : item;
 
+const treeHasAnyLeaf = (tree: Tree): boolean => {
+	for (const v of Object.values(tree)) {
+		if (v === undefined) continue;
+		return true;
+	}
+	return false;
+};
+
 class CmsStore {
 	isEditing = $state(false);
 	drafts = $state<Record<string, DraftBucket>>({});
-	metadataDrafts = $state<Record<string, DraftBucket>>({});
 	openRelease = $state<OpenRelease | null>(null);
-	overlay = $state<Record<string, Record<string, unknown>>>({});
-	metadataOverlay = $state<Record<string, Record<string, unknown>>>({});
+	overlay = $state<Record<string, Tree>>({});
 	/** Per-routeId entries overlay populated by `loadAndApplyEntriesOverlay`. */
 	entriesOverlay = $state<Record<string, CmsEntry[]>>({});
 	private overlayFetchToken = 0;
@@ -113,27 +116,47 @@ class CmsStore {
 		this.isEditing = !this.isEditing;
 	}
 
-	hasOverlay(scope: CmsScopeRef, name: string): boolean {
-		const bucket = this.overlay[composeKey(scope)];
-		return bucket !== undefined && name in bucket;
+	/** Base doc (server-rendered) for a scope. */
+	private baseDoc(scope: CmsScopeRef): Tree {
+		const cms = page.data?.cms as CmsPayload | undefined;
+		return (cms?.docs?.[scope.scopeId] ?? {}) as Tree;
 	}
 
-	getOverlayValue(scope: CmsScopeRef, name: string): unknown {
-		return this.overlay[composeKey(scope)]?.[name];
+	/** Merged read tree: base ∪ overlay (∪ draft when editing). */
+	private mergedTree(scope: CmsScopeRef): Tree {
+		const key = composeKey(scope);
+		const base = this.baseDoc(scope);
+		const ov = this.overlay[key];
+		const draft = this.isEditing ? this.drafts[key]?.tree : undefined;
+		return mergeTree(base, ov, draft);
 	}
 
-	hasMetadataOverlay(scope: CmsScopeRef, name: string): boolean {
-		const bucket = this.metadataOverlay[composeKey(scope)];
-		return bucket !== undefined && name in bucket;
+	/** Read the merged value at `path`. Returns `undefined` if missing. */
+	getValue(scope: CmsScopeRef, path: string): unknown {
+		return get(this.mergedTree(scope), path);
 	}
 
-	getMetadataOverlayValue(scope: CmsScopeRef, name: string): unknown {
-		return this.metadataOverlay[composeKey(scope)]?.[name];
+	/** Whether the editor's draft tree contains a value at `path`. */
+	hasDraft(scope: CmsScopeRef, path: string): boolean {
+		const bucket = this.drafts[composeKey(scope)];
+		return bucket ? has(bucket.tree, path) : false;
+	}
+
+	/** Whether the client overlay (published+release) contains a value at `path`. */
+	hasOverlay(scope: CmsScopeRef, path: string): boolean {
+		const ov = this.overlay[composeKey(scope)];
+		return ov ? has(ov, path) : false;
+	}
+
+	/** Write a value at `path` into the draft tree. Creates the bucket if needed. */
+	setValue(scope: CmsScopeRef, path: string, value: unknown): void {
+		const key = composeKey(scope);
+		const bucket = this.drafts[key] ?? (this.drafts[key] = { scope, tree: {} });
+		set(bucket.tree, path, value);
 	}
 
 	clearOverlay(): void {
 		this.overlay = {};
-		this.metadataOverlay = {};
 		this.entriesOverlay = {};
 	}
 
@@ -145,7 +168,7 @@ class CmsStore {
 	 * to fetch published-only content (used post-publish to mask the now-stale
 	 * `page.data.cms.docs` on static-export sites).
 	 *
-	 * `opts.reset` replaces the overlay maps wholesale (mount with release,
+	 * `opts.reset` replaces the overlay map wholesale (mount with release,
 	 * post-publish, post-discard). Otherwise we merge — keeps unchanged-layout
 	 * overlays applied during navigation while new-page scopes load.
 	 */
@@ -166,15 +189,14 @@ class CmsStore {
 			if (previewKey) qs.set('preview', previewKey);
 			const res = await fetch(`${endpoint}/docs?${qs}`, { credentials: 'include' });
 			if (!res.ok) return null;
-			const data = (await res.json()) as { contents: Record<string, unknown> };
+			const data = (await res.json()) as { contents: Tree };
 			return { scope, contents: data.contents };
 		};
 
 		const results = await Promise.all(scopes.map(fetchOne));
 		if (token !== this.overlayFetchToken) return;
 
-		const nextOverlay: Record<string, Record<string, unknown>> = {};
-		const nextMeta: Record<string, Record<string, unknown>> = {};
+		const next: Record<string, Tree> = {};
 		for (const r of results) {
 			if (!r) continue;
 			const key = composeKey({
@@ -182,22 +204,13 @@ class CmsStore {
 				routeId: r.scope.routeId,
 				params: r.scope.params
 			});
-			const { _metadata, ...fields } = r.contents as { _metadata?: unknown } & Record<
-				string,
-				unknown
-			>;
-			nextOverlay[key] = fields;
-			if (r.scope.kind === 'page' && _metadata && typeof _metadata === 'object') {
-				nextMeta[key] = _metadata as Record<string, unknown>;
-			}
+			next[key] = r.contents ?? {};
 		}
 
 		if (opts.reset) {
-			this.overlay = nextOverlay;
-			this.metadataOverlay = nextMeta;
+			this.overlay = next;
 		} else {
-			this.overlay = { ...this.overlay, ...nextOverlay };
-			this.metadataOverlay = { ...this.metadataOverlay, ...nextMeta };
+			this.overlay = { ...this.overlay, ...next };
 		}
 	}
 
@@ -205,9 +218,8 @@ class CmsStore {
 	 * Refresh the per-routeId entries overlay used by `<CmsEntries>`. One fetch
 	 * to `${endpoint}/pages?preview=…` covers all `routeIds`; we filter the
 	 * response per route. With `previewKey` set, draft and pending-delete
-	 * entries are kept (mirrors `apiAdapter.fetchEntries` preview behavior);
-	 * with `previewKey === null`, they're filtered out — used post-publish to
-	 * mask the now-stale `page.data.cms.entries` on static-export sites.
+	 * entries are kept; with `previewKey === null`, they're filtered out — used
+	 * post-publish to mask stale `page.data.cms.entries` on static-export sites.
 	 */
 	async loadAndApplyEntriesOverlay(
 		endpoint: string,
@@ -255,7 +267,6 @@ class CmsStore {
 				metadata: e.metadata ?? {}
 			}));
 		}
-		// Routes asked for but not present in the response → empty list.
 		for (const rid of routeIds) {
 			if (!(rid in next)) next[rid] = [];
 		}
@@ -267,42 +278,9 @@ class CmsStore {
 		}
 	}
 
-	setValue(scope: CmsScopeRef, name: string, value: unknown): void {
-		const key = composeKey(scope);
-		const bucket = this.drafts[key] ?? (this.drafts[key] = { scope, fields: {} });
-		bucket.fields[name] = value;
-	}
-
-	getValue(scope: CmsScopeRef, name: string): unknown {
-		return this.drafts[composeKey(scope)]?.fields[name];
-	}
-
-	hasDraft(scope: CmsScopeRef, name: string): boolean {
-		const bucket = this.drafts[composeKey(scope)];
-		return bucket !== undefined && name in bucket.fields;
-	}
-
-	setMetadataValue(scope: CmsScopeRef, name: string, value: unknown): void {
-		const key = composeKey(scope);
-		const bucket = this.metadataDrafts[key] ?? (this.metadataDrafts[key] = { scope, fields: {} });
-		bucket.fields[name] = value;
-	}
-
-	getMetadataValue(scope: CmsScopeRef, name: string): unknown {
-		return this.metadataDrafts[composeKey(scope)]?.fields[name];
-	}
-
-	hasMetadataDraft(scope: CmsScopeRef, name: string): boolean {
-		const bucket = this.metadataDrafts[composeKey(scope)];
-		return bucket !== undefined && name in bucket.fields;
-	}
-
 	get isDirty(): boolean {
 		for (const bucket of Object.values(this.drafts)) {
-			if (Object.keys(bucket.fields).length > 0) return true;
-		}
-		for (const bucket of Object.values(this.metadataDrafts)) {
-			if (Object.keys(bucket.fields).length > 0) return true;
+			if (treeHasAnyLeaf(bucket.tree)) return true;
 		}
 		return false;
 	}
@@ -319,7 +297,6 @@ class CmsStore {
 
 	clearDrafts(): void {
 		this.drafts = {};
-		this.metadataDrafts = {};
 	}
 
 	setOpenRelease(release: OpenRelease | null): void {
@@ -337,10 +314,9 @@ class CmsStore {
 	}
 
 	/**
-	 * Upload a media file (image-only on the MVP backend) to `${endpoint}/media`
-	 * and return the full `MediaItem`. The library panel and inline picker both
-	 * call this so newly-uploaded items can be prepended to local state without
-	 * a re-list.
+	 * Upload a media file to `${endpoint}/media` and return the full `MediaItem`.
+	 * The library panel and inline picker both call this so newly-uploaded items
+	 * can be prepended to local state without a re-list.
 	 */
 	async uploadMedia(endpoint: string, file: File): Promise<MediaItem> {
 		const formData = new FormData();
@@ -387,48 +363,31 @@ class CmsStore {
 	}
 
 	/**
-	 * Flush dirty drafts and metadata to the server's open release. Layout
-	 * and page edits are sent in one batch — the server merges them into the
-	 * editor's working copy without publishing. Metadata edits ride along on
-	 * the matching scope's item under a `_metadata` key.
+	 * Flush dirty drafts to the server's open release as one item per scope,
+	 * each carrying a partial tree. The server deep-merges each tree into its
+	 * matching item in the working copy without publishing.
 	 */
 	async save(endpoint: string): Promise<{ ok: boolean; release?: OpenRelease }> {
 		type SaveInput =
-			| {
-					kind: 'page';
-					routeId: string;
-					params: Record<string, string>;
-					fields: Record<string, unknown>;
-			  }
-			| { kind: 'layout'; routeId: string; fields: Record<string, unknown> };
-		const itemsByKey = new Map<string, SaveInput>();
+			| { kind: 'page'; routeId: string; params: Record<string, string>; tree: Tree }
+			| { kind: 'layout'; routeId: string; tree: Tree };
 
-		const itemFor = (scope: CmsScopeRef): SaveInput => {
-			const key = composeKey(scope);
-			let item = itemsByKey.get(key);
-			if (!item) {
-				const kind = scopeKindFromId(scope.scopeId);
-				item =
-					kind === 'page'
-						? { kind: 'page', routeId: scope.routeId, params: scope.params, fields: {} }
-						: { kind: 'layout', routeId: scope.routeId, fields: {} };
-				itemsByKey.set(key, item);
-			}
-			return item;
-		};
-
+		const items: SaveInput[] = [];
 		for (const bucket of Object.values(this.drafts)) {
-			if (Object.keys(bucket.fields).length === 0) continue;
-			Object.assign(itemFor(bucket.scope).fields, bucket.fields);
-		}
-		for (const bucket of Object.values(this.metadataDrafts)) {
-			if (Object.keys(bucket.fields).length === 0) continue;
-			const item = itemFor(bucket.scope);
-			const existingMeta = (item.fields._metadata as Record<string, unknown> | undefined) ?? {};
-			item.fields._metadata = { ...existingMeta, ...bucket.fields };
+			if (!treeHasAnyLeaf(bucket.tree)) continue;
+			const kind = scopeKindFromId(bucket.scope.scopeId);
+			if (kind === 'page') {
+				items.push({
+					kind: 'page',
+					routeId: bucket.scope.routeId,
+					params: bucket.scope.params,
+					tree: bucket.tree
+				});
+			} else {
+				items.push({ kind: 'layout', routeId: bucket.scope.routeId, tree: bucket.tree });
+			}
 		}
 
-		const items = [...itemsByKey.values()];
 		if (items.length === 0) return { ok: true, release: this.openRelease ?? undefined };
 
 		const res = await fetch(`${endpoint}/release/items`, {
@@ -449,20 +408,19 @@ export const cmsStore = new CmsStore();
 
 /**
  * Public read view of the merged CMS payload: server-loaded `page.data.cms`
- * with `cmsStore.overlay` / `cmsStore.metadataOverlay` applied on top, so
- * authed editors see working-copy content without a server reload.
+ * with `cmsStore.overlay` applied on top, so authed editors see working-copy
+ * content without a server reload.
  *
  * Shape mirrors `CmsPayload` directly via getters (`cms.docs`, `cms.metadata`,
- * `cms.page`, …). `docs` stays keyed by `scopeId` to match `CmsPayload`; the
- * overlay buckets (which key by `composeKey` to disambiguate sibling-param
- * navigations) are translated through `base.scopes` for each scope.
+ * `cms.page`, …). `metadata` is now a thin alias — it reads the page scope's
+ * `metadata` branch from the merged docs.
  */
 class Cms {
 	#merged = $derived.by((): CmsPayload | null => {
 		const base = (page.data?.cms ?? null) as CmsPayload | null;
 		if (!base) return null;
 
-		const docs: Record<string, Record<string, unknown>> = {};
+		const docs: Record<string, Tree> = {};
 		for (const [scopeId, scopeEntry] of Object.entries(base.scopes)) {
 			const overlayKey = composeKey({
 				scopeId: scopeEntry.scopeId,
@@ -470,19 +428,17 @@ class Cms {
 				params: scopeEntry.params
 			});
 			const overlayBucket = cmsStore.overlay[overlayKey];
-			const baseDoc = base.docs[scopeId] ?? {};
-			docs[scopeId] = overlayBucket ? { ...baseDoc, ...overlayBucket } : baseDoc;
+			const baseDoc = (base.docs[scopeId] ?? {}) as Tree;
+			docs[scopeId] = overlayBucket ? mergeTree(baseDoc, overlayBucket) : baseDoc;
 		}
 
 		let metadata = base.metadata;
 		if (base.page) {
-			const metaKey = composeKey({
-				scopeId: base.page.scopeId,
-				routeId: base.page.routeId,
-				params: base.page.params
-			});
-			const metaOverlay = cmsStore.metadataOverlay[metaKey];
-			if (metaOverlay) metadata = { ...base.metadata, ...metaOverlay };
+			const pageDoc = docs[base.page.scopeId] as Tree | undefined;
+			const meta = pageDoc?.metadata;
+			if (meta && typeof meta === 'object' && !Array.isArray(meta)) {
+				metadata = meta as Record<string, unknown>;
+			}
 		}
 
 		const entries: Record<string, CmsEntry[]> = {

@@ -14,17 +14,23 @@ export type CmsManifestScope = {
 	kind: 'layout' | 'page';
 	routeId: string;
 	ownedParams: string[];
+	/**
+	 * Lodash-style paths used by Cms* components in this scope. For pages the
+	 * `metadata` branch shows up here too (e.g. `'metadata.title'`).
+	 */
 	fields: string[];
-	/** Editable metadata field names. Present only for `kind === 'page'`. */
-	metadata?: string[];
 };
 
 /**
- * Default page-metadata fields exposed to the editor. These are intentionally
- * the flat top-level keys of `MetaTagsProps` so they map directly to
- * `definePageMetaTags(...)` without nested transformation.
+ * Default page-metadata paths surfaced to the editor when a route has no
+ * explicit schema. Always live under the `metadata` branch.
  */
-const DEFAULT_PAGE_METADATA: string[] = ['title', 'description', 'canonical', 'robots'];
+const DEFAULT_PAGE_METADATA_PATHS: string[] = [
+	'metadata.title',
+	'metadata.description',
+	'metadata.canonical',
+	'metadata.robots'
+];
 
 export type CmsManifestRoute = {
 	scopes: CmsManifestScope[];
@@ -403,13 +409,15 @@ const buildScopeChain = async (
 
 	const pageCollected = await collectFieldsForEntry(leaf.pagePath as string, collectOptions);
 	entriesRouteIds.push(...pageCollected.entriesRouteIds);
+	const fieldsWithDefaults = Array.from(
+		new Set([...pageCollected.fields, ...DEFAULT_PAGE_METADATA_PATHS])
+	);
 	scopes.push({
 		scopeId: 'page:' + leaf.routeId,
 		kind: 'page',
 		routeId: leaf.routeId,
 		ownedParams: extractRouteParams(leaf.routeId),
-		fields: pageCollected.fields,
-		metadata: DEFAULT_PAGE_METADATA
+		fields: fieldsWithDefaults
 	});
 
 	const seen = new Set<string>();

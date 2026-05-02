@@ -87,11 +87,11 @@
 	let newPageError = $state<string | null>(null);
 	let newPageCreating = $state(false);
 	// Source content captured when the dialog is opened in duplicate mode.
-	// `metadata` seeds the input field values; `fields` is the rest of the
-	// source's content (non-`_metadata` keys) that gets copied to the new page
-	// after create succeeds.
+	// `metadata` seeds the input field values; `tree` is the rest of the
+	// source's content (non-`metadata` branch) that gets copied to the new
+	// page after create succeeds.
 	let duplicateSource = $state<{
-		fields: Record<string, unknown>;
+		tree: Record<string, unknown>;
 		metadata: Record<string, unknown>;
 	} | null>(null);
 
@@ -526,16 +526,16 @@
 		const sourceContents: Record<string, unknown> = res.ok
 			? ((await res.json()) as { contents: Record<string, unknown> }).contents
 			: {};
-		const { _metadata, ...rest } = sourceContents as { _metadata?: unknown } & Record<
+		const { metadata: meta, ...rest } = sourceContents as { metadata?: unknown } & Record<
 			string,
 			unknown
 		>;
 		const sourceMetadata =
-			_metadata && typeof _metadata === 'object' && !Array.isArray(_metadata)
-				? (_metadata as Record<string, unknown>)
+			meta && typeof meta === 'object' && !Array.isArray(meta)
+				? (meta as Record<string, unknown>)
 				: {};
 		closeAllPanels();
-		duplicateSource = { fields: rest, metadata: sourceMetadata };
+		duplicateSource = { tree: rest, metadata: sourceMetadata };
 		newDialog = config;
 		newPageError = null;
 	};
@@ -584,7 +584,7 @@
 				return;
 			}
 
-			if (dup && Object.keys(dup.fields).length > 0) {
+			if (dup && Object.keys(dup.tree).length > 0) {
 				await fetch(`${endpoint}/release/items`, {
 					credentials: 'include',
 					method: 'POST',
@@ -595,7 +595,7 @@
 								kind: 'page',
 								routeId: target.routeId,
 								params: newParams,
-								fields: dup.fields
+								tree: dup.tree
 							}
 						]
 					})

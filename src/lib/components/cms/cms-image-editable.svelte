@@ -2,6 +2,8 @@
 	import { tick as svelteTick } from 'svelte';
 	import { page } from '$app/state';
 	import { cmsStore, type CmsScopeRef, type MediaItem } from './cms-store.svelte.js';
+	import { get as pathGet } from './path.js';
+	import type { CmsImageValue } from './cms-image.svelte';
 	import { Button } from '../admin-bar/ui/button/index.js';
 	import { Input } from '../admin-bar/ui/input/index.js';
 	import CssRoot from '../admin-bar/css-root.svelte';
@@ -19,20 +21,31 @@
 	type Props = {
 		scope: CmsScopeRef;
 		name: string;
-		alt: string;
-		initial: string;
+		initial: CmsImageValue;
+		fallbackAlt: string;
 	};
-	let { scope, name, alt, initial }: Props = $props();
+	let { scope, name, initial, fallbackAlt }: Props = $props();
 
-	const current = $derived.by(() => {
-		const draft = cmsStore.getValue(scope, name);
-		return typeof draft === 'string' ? draft : initial;
+	// Read leaves through `getValue` so live drafts reflect immediately. Fall
+	// back to the snapshot the display passed in when nothing's been written.
+	const currentUrl = $derived.by(() => {
+		const v = pathGet(cmsStore.getValue(scope, name), 'url');
+		if (typeof v === 'string') return v;
+		return initial.url ?? '';
 	});
+	const currentAlt = $derived.by(() => {
+		const v = pathGet(cmsStore.getValue(scope, name), 'alt');
+		if (typeof v === 'string') return v;
+		return initial.alt ?? '';
+	});
+
 	const endpoint = $derived(page.data.cms?.endpoint ?? '/api/cms');
 
-	let mode: 'idle' | 'url' = $state('idle');
+	let mode: 'idle' | 'url' | 'alt' = $state('idle');
 	let urlValue = $state('');
+	let altValue = $state('');
 	let urlInputEl: HTMLInputElement | null = $state(null);
+	let altInputEl: HTMLInputElement | null = $state(null);
 	let fileInputEl: HTMLInputElement | null = $state(null);
 	let libraryOpen = $state(false);
 
@@ -42,7 +55,8 @@
 	let uploading = $state(false);
 	let error: string | null = $state(null);
 
-	const setValue = (v: string) => cmsStore.setValue(scope, name, v);
+	const writeUrl = (v: string) => cmsStore.setValue(scope, `${name}.url`, v);
+	const writeAlt = (v: string) => cmsStore.setValue(scope, `${name}.alt`, v);
 
 	const upload = async (file: File) => {
 		if (!file.type.startsWith('image/')) {
@@ -53,7 +67,7 @@
 		uploading = true;
 		try {
 			const url = await cmsStore.uploadImage(endpoint, file);
-			setValue(url);
+			writeUrl(url);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Upload failed';
 		} finally {
@@ -97,34 +111,54 @@
 	const enterUrlMode = async (e: Event) => {
 		e.preventDefault();
 		e.stopPropagation();
-		urlValue = current;
+		urlValue = currentUrl;
 		mode = 'url';
 		await svelteTick();
 		urlInputEl?.focus();
 		urlInputEl?.select();
 	};
 
+	const enterAltMode = async (e: Event) => {
+		e.preventDefault();
+		e.stopPropagation();
+		altValue = currentAlt;
+		mode = 'alt';
+		await svelteTick();
+		altInputEl?.focus();
+		altInputEl?.select();
+	};
+
 	const applyUrl = (e?: Event) => {
 		e?.preventDefault();
 		e?.stopPropagation();
 		const v = urlValue.trim();
-		if (v !== current) setValue(v);
+		if (v !== currentUrl) writeUrl(v);
 		mode = 'idle';
 	};
-	const cancelUrl = (e?: Event) => {
+	const applyAlt = (e?: Event) => {
+		e?.preventDefault();
+		e?.stopPropagation();
+		if (altValue !== currentAlt) writeAlt(altValue);
+		mode = 'idle';
+	};
+	const cancelEdit = (e?: Event) => {
 		e?.preventDefault();
 		e?.stopPropagation();
 		mode = 'idle';
 	};
 	const onUrlKey = (e: KeyboardEvent) => {
 		if (e.key === 'Enter') applyUrl(e);
-		else if (e.key === 'Escape') cancelUrl(e);
+		else if (e.key === 'Escape') cancelEdit(e);
+	};
+	const onAltKey = (e: KeyboardEvent) => {
+		if (e.key === 'Enter') applyAlt(e);
+		else if (e.key === 'Escape') cancelEdit(e);
 	};
 
 	const remove = (e: Event) => {
 		e.preventDefault();
 		e.stopPropagation();
-		setValue('');
+		writeUrl('');
 	};
 
 	const toggleLibrary = (e: Event) => {
@@ -134,7 +168,7 @@
 	};
 
 	const onLibrarySelect = (item: MediaItem) => {
-		setValue(item.url);
+		writeUrl(item.url);
 		libraryOpen = false;
 	};
 
@@ -153,6 +187,8 @@
 	};
 
 	const stopMouseDown = (e: MouseEvent) => e.preventDefault();
+
+	const renderedAlt = $derived(currentAlt || fallbackAlt);
 </script>
 
 <CssRoot>
@@ -170,10 +206,10 @@
 		type="button"
 		class="cms-image-edit__pick"
 		onclick={openPicker}
-		aria-label={current ? `Replace image for ${name}` : `Upload image for ${name}`}
+		aria-label={currentUrl ? `Replace image for ${name}` : `Upload image for ${name}`}
 	>
-		{#if current}
-			<img class="cms-image" src={current} {alt} draggable="false" />
+		{#if currentUrl}
+			<img class="cms-image" src={currentUrl} alt={renderedAlt} draggable="false" />
 		{:else}
 			<span class="cms-image-edit__empty" data-cms-name={name}>{name}</span>
 		{/if}
@@ -207,12 +243,15 @@
 				<LinkIcon class="vela:size-3.5" />
 				URL
 			</Button>
-			{#if current}
+			<Button size="xs" variant="ghost" onclick={enterAltMode}>
+				Alt
+			</Button>
+			{#if currentUrl}
 				<Button size="xs" variant="ghost" onclick={remove} aria-label="Remove image">
 					<TrashIcon class="vela:size-3.5" />
 				</Button>
 			{/if}
-		{:else}
+		{:else if mode === 'url'}
 			<Input
 				bind:ref={urlInputEl}
 				bind:value={urlValue}
@@ -224,7 +263,22 @@
 			<Button size="icon" variant="ghost" aria-label="Apply URL" onclick={applyUrl}>
 				<CheckIcon class="vela:size-4" />
 			</Button>
-			<Button size="icon" variant="ghost" aria-label="Cancel" onclick={cancelUrl}>
+			<Button size="icon" variant="ghost" aria-label="Cancel" onclick={cancelEdit}>
+				<XIcon class="vela:size-4" />
+			</Button>
+		{:else if mode === 'alt'}
+			<Input
+				bind:ref={altInputEl}
+				bind:value={altValue}
+				type="text"
+				placeholder="Alt text"
+				onkeydown={onAltKey}
+				class="vela:h-7 vela:w-72 vela:text-xs"
+			/>
+			<Button size="icon" variant="ghost" aria-label="Apply alt text" onclick={applyAlt}>
+				<CheckIcon class="vela:size-4" />
+			</Button>
+			<Button size="icon" variant="ghost" aria-label="Cancel" onclick={cancelEdit}>
 				<XIcon class="vela:size-4" />
 			</Button>
 		{/if}

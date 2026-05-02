@@ -20,8 +20,7 @@ const fixture: CmsManifest = {
 					kind: 'page',
 					routeId: '/',
 					ownedParams: [],
-					fields: ['welcome.title'],
-					metadata: ['title']
+					fields: ['welcome.title', 'metadata.title']
 				}
 			],
 			entriesRouteIds: []
@@ -47,8 +46,7 @@ const fixture: CmsManifest = {
 					kind: 'page',
 					routeId: '/(marketing)/rooms/[slug]',
 					ownedParams: ['slug'],
-					fields: ['hero.title'],
-					metadata: ['title']
+					fields: ['hero.title', 'metadata.title']
 				}
 			],
 			entriesRouteIds: []
@@ -95,10 +93,10 @@ describe('resolveCmsPayload — degenerate cases', () => {
 describe('resolveCmsPayload — payload shape', () => {
 	it('preserves scope chain order in payload.scopes (not strictly ordered, but each scope present)', async () => {
 		const adapter = mockAdapter({
-			layoutDocs: { '/': { 'footer.copy': 'F' }, '/(marketing)': { 'header.title': 'H' } },
+			layoutDocs: { '/': { footer: { copy: 'F' } }, '/(marketing)': { header: { title: 'H' } } },
 			pageDocs: {
 				'/(marketing)/rooms/[slug]': [
-					{ params: { slug: 'a' }, published: { 'hero.title': 'Hero A' } }
+					{ params: { slug: 'a' }, published: { hero: { title: 'Hero A' } } }
 				]
 			}
 		});
@@ -114,19 +112,19 @@ describe('resolveCmsPayload — payload shape', () => {
 			'layout:/(marketing)',
 			'page:/(marketing)/rooms/[slug]'
 		]);
-		expect(result.cms.docs['layout:/']).toEqual({ 'footer.copy': 'F' });
-		expect(result.cms.docs['page:/(marketing)/rooms/[slug]']).toEqual({ 'hero.title': 'Hero A' });
+		expect(result.cms.docs['layout:/']).toEqual({ footer: { copy: 'F' } });
+		expect(result.cms.docs['page:/(marketing)/rooms/[slug]']).toEqual({ hero: { title: 'Hero A' } });
 	});
 
-	it('lifts a page doc _metadata field onto payload.metadata', async () => {
+	it('aliases the page doc `metadata` branch onto payload.metadata', async () => {
 		const adapter = mockAdapter({
 			pageDocs: {
 				'/': [
 					{
 						params: {},
 						published: {
-							'welcome.title': 'Hello',
-							_metadata: { title: 'Home' }
+							welcome: { title: 'Hello' },
+							metadata: { title: 'Home' }
 						}
 					}
 				]
@@ -140,8 +138,11 @@ describe('resolveCmsPayload — payload shape', () => {
 			adapter
 		});
 		expect(result.cms.metadata).toEqual({ title: 'Home' });
-		expect(result.cms.docs['page:/']).toEqual({ 'welcome.title': 'Hello' });
-		expect(result.cms.docs['page:/']).not.toHaveProperty('_metadata');
+		// `metadata` stays on the doc — `cms.metadata` is an alias, not a lift.
+		expect(result.cms.docs['page:/']).toEqual({
+			welcome: { title: 'Hello' },
+			metadata: { title: 'Home' }
+		});
 	});
 
 	it('emits page pointer with bound owned params only (no parent params)', async () => {
@@ -284,7 +285,9 @@ describe('resolveCmsPayload — notFound semantics', () => {
 	it('does not flag notFound when the parameterized page has a doc', async () => {
 		const adapter = mockAdapter({
 			pageDocs: {
-				'/(marketing)/rooms/[slug]': [{ params: { slug: 'a' }, published: { 'hero.title': 'H' } }]
+				'/(marketing)/rooms/[slug]': [
+					{ params: { slug: 'a' }, published: { hero: { title: 'H' } } }
+				]
 			}
 		});
 		const result = await resolveCmsPayload({

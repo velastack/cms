@@ -48,11 +48,7 @@
 
 	const persistedValue = (key: string): unknown => {
 		if (!ref) return undefined;
-		const draft = cmsStore.getMetadataValue(ref, key);
-		if (draft !== undefined) return draft;
-		const ov = cmsStore.getMetadataOverlayValue(ref, key);
-		if (ov !== undefined) return ov;
-		return cms?.metadata[key];
+		return cmsStore.getValue(ref, `metadata.${key}`);
 	};
 
 	// Local form state — typing only updates `local`; nothing reaches
@@ -117,7 +113,7 @@
 		if (!ref) return onClose();
 		for (const [k] of entries) {
 			const v = local[k];
-			if (v !== persistedValue(k)) cmsStore.setMetadataValue(ref, k, v);
+			if (v !== persistedValue(k)) cmsStore.setValue(ref, `metadata.${k}`, v);
 		}
 		await onSave();
 	};

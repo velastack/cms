@@ -1,11 +1,20 @@
+<script lang="ts" module>
+	export type CmsImageValue = {
+		url?: string;
+		alt?: string;
+		width?: number;
+		height?: number;
+	};
+</script>
+
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { page } from '$app/state';
-	import { getCmsScope, type CmsPayload } from './scope.js';
+	import { getCmsScope } from './scope.js';
 	import { cmsStore, type CmsScopeRef } from './cms-store.svelte.js';
 
 	type Props = {
 		name: string;
+		/** Fallback alt text used when the branch has no `alt` leaf. */
 		alt?: string;
 		fallback?: string;
 		value?: unknown;
@@ -16,33 +25,34 @@
 
 	const scope = getCmsScope();
 	const ref = $derived<CmsScopeRef | null>(
-		scope
-			? { scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params }
-			: null
+		scope ? { scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params } : null
 	);
 
 	const resolved = $derived.by(() => {
 		if (value !== undefined) return value;
-		if (cmsStore.isEditing && ref && cmsStore.hasDraft(ref, name)) {
-			return cmsStore.getValue(ref, name);
-		}
-		if (ref && cmsStore.hasOverlay(ref, name)) {
-			return cmsStore.getOverlayValue(ref, name);
-		}
-		const cms = page.data.cms as CmsPayload | undefined;
-		return scope ? cms?.docs[scope.scopeId]?.[name] : undefined;
+		return ref ? cmsStore.getValue(ref, name) : undefined;
 	});
 
-	const src = $derived(typeof resolved === 'string' ? resolved : (fallback ?? ''));
+	// `<CmsImage>` owns a `{ url, alt, width?, height? }` branch. Accept a bare
+	// string as the URL leaf for legacy/value-prop callers.
+	const branch = $derived.by((): CmsImageValue | null => {
+		if (resolved == null) return null;
+		if (typeof resolved === 'string') return { url: resolved };
+		if (typeof resolved === 'object' && !Array.isArray(resolved)) return resolved as CmsImageValue;
+		return null;
+	});
+
+	const src = $derived(branch?.url ?? fallback ?? '');
+	const altText = $derived(branch?.alt ?? alt ?? '');
 	const editable = $derived(cmsStore.isEditing && value === undefined && !!ref);
 </script>
 
 {#if editable && ref}
 	{#await import('./cms-image-editable.svelte') then { default: Editable }}
-		<Editable scope={ref} {name} {alt} initial={src} />
+		<Editable scope={ref} {name} initial={branch ?? {}} fallbackAlt={alt} />
 	{/await}
 {:else if src}
-	<img class="cms-image" {src} {alt} />
+	<img class="cms-image" {src} alt={altText} />
 {:else if children}
 	{@render children()}
 {:else}

@@ -101,7 +101,7 @@ describe('mockAdapter.fetchDocs', () => {
 					kind: 'page',
 					routeId: '/(marketing)/about',
 					params: {},
-					fields: { hero: 'NEW' }
+					tree: { hero: 'NEW' }
 				}
 			]
 		};
@@ -121,7 +121,7 @@ describe('mockAdapter.fetchDocs', () => {
 		});
 	});
 
-	it('shallow-merges _metadata in release overlay rather than replacing it', async () => {
+	it('deep-merges nested branches in the release tree onto published content', async () => {
 		const release: ReleaseSnapshot = {
 			id: 'u1',
 			items: [
@@ -129,7 +129,7 @@ describe('mockAdapter.fetchDocs', () => {
 					kind: 'page',
 					routeId: '/(marketing)/about',
 					params: {},
-					fields: { _metadata: { title: 'New title' } }
+					tree: { metadata: { title: 'New title' } }
 				}
 			]
 		};
@@ -138,7 +138,7 @@ describe('mockAdapter.fetchDocs', () => {
 				'/(marketing)/about': [
 					{
 						params: {},
-						published: { _metadata: { title: 'Old title', description: 'kept' } }
+						published: { metadata: { title: 'Old title', description: 'kept' } }
 					}
 				]
 			},
@@ -148,10 +148,42 @@ describe('mockAdapter.fetchDocs', () => {
 			...ctx,
 			previewKey: 'k'
 		});
-		expect(out['page:/(marketing)/about'].contents._metadata).toEqual({
+		expect(out['page:/(marketing)/about'].contents.metadata).toEqual({
 			title: 'New title',
 			description: 'kept'
 		});
+	});
+
+	it('replaces arrays wholesale (no concat) when overlaying tree changes', async () => {
+		const release: ReleaseSnapshot = {
+			id: 'u1',
+			items: [
+				{
+					kind: 'page',
+					routeId: '/(marketing)/rooms',
+					params: {},
+					tree: { gallery: [{ caption: 'only' }] }
+				}
+			]
+		};
+		const adapter = mockAdapter({
+			pageDocs: {
+				'/(marketing)/rooms': [
+					{
+						params: {},
+						published: {
+							gallery: [{ caption: 'first' }, { caption: 'second' }, { caption: 'third' }]
+						}
+					}
+				]
+			},
+			resolvePreview: () => release
+		});
+		const out = await adapter.fetchDocs([pageQuery('/(marketing)/rooms')], {
+			...ctx,
+			previewKey: 'k'
+		});
+		expect(out['page:/(marketing)/rooms'].contents.gallery).toEqual([{ caption: 'only' }]);
 	});
 
 	it('suppresses page entries marked for deletion in the release', async () => {
@@ -194,13 +226,13 @@ describe('mockAdapter.fetchEntries', () => {
 		expect(await adapter.fetchEntries('/r/[slug]', ctx)).toEqual([]);
 	});
 
-	it('returns all published entries with metadata lifted from _metadata', async () => {
+	it('returns all published entries with metadata read from the `metadata` branch', async () => {
 		const adapter = mockAdapter({
 			pageDocs: {
 				'/r/[slug]': [
 					{
 						params: { slug: 'a' },
-						published: { _metadata: { title: 'A' }, hero: 'a-hero' }
+						published: { metadata: { title: 'A' }, hero: 'a-hero' }
 					},
 					{
 						params: { slug: 'b' },
@@ -242,7 +274,7 @@ describe('mockAdapter.fetchEntries', () => {
 					kind: 'page',
 					routeId: '/r/[slug]',
 					params: { slug: 'new' },
-					fields: { _metadata: { title: 'New' } }
+					tree: { metadata: { title: 'New' } }
 				}
 			]
 		};
@@ -264,7 +296,7 @@ describe('mockAdapter.fetchEntries', () => {
 					kind: 'page',
 					routeId: '/r/[slug]',
 					params: { slug: 'a' },
-					fields: { hero: 'edited' }
+					tree: { hero: 'edited' }
 				}
 			]
 		};

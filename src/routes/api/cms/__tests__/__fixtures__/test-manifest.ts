@@ -17,8 +17,7 @@ export const cmsManifest: CmsManifest = {
 					kind: 'page',
 					routeId: '/',
 					ownedParams: [],
-					fields: ['welcome.title'],
-					metadata: ['title']
+					fields: ['welcome.title', 'metadata.title']
 				}
 			],
 			entriesRouteIds: []
@@ -44,8 +43,7 @@ export const cmsManifest: CmsManifest = {
 					kind: 'page',
 					routeId: '/(marketing)/rooms/[slug]',
 					ownedParams: ['slug'],
-					fields: ['hero.title'],
-					metadata: ['title']
+					fields: ['hero.title', 'metadata.title']
 				}
 			],
 			entriesRouteIds: []

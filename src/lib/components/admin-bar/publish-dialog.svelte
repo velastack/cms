@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { ReleaseItem } from '../cms/cms-store.svelte.js';
+	import { diffPaths, type Tree } from '../cms/path.js';
 	import { resolveRouteOnlyParams, resolveRouteUrl } from './resolve-route.js';
 	import { Badge, type BadgeVariant } from './ui/badge/index.js';
 	import { Button } from './ui/button/index.js';
@@ -65,27 +66,27 @@
 
 	type ChangeType = 'edited' | 'new' | 'delete' | 'seo';
 
-	const fieldNames = (fields: Record<string, unknown>): string[] => {
-		const out: string[] = [];
-		for (const k of Object.keys(fields)) {
-			if (k === '_metadata') continue;
-			out.push(k);
-		}
-		return out;
-	};
+	const META_PREFIX = 'metadata.';
 
-	const metadataKeys = (fields: Record<string, unknown>): string[] => {
-		const meta = fields._metadata;
-		if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return [];
-		return Object.keys(meta as Record<string, unknown>);
-	};
+	/** All edited leaf paths in the item's tree. */
+	const editedPaths = (tree: Tree): string[] => diffPaths(undefined, tree);
+
+	/** Leaf paths under the `metadata.*` branch, surfaced without the prefix. */
+	const metadataPaths = (tree: Tree): string[] =>
+		editedPaths(tree)
+			.filter((p) => p.startsWith(META_PREFIX))
+			.map((p) => p.slice(META_PREFIX.length));
+
+	/** Leaf paths NOT under the `metadata.*` branch. */
+	const nonMetadataPaths = (tree: Tree): string[] =>
+		editedPaths(tree).filter((p) => !p.startsWith(META_PREFIX));
 
 	const changeTypeOf = (item: ReleaseItem): ChangeType => {
 		if (item.kind === 'page-delete') return 'delete';
 		if (item.kind === 'layout') return 'edited';
 		if (draftPageKeys.has(itemKey(item))) return 'new';
-		const nonMeta = fieldNames(item.fields);
-		if (nonMeta.length === 0 && metadataKeys(item.fields).length > 0) return 'seo';
+		const non = nonMetadataPaths(item.tree);
+		if (non.length === 0 && metadataPaths(item.tree).length > 0) return 'seo';
 		return 'edited';
 	};
 
@@ -106,11 +107,11 @@
 
 	const metaTextFor = (item: ReleaseItem): string => {
 		if (item.kind === 'page-delete') return 'Marked for deletion';
-		if (item.kind === 'layout') return summarizeNames(fieldNames(item.fields), 'Edited');
+		if (item.kind === 'layout') return summarizeNames(editedPaths(item.tree), 'Edited');
 		if (changeTypeOf(item) === 'new') return 'Created';
-		const non = fieldNames(item.fields);
+		const non = nonMetadataPaths(item.tree);
 		if (non.length > 0) return summarizeNames(non, 'Edited');
-		return summarizeNames(metadataKeys(item.fields), 'Updated');
+		return summarizeNames(metadataPaths(item.tree), 'Updated');
 	};
 
 	const formatRelative = (iso: string): string => {

@@ -6,8 +6,9 @@
  * Intercepts `*.__data.json` fetches that target a creatable route which
  * isn't yet prerendered. When the URL also carries a `?preview=...` key,
  * the shim fetches the matching draft from the CMS endpoint and splices
- * its `_metadata` + content fields into the route's `__fallback.json`,
- * returning the merged envelope as the response. All other fetches —
+ * the doc's tree (including its `metadata` branch) into the route's
+ * `__fallback.json`, returning the merged envelope as the response. All
+ * other fetches —
  * including non-`__data.json` requests, prerendered entries, and any
  * navigation without a preview key — fall through to the native fetch.
  *
@@ -151,15 +152,19 @@
 				}
 			}
 
-			// Splice `_metadata` into `cms.metadata` (currently `{}` at its index).
+			// Splice the page doc's `metadata` branch into `cms.metadata`
+			// (currently `{}` at its index). Branch is just a sub-tree of `contents`.
 			var metaSrc =
-				contents._metadata && typeof contents._metadata === 'object' ? contents._metadata : {};
+				contents.metadata && typeof contents.metadata === 'object' && !Array.isArray(contents.metadata)
+					? contents.metadata
+					: {};
 			var encodedMeta = {};
 			for (var mk in metaSrc) encodedMeta[mk] = flatten(data, metaSrc[mk]);
 			data[cmsObj.metadata] = encodedMeta;
 
-			// Splice the rest of `contents` into `cms.docs[pageScopeId]`
-			// (also `{}` at its index).
+			// Splice the whole `contents` tree into `cms.docs[pageScopeId]`
+			// (also `{}` at its index). The `metadata` branch stays inside
+			// the doc — `cms.metadata` is just an alias.
 			var pageObj = data[cmsObj.page];
 			if (pageObj && typeof pageObj === 'object') {
 				var pageScopeId = data[pageObj.scopeId];
@@ -169,7 +174,7 @@
 					if (typeof pageDocIdx === 'number') {
 						var encodedDoc = {};
 						for (var ck in contents) {
-							if (ck !== '_metadata') encodedDoc[ck] = flatten(data, contents[ck]);
+							encodedDoc[ck] = flatten(data, contents[ck]);
 						}
 						data[pageDocIdx] = encodedDoc;
 					}
