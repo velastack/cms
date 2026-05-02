@@ -20,6 +20,8 @@
 		params: Record<string, string>;
 		isDraft: boolean;
 		isDeletePending: boolean;
+		redirectTo?: string;
+		gone?: boolean;
 	};
 	type PageRoute = {
 		routeId: string;
@@ -163,6 +165,8 @@
 					? r.entries
 					: [{ params: {} as Record<string, string>, isDraft: false, isDeletePending: false }];
 			for (const ent of entries) {
+				// Tombstones (redirected / gone) aren't real link targets.
+				if (ent.redirectTo || ent.gone) continue;
 				let url: string;
 				try {
 					url = resolveRouteUrl(r.routeId, ent.params);

@@ -6,8 +6,8 @@ import type { CmsAdapter, CmsEntry } from './types.js';
 export type CreateCmsOptions = {
 	/** Adapter that talks to the backing store. */
 	adapter: CmsAdapter;
-	/** BCP-47 locale for requests, e.g. `'en'` or `'es-MX'`. */
-	locale: string;
+	/** BCP-47 supported locales, e.g. `'en'` or `'es-MX'`. */
+	locales: string[];
 };
 
 export type Cms = {
@@ -15,7 +15,7 @@ export type Cms = {
 	 * Resolve the CMS payload for the current SvelteKit request. Mirrors
 	 * {@link loadCms} but with the adapter and locale already bound.
 	 */
-	load: (event: ServerLoadEvent) => Promise<LoadCmsResult>;
+	load: (event: ServerLoadEvent, { locale }: { locale: string }) => Promise<LoadCmsResult>;
 	/**
 	 * Enumerate every publishable entry the adapter has at one route.
 	 * Resolves to `{ params, metadata }[]` — `params` for SvelteKit's
@@ -49,21 +49,25 @@ export type Cms = {
  * import { createCms, mockAdapter } from '@velastack/cms/server';
  * export const { load: loadCms, generateEntries } = createCms({
  *   adapter: mockAdapter({ layoutDocs, pageDocs }),
- *   locale: 'en'
  * });
  * ```
  */
 export const createCms = (options: CreateCmsOptions): Cms => {
-	const { adapter, locale } = options;
+	const { adapter, locales } = options;
+	const defaultLocale = locales[0];
 	return {
-		load: (event) => loadCms(event, { adapter, locale }),
+		load: (event, { locale }) => loadCms(event, { adapter, locale, locales }),
 		generateEntries: (async <R extends RouteId>(routeId?: R) => {
 			if (!routeId) {
 				throw new Error(
 					'generateEntries: routeId not injected. Did the @velastack/cms Vite plugin run?'
 				);
 			}
-			const entries = await adapter.fetchEntries(routeId, { fetch });
+			const entries = await adapter.fetchEntries(routeId, {
+				fetch,
+				locale: defaultLocale,
+				locales
+			});
 			return entries as CmsEntry<RouteParams<R>>[];
 		}) as Cms['generateEntries']
 	};

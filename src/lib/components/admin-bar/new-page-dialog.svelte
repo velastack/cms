@@ -16,7 +16,7 @@
 		creating: boolean;
 		error: string | null;
 		onCreate: (values: Record<string, string>) => void;
-		mode?: 'new' | 'duplicate';
+		mode?: 'new' | 'duplicate' | 'rename';
 		initialValues?: Record<string, string>;
 	};
 
@@ -71,9 +71,14 @@
 		>
 			<Dialog.Header>
 				<Dialog.Title>
-					{mode === 'duplicate' ? 'Duplicate' : 'New'}
+					{mode === 'duplicate' ? 'Duplicate' : mode === 'rename' ? 'Rename' : 'New'}
 					{config.type}
 				</Dialog.Title>
+				{#if mode === 'rename'}
+					<Dialog.Description>
+						Creates a new page with the same content and redirects the old URL.
+					</Dialog.Description>
+				{/if}
 			</Dialog.Header>
 
 			<div class="vela:px-6 vela:pb-2 vela:flex vela:flex-col vela:gap-3">
@@ -109,10 +114,14 @@
 					{creating
 						? mode === 'duplicate'
 							? 'Duplicating…'
-							: 'Creating…'
+							: mode === 'rename'
+								? 'Renaming…'
+								: 'Creating…'
 						: mode === 'duplicate'
 							? 'Duplicate'
-							: 'Create'}
+							: mode === 'rename'
+								? 'Rename'
+								: 'Create'}
 				</Button>
 			</Dialog.Footer>
 		</form>

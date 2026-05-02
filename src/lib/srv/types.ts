@@ -21,6 +21,24 @@ export type CmsAdapterDoc = {
 };
 
 /**
+ * Tombstone for a page-kind scope: the page was deleted but the URL still
+ * resolves with non-404 semantics. `kind: 'gone'` means the page is
+ * deliberately permanently removed (HTTP 410); `kind: 'redirect'` means the
+ * page was replaced with a permanent redirect to `to` (HTTP 308). Layout
+ * scopes never resolve to a tombstone — only page-kind scopes do.
+ */
+export type CmsAdapterTombstone =
+	| { kind: 'gone' }
+	| { kind: 'redirect'; to: string };
+
+/**
+ * One resolution from an adapter for a single scope query: either the doc's
+ * tree (`CmsAdapterDoc`) or a tombstone signaling the page was deleted with
+ * a non-404 outcome. Discriminator: presence of `kind` on the value.
+ */
+export type CmsAdapterResolution = CmsAdapterDoc | CmsAdapterTombstone;
+
+/**
  * Per-request context handed to adapter methods alongside their queries.
  * `fetch` is the SvelteKit request-scoped fetch, suitable for HTTP-backed
  * adapters that need cookie forwarding during SSR. `previewKey`, when set,
@@ -30,11 +48,20 @@ export type CmsAdapterDoc = {
  * adapters resolve it to a past published release and return that release's
  * snapshot. Mutually exclusive with `previewKey`; when both are present
  * `versionKey` wins.
+ *
+ * `locale` is the BCP-47 string bound at `loadCms(event, { locale })` time;
+ * `locales` is the full supported set from `createCms({ locales })`. The
+ * first entry of `locales` is the default locale used for read-time
+ * fallback. Adapters use `locale` to scope reads (`fetchEntries` doesn't
+ * take queries, so it relies on this); `fetchDocs` also gets per-query
+ * `locale` on each `CmsScopeQuery`.
  */
 export type CmsAdapterContext = {
 	fetch: typeof fetch;
 	previewKey?: string | null;
 	versionKey?: string | null;
+	locale: string;
+	locales: string[];
 };
 
 /**
@@ -66,11 +93,16 @@ export interface CmsAdapter {
 	 * is set, adapters that support release previews overlay the matching
 	 * open release's pending field edits on top of published content before
 	 * returning.
+	 *
+	 * Page-kind scopes may resolve to a {@link CmsAdapterTombstone} instead of
+	 * a {@link CmsAdapterDoc} when the page has been deleted with a non-404
+	 * outcome (gone / redirect). The resolver short-circuits the page render
+	 * for tombstoned scopes; layout-kind scopes never tombstone.
 	 */
 	fetchDocs(
 		queries: CmsScopeQuery[],
 		context: CmsAdapterContext
-	): Promise<Record<string, CmsAdapterDoc>> | Record<string, CmsAdapterDoc>;
+	): Promise<Record<string, CmsAdapterResolution>> | Record<string, CmsAdapterResolution>;
 
 	/**
 	 * Enumerate the publishable entries the adapter has at a given

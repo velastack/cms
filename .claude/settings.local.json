@@ -52,7 +52,8 @@
       "Bash(curl -s -o /dev/null -w '%{http_code}\\\\n' 'http://localhost:5174/rooms/garden-loft?version=1&preview=__TRACKED_VAR__')",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:5174/rooms/garden-loft\")",
       "Bash(kill bta5o3jc3 *)",
-      "Bash(npx svelte-check *)"
+      "Bash(npx svelte-check *)",
+      "Bash(npx vitest *)"
     ]
   }
 }

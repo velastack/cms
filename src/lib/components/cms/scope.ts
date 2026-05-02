@@ -40,14 +40,29 @@ export type CmsPagePointer = {
  * One publishable page-kind entry. Mirrored from `srv/types.ts` so client-only
  * code (`<CmsEntries>`, the merged `cms` view) can read entries without
  * importing server modules. The server type re-exports this one.
+ *
+ * `redirectTo` and `gone` are tombstone flags — when set, this entry is not a
+ * listable page but a deletion marker. Adapters surface tombstones in
+ * `fetchEntries` so prerender visits redirect URLs (and SvelteKit emits the
+ * redirect file); consumer-facing payloads (`cms.entries[routeId]`) should
+ * filter tombstones out before display.
  */
 export type CmsEntry<Params extends Record<string, string> = Record<string, string>> = {
 	params: Params;
 	metadata: Record<string, unknown>;
+	redirectTo?: string;
+	gone?: boolean;
 };
 
 export type CmsPayload = {
+	/** BCP-47 locale resolved for this request. */
 	locale: string;
+	/**
+	 * BCP-47 supported locales from `createCms({ locales })`. First entry is
+	 * the default locale used for read-time fallback when a value is missing
+	 * in the requested `locale`.
+	 */
+	locales: string[];
 	/** Keyed by `scopeId`. */
 	docs: Record<string, Record<string, unknown>>;
 	/** Keyed by `scopeId`. */

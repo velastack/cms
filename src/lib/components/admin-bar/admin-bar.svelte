@@ -179,7 +179,7 @@
 		signinOpen = false;
 		authState = 'idle';
 		user = null;
-		stripUrlParams('edit', 'preview');
+		stripUrlParams('edit', 'preview', 'locale');
 	};
 
 	const closeBar = () => {

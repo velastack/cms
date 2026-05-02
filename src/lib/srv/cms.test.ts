@@ -29,21 +29,25 @@ describe('createCms.load', () => {
 	it('binds adapter + locale and returns a populated payload', async () => {
 		const adapter = mockAdapter({
 			pageDocs: {
-				'/': [{ params: {}, published: { welcome: { title: 'Hi' } } }]
+				en: { '/': [{ params: {}, published: { welcome: { title: 'Hi' } } }] }
 			}
 		});
-		const cms = createCms({ adapter, locale: 'en' });
-		const { cms: payload, notFound } = await cms.load(fakeEvent({ routeId: '/' }));
+		const cms = createCms({ adapter, locales: ['en'] });
+		const { cms: payload, notFound } = await cms.load(fakeEvent({ routeId: '/' }), {
+			locale: 'en'
+		});
 		expect(notFound).toBe(false);
 		expect(payload.locale).toBe('en');
+		expect(payload.locales).toEqual(['en']);
 		expect(payload.docs['page:/']).toEqual({ welcome: { title: 'Hi' } });
 	});
 
 	it('returns notFound for a parameterized route with no doc', async () => {
 		const adapter = mockAdapter({});
-		const cms = createCms({ adapter, locale: 'en' });
+		const cms = createCms({ adapter, locales: ['en'] });
 		const result = await cms.load(
-			fakeEvent({ routeId: '/(marketing)/rooms/[slug]', params: { slug: 'missing' } })
+			fakeEvent({ routeId: '/(marketing)/rooms/[slug]', params: { slug: 'missing' } }),
+			{ locale: 'en' }
 		);
 		expect(result.notFound).toBe(true);
 	});
@@ -53,20 +57,22 @@ describe('createCms.generateEntries', () => {
 	it("returns the adapter's entries for a given route id", async () => {
 		const adapter = mockAdapter({
 			pageDocs: {
-				'/(marketing)/rooms/[slug]': [
-					{ params: { slug: 'a' }, published: { metadata: { title: 'A' } } },
-					{ params: { slug: 'b' }, published: { metadata: { title: 'B' } } }
-				]
+				en: {
+					'/(marketing)/rooms/[slug]': [
+						{ params: { slug: 'a' }, published: { metadata: { title: 'A' } } },
+						{ params: { slug: 'b' }, published: { metadata: { title: 'B' } } }
+					]
+				}
 			}
 		});
-		const cms = createCms({ adapter, locale: 'en' });
+		const cms = createCms({ adapter, locales: ['en'] });
 		const entries = await cms.generateEntries('/(marketing)/rooms/[slug]');
 		expect(entries.map((e) => e.params.slug).sort()).toEqual(['a', 'b']);
 		expect(entries.find((e) => e.params.slug === 'a')?.metadata).toEqual({ title: 'A' });
 	});
 
 	it('throws when no routeId is supplied (Vite plugin not running)', async () => {
-		const cms = createCms({ adapter: mockAdapter({}), locale: 'en' });
+		const cms = createCms({ adapter: mockAdapter({}), locales: ['en'] });
 		await expect(cms.generateEntries()).rejects.toThrow(/Vite plugin/);
 	});
 });

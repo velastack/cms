@@ -4,7 +4,7 @@
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import { cmsStore } from '../cms/cms-store.svelte.js';
 	import type { CmsCreatablePageConfigWithRouteId } from './page-config.js';
-	import PanelFooter from './panel-footer.svelte';
+	import NewPageDialog from './new-page-dialog.svelte';
 	import PanelHeader from './panel-header.svelte';
 	import Panel from './panel.svelte';
 	import { resolveRouteOnlyParams, resolveRouteUrl } from './resolve-route.js';
@@ -16,6 +16,8 @@
 		params: Record<string, string>;
 		isDraft: boolean;
 		isDeletePending: boolean;
+		redirectTo?: string;
+		gone?: boolean;
 	};
 
 	type PageRoute = {
@@ -34,9 +36,21 @@
 			config: CmsCreatablePageConfigWithRouteId,
 			sourceParams: Record<string, string>
 		) => void;
+		onRequestDelete: (
+			routeId: string,
+			params: Record<string, string>,
+			isDraft: boolean
+		) => void;
 	};
-	let { endpoint, creatablePages, onClose, onChanged, onRequestNew, onRequestDuplicate }: Props =
-		$props();
+	let {
+		endpoint,
+		creatablePages,
+		onClose,
+		onChanged,
+		onRequestNew,
+		onRequestDuplicate,
+		onRequestDelete
+	}: Props = $props();
 
 	let routes = $state<PageRoute[]>([]);
 	let loading = $state(true);
@@ -46,6 +60,11 @@
 	let searchEl = $state<HTMLInputElement | null>(null);
 	let scrollContainerEl = $state<HTMLElement | null>(null);
 	let highlightedIndex = $state(-1);
+
+	let renameConfig = $state<CmsCreatablePageConfigWithRouteId | null>(null);
+	let renameFromParams = $state<Record<string, string> | null>(null);
+	let renameRunning = $state(false);
+	let renameError = $state<string | null>(null);
 
 	const creatableByRouteId = $derived(new Map(creatablePages.map((c) => [c.routeId, c] as const)));
 
@@ -230,34 +249,6 @@
 		}
 	};
 
-	const onDelete = async (routeId: string, params: Record<string, string>, isDraft: boolean) => {
-		const url = resolveRouteUrl(routeId, params);
-		const message = isDraft
-			? `Discard draft page ${url}?`
-			: `Stage delete for ${url}? It will be removed when you publish.`;
-		if (!confirm(message)) return;
-		const key = rowKey(routeId, params);
-		const onCurrent = isCurrentPage(routeId, params);
-		mutating = key;
-		try {
-			const res = await fetch(`${endpoint}/pages`, {
-				method: 'DELETE',
-				credentials: 'include',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ routeId, params })
-			});
-			if (!res.ok) {
-				error = 'Could not delete page.';
-				return;
-			}
-			await cmsStore.fetchOpenRelease(endpoint);
-			await fetchList();
-			if (!onCurrent) await onChanged();
-		} finally {
-			mutating = null;
-		}
-	};
-
 	const setHighlightByKey = (k: string) => {
 		const i = flatRows.findIndex((r) => r.key === k);
 		if (i >= 0) highlightedIndex = i;
@@ -278,6 +269,70 @@
 			e.preventDefault();
 			const r = flatRows[highlightedIndex];
 			void onView(r.routeId, r.entry.params);
+		}
+	};
+
+	const openRenameDialog = (
+		config: CmsCreatablePageConfigWithRouteId,
+		fromParams: Record<string, string>
+	) => {
+		renameConfig = config;
+		renameFromParams = fromParams;
+		renameError = null;
+	};
+
+	const closeRenameDialog = () => {
+		if (renameRunning) return;
+		renameConfig = null;
+		renameFromParams = null;
+		renameError = null;
+	};
+
+	const onRenameSubmit = async (rawValues: Record<string, string>) => {
+		const config = renameConfig;
+		const fromParams = renameFromParams;
+		if (!config || !fromParams) return;
+		renameRunning = true;
+		renameError = null;
+		try {
+			let toParams: Record<string, string>;
+			try {
+				toParams = config.transform(rawValues).params;
+			} catch {
+				renameError = 'Could not derive params from input.';
+				return;
+			}
+			const samePage = Object.keys(toParams).every((k) => toParams[k] === fromParams[k]);
+			if (samePage) {
+				renameError = 'New slug matches the existing one.';
+				return;
+			}
+			const locale = page.data.cms?.locale ?? '';
+			let toUrl: string;
+			try {
+				toUrl = resolveRouteUrl(config.routeId, toParams);
+			} catch {
+				renameError = 'Could not derive a target URL.';
+				return;
+			}
+			const onCurrent = isCurrentPage(config.routeId, fromParams);
+			const result = await cmsStore.renameSlug(endpoint, {
+				routeId: config.routeId,
+				fromParams,
+				toParams,
+				locale,
+				toUrl
+			});
+			if (!result.ok) {
+				renameError = 'Could not rename page.';
+				return;
+			}
+			renameConfig = null;
+			renameFromParams = null;
+			await fetchList();
+			if (!onCurrent) await onChanged();
+		} finally {
+			renameRunning = false;
 		}
 	};
 
@@ -375,7 +430,13 @@
 								{url}
 							</span>
 							{#if entry.isDeletePending}
-								<Badge variant="warn" size="sm">delete pending</Badge>
+								<Badge variant="warn" size="sm">
+									{entry.redirectTo
+										? 'redirect pending'
+										: entry.gone
+											? 'gone pending'
+											: 'delete pending'}
+								</Badge>
 								{#if highlightedKey === k}
 									<Button
 										variant="outline"
@@ -461,7 +522,13 @@
 										{url}
 									</span>
 									{#if entry.isDeletePending}
-										<Badge variant="warn" size="sm">delete pending</Badge>
+										<Badge variant="warn" size="sm">
+											{entry.redirectTo
+												? 'redirect pending'
+												: entry.gone
+													? 'gone pending'
+													: 'delete pending'}
+										</Badge>
 										{#if highlightedKey === k}
 											<Button
 												variant="outline"
@@ -504,11 +571,21 @@
 										>
 											Duplicate
 										</Button>
+										{#if !entry.isDraft && !entry.isDeletePending}
+											<Button
+												variant="outline"
+												size="xs"
+												onclick={() => openRenameDialog(group.creator, entry.params)}
+											>
+												Rename
+											</Button>
+										{/if}
 										<Button
 											variant="outline-destructive"
 											size="xs"
 											disabled={mutating === k}
-											onclick={() => onDelete(group.routeId, entry.params, entry.isDraft)}
+											onclick={() =>
+												onRequestDelete(group.routeId, entry.params, entry.isDraft)}
 										>
 											{mutating === k ? '…' : 'Delete'}
 										</Button>
@@ -528,3 +605,17 @@
 		{/if}
 	</div>
 </Panel>
+
+{#if renameConfig}
+	<NewPageDialog
+		open={true}
+		onOpenChange={(next) => {
+			if (!next) closeRenameDialog();
+		}}
+		config={renameConfig}
+		creating={renameRunning}
+		error={renameError}
+		onCreate={onRenameSubmit}
+		mode="rename"
+	/>
+{/if}

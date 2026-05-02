@@ -72,7 +72,7 @@ describe('apiAdapter — fetchDocs', () => {
 
 		const result = await adapter.fetchDocs(
 			[layoutQuery('layout:/foo', '/foo'), pageQuery('page:/bar', '/bar', { slug: 'x' })],
-			{ fetch, previewKey: null }
+			{ fetch, previewKey: null, locale: 'en', locales: ['en'] }
 		);
 
 		expect(calls).toHaveLength(2);
@@ -89,7 +89,7 @@ describe('apiAdapter — fetchDocs', () => {
 
 		const result = await adapter.fetchDocs(
 			[layoutQuery('layout:/missing', '/missing'), layoutQuery('layout:/ok', '/ok')],
-			{ fetch, previewKey: null }
+			{ fetch, previewKey: null, locale: 'en', locales: ['en'] }
 		);
 
 		expect(result['layout:/missing']).toBeUndefined();
@@ -100,7 +100,12 @@ describe('apiAdapter — fetchDocs', () => {
 		const adapter = apiAdapter({ endpoint: 'http://api/cms' });
 		const { fetch } = stubFetch(() => ({ status: 500 }));
 		await expect(
-			adapter.fetchDocs([layoutQuery('layout:/foo', '/foo')], { fetch, previewKey: null })
+			adapter.fetchDocs([layoutQuery('layout:/foo', '/foo')], {
+				fetch,
+				previewKey: null,
+				locale: 'en',
+				locales: ['en']
+			})
 		).rejects.toThrow(/500/);
 	});
 
@@ -109,7 +114,9 @@ describe('apiAdapter — fetchDocs', () => {
 		const { fetch, calls } = stubFetch(() => ({ status: 200, json: { contents: {} } }));
 		await adapter.fetchDocs([layoutQuery('layout:/', '/')], {
 			fetch,
-			previewKey: 'abc 123'
+			previewKey: 'abc 123',
+			locale: 'en',
+			locales: ['en']
 		});
 		expect(calls[0].url).toContain('preview=abc%20123');
 	});
@@ -117,7 +124,12 @@ describe('apiAdapter — fetchDocs', () => {
 	it('does not append ?preview when previewKey is null', async () => {
 		const adapter = apiAdapter({ endpoint: 'http://api/cms' });
 		const { fetch, calls } = stubFetch(() => ({ status: 200, json: { contents: {} } }));
-		await adapter.fetchDocs([layoutQuery('layout:/', '/')], { fetch, previewKey: null });
+		await adapter.fetchDocs([layoutQuery('layout:/', '/')], {
+			fetch,
+			previewKey: null,
+			locale: 'en',
+			locales: ['en']
+		});
 		expect(calls[0].url).not.toContain('preview=');
 	});
 
@@ -126,16 +138,63 @@ describe('apiAdapter — fetchDocs', () => {
 		const { fetch, calls } = stubFetch(() => ({ status: 200, json: { contents: {} } }));
 		await adapter.fetchDocs([pageQuery('page:/r/[slug]', '/r/[slug]', { slug: 'a' })], {
 			fetch,
-			previewKey: null
+			previewKey: null,
+			locale: 'en',
+			locales: ['en']
 		});
 		expect(calls[0].url).toContain(`params=${encodeURIComponent(JSON.stringify({ slug: 'a' }))}`);
+	});
+
+	it('forwards each query.locale on the request URL', async () => {
+		const adapter = apiAdapter({ endpoint: 'http://api/cms' });
+		const { fetch, calls } = stubFetch(() => ({ status: 200, json: { contents: {} } }));
+		const esQuery: CmsScopeQuery = { ...layoutQuery('layout:/', '/'), locale: 'es' };
+		await adapter.fetchDocs([esQuery], {
+			fetch,
+			previewKey: null,
+			locale: 'es',
+			locales: ['en', 'es']
+		});
+		expect(calls[0].url).toContain('locale=es');
 	});
 
 	it('passes credentials: "include" so cookies travel cross-origin', async () => {
 		const adapter = apiAdapter({ endpoint: 'http://api/cms' });
 		const { fetch, calls } = stubFetch(() => ({ status: 200, json: { contents: {} } }));
-		await adapter.fetchDocs([layoutQuery('layout:/', '/')], { fetch, previewKey: null });
+		await adapter.fetchDocs([layoutQuery('layout:/', '/')], {
+			fetch,
+			previewKey: null,
+			locale: 'en',
+			locales: ['en']
+		});
 		expect(calls[0].init?.credentials).toBe('include');
+	});
+
+	it('surfaces a redirect tombstone from the wire', async () => {
+		const adapter = apiAdapter({ endpoint: 'http://api/cms' });
+		const { fetch } = stubFetch(() => ({
+			status: 200,
+			json: { kind: 'redirect', to: '/new' }
+		}));
+		const result = await adapter.fetchDocs([layoutQuery('page:/old', '/old')], {
+			fetch,
+			previewKey: null,
+			locale: 'en',
+			locales: ['en']
+		});
+		expect(result['page:/old']).toEqual({ kind: 'redirect', to: '/new' });
+	});
+
+	it('surfaces a gone tombstone from the wire', async () => {
+		const adapter = apiAdapter({ endpoint: 'http://api/cms' });
+		const { fetch } = stubFetch(() => ({ status: 200, json: { kind: 'gone' } }));
+		const result = await adapter.fetchDocs([layoutQuery('page:/old', '/old')], {
+			fetch,
+			previewKey: null,
+			locale: 'en',
+			locales: ['en']
+		});
+		expect(result['page:/old']).toEqual({ kind: 'gone' });
 	});
 });
 
@@ -160,8 +219,13 @@ describe('apiAdapter — fetchEntries', () => {
 			}
 		}));
 
-		const entries = await adapter.fetchEntries('/r/[slug]', { fetch, previewKey: null });
-		expect(calls[0].url).toBe('http://api/cms/pages');
+		const entries = await adapter.fetchEntries('/r/[slug]', {
+			fetch,
+			previewKey: null,
+			locale: 'en',
+			locales: ['en']
+		});
+		expect(calls[0].url).toBe('http://api/cms/pages?locale=en');
 		expect(entries).toEqual([
 			{ params: { slug: 'a' }, metadata: { title: 'A' } },
 			{ params: { slug: 'b' }, metadata: {} }
@@ -171,22 +235,117 @@ describe('apiAdapter — fetchEntries', () => {
 	it('returns [] when the route is not in the response', async () => {
 		const adapter = apiAdapter({ endpoint: 'http://api/cms' });
 		const { fetch } = stubFetch(() => ({ status: 200, json: { routes: [] } }));
-		const entries = await adapter.fetchEntries('/r/[slug]', { fetch, previewKey: null });
+		const entries = await adapter.fetchEntries('/r/[slug]', {
+			fetch,
+			previewKey: null,
+			locale: 'en',
+			locales: ['en']
+		});
 		expect(entries).toEqual([]);
 	});
 
 	it('throws on non-2xx response', async () => {
 		const adapter = apiAdapter({ endpoint: 'http://api/cms' });
 		const { fetch } = stubFetch(() => ({ status: 500 }));
-		await expect(adapter.fetchEntries('/r/[slug]', { fetch, previewKey: null })).rejects.toThrow(
-			/500/
-		);
+		await expect(
+			adapter.fetchEntries('/r/[slug]', {
+				fetch,
+				previewKey: null,
+				locale: 'en',
+				locales: ['en']
+			})
+		).rejects.toThrow(/500/);
+	});
+
+	it('forwards context.locale on the /pages request', async () => {
+		const adapter = apiAdapter({ endpoint: 'http://api/cms' });
+		const { fetch, calls } = stubFetch(() => ({ status: 200, json: { routes: [] } }));
+		await adapter.fetchEntries('/r/[slug]', {
+			fetch,
+			previewKey: null,
+			locale: 'es',
+			locales: ['en', 'es']
+		});
+		expect(calls[0].url).toContain('locale=es');
 	});
 
 	it('passes credentials: "include" so cookies travel cross-origin', async () => {
 		const adapter = apiAdapter({ endpoint: 'http://api/cms' });
 		const { fetch, calls } = stubFetch(() => ({ status: 200, json: { routes: [] } }));
-		await adapter.fetchEntries('/r/[slug]', { fetch, previewKey: null });
+		await adapter.fetchEntries('/r/[slug]', {
+			fetch,
+			previewKey: null,
+			locale: 'en',
+			locales: ['en']
+		});
 		expect(calls[0].init?.credentials).toBe('include');
+	});
+
+	it('keeps redirect entries in production mode (prerender needs to visit them) but drops gone and pending deletes', async () => {
+		const adapter = apiAdapter({ endpoint: 'http://api/cms' });
+		const { fetch } = stubFetch(() => ({
+			status: 200,
+			json: {
+				routes: [
+					{
+						routeId: '/r/[slug]',
+						entries: [
+							{ params: { slug: 'a' }, metadata: { title: 'A' } },
+							{
+								params: { slug: 'redirected' },
+								redirectTo: '/r/a',
+								metadata: { title: 'R' }
+							},
+							{ params: { slug: 'gone' }, gone: true, metadata: {} },
+							{ params: { slug: 'pending' }, isDeletePending: true }
+						]
+					}
+				]
+			}
+		}));
+		const entries = await adapter.fetchEntries('/r/[slug]', {
+			fetch,
+			previewKey: null,
+			locale: 'en',
+			locales: ['en']
+		});
+		expect(entries).toEqual([
+			{ params: { slug: 'a' }, metadata: { title: 'A' } },
+			{ params: { slug: 'redirected' }, metadata: { title: 'R' }, redirectTo: '/r/a' }
+		]);
+	});
+
+	it('passes through redirect/gone flags on entries in preview mode', async () => {
+		const adapter = apiAdapter({ endpoint: 'http://api/cms' });
+		const { fetch } = stubFetch(() => ({
+			status: 200,
+			json: {
+				routes: [
+					{
+						routeId: '/r/[slug]',
+						entries: [
+							{ params: { slug: 'a' } },
+							{
+								params: { slug: 'redirected' },
+								isDeletePending: true,
+								redirectTo: '/r/a'
+							},
+							{ params: { slug: 'gone' }, isDeletePending: true, gone: true }
+						]
+					}
+				]
+			}
+		}));
+		const entries = await adapter.fetchEntries('/r/[slug]', {
+			fetch,
+			previewKey: 'k',
+			locale: 'en',
+			locales: ['en']
+		});
+		expect(entries).toEqual([
+			{ params: { slug: 'a' }, metadata: {} },
+			{ params: { slug: 'redirected' }, metadata: {}, redirectTo: '/r/a' },
+			{ params: { slug: 'gone' }, metadata: {}, gone: true }
+		]);
 	});
 });

@@ -64,7 +64,7 @@
 		})();
 	});
 
-	type ChangeType = 'edited' | 'new' | 'delete' | 'seo';
+	type ChangeType = 'edited' | 'new' | 'delete' | 'gone' | 'redirect' | 'seo';
 
 	const META_PREFIX = 'metadata.';
 
@@ -82,7 +82,11 @@
 		editedPaths(tree).filter((p) => !p.startsWith(META_PREFIX));
 
 	const changeTypeOf = (item: ReleaseItem): ChangeType => {
-		if (item.kind === 'page-delete') return 'delete';
+		if (item.kind === 'page-delete') {
+			if (item.outcome?.kind === 'redirect') return 'redirect';
+			if (item.outcome?.kind === 'gone') return 'gone';
+			return 'delete';
+		}
 		if (item.kind === 'layout') return 'edited';
 		if (draftPageKeys.has(itemKey(item))) return 'new';
 		const non = nonMetadataPaths(item.tree);
@@ -106,7 +110,11 @@
 	};
 
 	const metaTextFor = (item: ReleaseItem): string => {
-		if (item.kind === 'page-delete') return 'Marked for deletion';
+		if (item.kind === 'page-delete') {
+			if (item.outcome?.kind === 'redirect') return `Redirects to ${item.outcome.to}`;
+			if (item.outcome?.kind === 'gone') return 'Marked permanently gone';
+			return 'Marked for deletion';
+		}
 		if (item.kind === 'layout') return summarizeNames(editedPaths(item.tree), 'Edited');
 		if (changeTypeOf(item) === 'new') return 'Created';
 		const non = nonMetadataPaths(item.tree);
@@ -155,7 +163,8 @@
 	const badgeVariantOf = (t: ChangeType): BadgeVariant => {
 		if (t === 'edited') return 'warn';
 		if (t === 'new') return 'success';
-		if (t === 'delete') return 'destructive';
+		if (t === 'delete' || t === 'gone') return 'destructive';
+		if (t === 'redirect') return 'edit';
 		return 'edit';
 	};
 	const badgeLabel = (t: ChangeType): string => (t === 'seo' ? 'SEO' : t);

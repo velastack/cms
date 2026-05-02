@@ -15,7 +15,12 @@
 				params: Record<string, string>;
 				fields: Record<string, unknown>;
 		  }
-		| { kind: 'page-delete'; routeId: string; params: Record<string, string> }
+		| {
+				kind: 'page-delete';
+				routeId: string;
+				params: Record<string, string>;
+				outcome?: { kind: 'gone' } | { kind: 'redirect'; to: string };
+		  }
 		| { kind: 'layout'; routeId: string; fields: Record<string, unknown> };
 
 	type PublishedRelease = {

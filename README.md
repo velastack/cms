@@ -63,14 +63,18 @@ The plugin reads `src/routes/` and `src/lib/` by default. Override with `cms({ r
 
 ```ts
 // src/lib/cms.ts
-import { createCms } from '@velastack/cms/server';
+import { createCms, mockAdapter } from '@velastack/cms/server';
 
 export const { load: loadCms, generateEntries } = createCms({
-	adapter: mockAdapter()
+	adapter: mockAdapter(),
+	locales: ['en'] // or ['en', 'es', 'fr'] — first entry is the default locale
 });
 ```
 
 Swap `mockAdapter` for your real adapter once you have a backend (see [Adapters](#adapters)).
+The `locales` array names every BCP-47 locale your site supports; the first entry is the
+**default locale** used for read-time fallback when a value is missing in the requested
+locale (see [Locales](#locales)).
 
 ### 3. Wire `loadCms` into the root `+layout.server.ts`
 
@@ -78,7 +82,7 @@ Optionally include `svelte-meta-tags` for easy page metadata handling, but it is
 
 ```ts
 // src/routes/+layout.server.ts
-import { error, type ServerLoad } from '@sveltejs/kit';
+import { error, redirect, type ServerLoad } from '@sveltejs/kit';
 import { defineBaseMetaTags } from 'svelte-meta-tags';
 import { loadCms } from '$lib/cms.js';
 
@@ -88,7 +92,14 @@ export const load: ServerLoad = async (event) => {
 		titleTemplate: '%s · My site'
 	});
 
-	const { cms, notFound } = await loadCms(event);
+	// Pick the locale however you like — pathname segment (`/es/about`),
+	// `Accept-Language`, a session cookie, etc. Pass whatever string you
+	// land on; the loader doesn't care how it was derived.
+	const locale = event.url.searchParams.get('locale') ?? 'en';
+
+	const { cms, notFound, gone, redirectTo } = await loadCms(event, { locale });
+	if (redirectTo) redirect(308, redirectTo);
+	if (gone) error(410, 'Gone');
 	if (notFound) error(404, 'Not found');
 
 	return {
@@ -97,6 +108,17 @@ export const load: ServerLoad = async (event) => {
 	};
 };
 ```
+
+`loadCms` returns four mutually-exclusive page-kind resolutions, in priority order:
+
+| Field        | Meaning                                                                              | Caller does          |
+| ------------ | ------------------------------------------------------------------------------------ | -------------------- |
+| `redirectTo` | Page was replaced with a permanent redirect to this URL.                             | `redirect(308, …)`   |
+| `gone`       | Page was deliberately, permanently removed.                                          | `error(410, …)`      |
+| `notFound`   | Page-kind scope had owned params and the adapter returned no doc and no tombstone.   | `error(404, …)`      |
+| (none set)   | Render normally with `data.cms`.                                                     | return `{ cms, … }`  |
+
+Layout scopes never tombstone — only page-kind scopes can resolve to `gone` / `redirectTo`.
 
 ### 4. Render `<AdminBar/>` in the root layout
 
@@ -282,7 +304,8 @@ A request through `/(marketing)/rooms/suite-1` produces three scope queries (roo
 
 ```ts
 {
-  locale: 'en',
+  locale: 'en',                  // resolved locale for this request
+  locales: ['en', 'es', 'fr'],   // supported set, default = first entry
   docs: {
     'layout:/(marketing)': { 'header.title': '…' },
     'page:/(marketing)/rooms/[slug]?slug=suite-1': { 'hero.title': '…' }
@@ -341,33 +364,110 @@ Hand `cms.metadata` directly to `definePageMetaTags(...)` from `svelte-meta-tags
 
 ```ts
 export interface CmsAdapter {
+	readonly endpoint?: string;
+
 	fetchDocs(
 		queries: CmsScopeQuery[],
-		context: { fetch: typeof fetch }
-	): Promise<Record<string, Record<string, unknown>>> | Record<string, Record<string, unknown>>;
+		context: CmsAdapterContext
+	): Promise<Record<string, CmsAdapterResolution>> | Record<string, CmsAdapterResolution>;
+
+	fetchEntries(
+		routeId: string,
+		context: CmsAdapterContext
+	): Promise<CmsEntry[]> | CmsEntry[];
 }
+
+type CmsAdapterContext = {
+	fetch: typeof fetch;        // SvelteKit's request-scoped fetch
+	previewKey?: string | null; // ?preview= — overlay an open release's pending edits
+	versionKey?: string | null; // ?version= — load a past published release snapshot
+	locale: string;             // BCP-47 bound at loadCms({ locale }) time
+	locales: string[];          // supported set; first entry is the default locale
+};
+
+type CmsScopeQuery = {
+	scopeId: string;
+	kind: 'layout' | 'page';
+	routeId: string;
+	params: Record<string, string>; // owned params for this scope only
+	fields: string[];
+	locale: string;                 // request locale, repeated per query for adapter convenience
+};
+
+type CmsAdapterResolution = CmsAdapterDoc | CmsAdapterTombstone;
+type CmsAdapterDoc = { contents: Record<string, unknown> };
+type CmsAdapterTombstone =
+	| { kind: 'gone' }
+	| { kind: 'redirect'; to: string };
 ```
 
-Each `CmsScopeQuery` contains the composed `scopeKey`, the `kind` (`'layout' | 'page'`), the route id, the resolved owned params, the locale, and (for page scopes) the metadata field list. Map those to backend reads however you want. The `context.fetch` argument is the SvelteKit request-scoped fetch for HTTP-backed adapters.
+Each `CmsScopeQuery` carries the composed `scopeId`, the `kind` (`'layout' | 'page'`), the route id, the resolved owned params, the field list, and the locale. Map those to backend reads however you want. The `context.fetch` argument is the SvelteKit request-scoped fetch for HTTP-backed adapters.
 
-Page-kind docs may carry a reserved `_metadata` field. `loadCms` lifts it onto `cms.metadata` (for `definePageMetaTags(...)`) and strips it from the doc before components see it. Storing metadata alongside the doc lets adapters keep a page's content and SEO under one key in the backing store.
+Page-kind docs own a `metadata` branch on the doc tree. `loadCms` aliases that branch onto `cms.metadata` (for `definePageMetaTags(...)`) without removing it from the doc — components addressing `metadata.title` etc. read straight through.
+
+A page-kind scope can also resolve to a **tombstone** (`{ kind: 'gone' }` or `{ kind: 'redirect', to }`) instead of a doc. The loader short-circuits the page render and surfaces `gone` / `redirectTo` on the `LoadCmsResult` so the caller can return 410 / 308. Layout scopes never tombstone.
+
+`fetchEntries` enumerates publishable entries at one route id (used by `generateEntries` for prerender). Tombstoned entries are returned with `redirectTo` / `gone` flags so prerender visits the URL and SvelteKit emits the redirect file; the loader filters them out of `cms.entries` before display.
 
 ### `mockAdapter` (built-in)
 
-Useful for tests, demos, and pre-backend development:
+Useful for tests, demos, and pre-backend development. Storage is keyed by `[locale][routeId]`:
 
 ```ts
 import { mockAdapter } from '@velastack/cms/server';
 
 const adapter = mockAdapter({
-	docs: {
-		'layout:/(marketing)': { 'header.title': 'Climb Angola' },
-		'page:/(marketing)/about': {
-			'hero.title': 'About us',
-			_metadata: { title: 'About us' }
+	layoutDocs: {
+		en: { '/(marketing)': { header: { title: 'Climb Angola' } } },
+		es: { '/(marketing)': { header: { title: 'Escalar Angola' } } }
+	},
+	pageDocs: {
+		en: {
+			'/(marketing)/about': [
+				{
+					params: {},
+					published: {
+						hero: { title: 'About us' },
+						metadata: { title: 'About us' }
+					}
+				}
+			]
 		}
 	}
 });
+```
+
+A page can be **tombstoned at publish time** by setting `tombstone` on its `PageEntry`:
+
+```ts
+mockAdapter({
+	pageDocs: {
+		en: {
+			'/(marketing)/rooms/[slug]': [
+				// Hard 410 — this URL is permanently gone.
+				{ params: { slug: 'old-suite' }, published: {}, tombstone: { kind: 'gone' } },
+				// Permanent redirect — visitors land on the new URL.
+				{
+					params: { slug: 'legacy' },
+					published: {},
+					tombstone: { kind: 'redirect', to: '/rooms/suite-1' }
+				}
+			]
+		}
+	}
+});
+```
+
+Pass `resolvePreview` to enable release-preview overlay; release items can also stage tombstones in flight via `outcome` on a `page-delete` item:
+
+```ts
+{
+  kind: 'page-delete',
+  routeId: '/(marketing)/rooms/[slug]',
+  params: { slug: 'legacy' },
+  locale: 'en',
+  outcome: { kind: 'redirect', to: '/rooms/suite-1' } // omit for hard delete (404 after publish)
+}
 ```
 
 ### Writing your own adapter
@@ -375,19 +475,78 @@ const adapter = mockAdapter({
 A skeleton sketch:
 
 ```ts
-import type { CmsAdapter, CmsScopeQuery } from '@velastack/cms/server';
+import type { CmsAdapter, CmsAdapterResolution } from '@velastack/cms/server';
 
 export const myAdapter = (config: { project: string; client: MyClient }): CmsAdapter => ({
-	async fetchDocs(queries, { fetch }) {
+	async fetchDocs(queries, { fetch, locale, previewKey }) {
 		const rows = await config.client.findMany({
 			project: config.project,
-			keys: queries.map((q) => q.scopeKey),
+			keys: queries.map((q) => ({
+				scopeId: q.scopeId,
+				routeId: q.routeId,
+				params: q.params,
+				locale: q.locale
+			})),
+			previewKey,
 			fetch
 		});
-		return Object.fromEntries(rows.map((r) => [r.scopeKey, r.contents]));
+		const out: Record<string, CmsAdapterResolution> = {};
+		for (const r of rows) {
+			out[r.scopeId] = r.tombstone ?? { contents: r.contents };
+		}
+		return out;
+	},
+	async fetchEntries(routeId, { fetch, locale }) {
+		const rows = await config.client.listEntries({
+			project: config.project,
+			routeId,
+			locale,
+			fetch
+		});
+		return rows.map((r) => ({
+			params: r.params,
+			metadata: r.metadata ?? {},
+			...(r.redirectTo ? { redirectTo: r.redirectTo } : {}),
+			...(r.gone ? { gone: true as const } : {})
+		}));
 	}
 });
 ```
+
+The adapter doesn't need to implement default-locale fallback — `resolveCmsPayload` issues a parallel default-locale `fetchDocs` when needed and merges trees on the loader side. Just return what's stored for the requested locale.
+
+## Locales
+
+Locale support is first-class and lives at the release / version dimension: every release contains items across every locale you've touched, so publishing ships all locales atomically. Items are tagged `(scope, locale, tree)`; switching the editor's preview locale is a free UI op against the same release.
+
+**Configuration:** pass the supported set to `createCms({ locales })`. The first entry is the **default locale**.
+
+**Per-request:** the consumer decides how to derive a locale from the request (pathname, `Accept-Language`, cookie, query param, …) and passes the resulting string to `loadCms(event, { locale })`. The library doesn't read URLs itself.
+
+**Default-locale fallback:** when `locale !== locales[0]`, the loader fetches docs in both locales and merges (`mergeTree(default, requested)`), so a missing `hero.title` in `es` falls through to the EN value. Arrays replace wholesale — explicit ES content always overrides EN, but absent ES keys inherit. Page-kind tombstones in either locale apply (requested wins on conflict).
+
+**Editor preview locale:** the admin bar uses `?locale=` to override whichever locale the consumer's logic would have picked, so editors can preview any locale at any URL without changing pathname routing. The bar's Locales panel shows per-locale edit counts (`workingCopyCountsByLocale`) plus translation gaps (default-locale items not yet edited in each other locale).
+
+**On the payload:**
+
+```ts
+cms.locale  // 'es'
+cms.locales // ['en', 'es', 'fr']
+```
+
+## Redirects & tombstones
+
+Pages can be deleted with three different outcomes:
+
+| Outcome              | HTTP | When to use                                                  |
+| -------------------- | ---- | ------------------------------------------------------------ |
+| `notFound` (no doc)  | 404  | Default — the URL just isn't there.                          |
+| `gone`               | 410  | URL was deliberately retired; tell crawlers to forget it.    |
+| `redirectTo`         | 308  | URL moved permanently; preserve link equity to the new path. |
+
+Tombstones live on the adapter's `PageEntry` (`tombstone: CmsAdapterTombstone`) for already-published deletions, and on a release's `page-delete` item (`outcome?: CmsAdapterTombstone`) for staged deletions in the editor's working copy. The loader returns whichever applies on `LoadCmsResult.{ gone, redirectTo }`; your `+layout.server.ts` branches on those flags before rendering.
+
+For prerender, `fetchEntries` returns tombstoned entries with `redirectTo` / `gone` flags so SvelteKit visits the URL and emits the redirect file — but `cms.entries[routeId]` strips them, so `<CmsEntries>` lists never display deleted pages.
 
 ## Plugin options
 

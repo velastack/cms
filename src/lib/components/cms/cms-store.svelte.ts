@@ -1,22 +1,31 @@
 /**
  * Reactive edit-mode store for CMS components.
  *
- * Every scope owns one tree. `drafts[key].tree` holds the editor's local,
- * uncommitted patch tree; `overlay[key]` holds merged published+release
- * content fetched client-side from `${endpoint}/docs`. Display components
- * read through `getValue(scope, path)`, which deep-merges
- * `base ∪ overlay ∪ draft` (drafts only when `isEditing`) and returns the
- * value at `path`.
+ * Every (scope, locale) owns one tree. `drafts[key].tree` holds the editor's
+ * local, uncommitted patch tree; `overlay[key]` holds merged
+ * published+release content fetched client-side from `${endpoint}/docs` for
+ * that locale. Display components read through `getValue(scope, path)`,
+ * which deep-merges `base ∪ overlay ∪ draft` (drafts only when `isEditing`)
+ * and returns the value at `path`. The `base` is the request-time doc on
+ * `page.data.cms` (already locale-resolved + fallback-merged by the
+ * server-side `resolveCmsPayload`); `overlay` and `draft` are scoped to the
+ * locale stored on the bucket.
  *
  * `save(endpoint)` flushes draft trees to `${endpoint}/release/items` as
- * `{ items: [{ kind, routeId, [params], tree }] }`. The server deep-merges
- * each tree into the editor's open release. Publishing is a separate
- * deliberate step via `/release/publish`.
+ * `{ items: [{ kind, routeId, [params], locale, tree }] }`. The server
+ * deep-merges each tree into the editor's open release, keyed by
+ * (scope, locale). Publishing is a separate deliberate step via
+ * `/release/publish`.
  *
  * Paths are lodash-style: `welcome.title`, `gallery.0.caption`,
  * `metadata.openGraph.image.url`. Numeric segments index arrays. There is no
  * special envelope for metadata — `metadata` is just a branch on the page
  * scope's tree.
+ *
+ * Locale on read/write helpers (`getValue`, `setValue`, `hasDraft`,
+ * `hasOverlay`) defaults to the request's `page.data.cms.locale`. The
+ * Locales panel passes an explicit locale to inspect other locales'
+ * working-copy state without switching the page.
  */
 import { page } from '$app/state';
 import { get, has, mergeTree, set, type Tree } from './path.js';
@@ -30,29 +39,43 @@ export type CmsScopeRef = {
 
 type DraftBucket = {
 	scope: CmsScopeRef;
+	locale: string;
 	tree: Tree;
 };
 
-const composeKey = (scope: CmsScopeRef): string => {
+const composeKey = (scope: CmsScopeRef, locale: string): string => {
 	const keys = Object.keys(scope.params).sort();
-	if (keys.length === 0) return scope.scopeId;
-	const qp = keys.map((k) => `${k}=${scope.params[k]}`).join('&');
-	return `${scope.scopeId}?${qp}`;
+	const base =
+		keys.length === 0
+			? scope.scopeId
+			: `${scope.scopeId}?${keys.map((k) => `${k}=${scope.params[k]}`).join('&')}`;
+	return `${base}|locale=${locale}`;
 };
+
+/**
+ * Outcome of a page-delete release item: omit for hard-delete (404 after
+ * publish), set to `gone` for permanent removal (410), or `redirect` to a
+ * target URL for a permanent redirect (308). The CMS server keeps the
+ * outcome on the published tombstone after the release is published.
+ */
+export type PageDeleteOutcome = { kind: 'gone' } | { kind: 'redirect'; to: string };
 
 export type ReleaseItem =
 	| {
 			kind: 'page';
 			routeId: string;
 			params: Record<string, string>;
+			locale: string;
 			tree: Tree;
 			addedAt: string;
 	  }
-	| { kind: 'layout'; routeId: string; tree: Tree; addedAt: string }
+	| { kind: 'layout'; routeId: string; locale: string; tree: Tree; addedAt: string }
 	| {
 			kind: 'page-delete';
 			routeId: string;
 			params: Record<string, string>;
+			locale: string;
+			outcome?: PageDeleteOutcome;
 			addedAt: string;
 	  };
 
@@ -102,6 +125,12 @@ const treeHasAnyLeaf = (tree: Tree): boolean => {
 	return false;
 };
 
+/** Read the request-time locale from `page.data.cms`. Empty string until a payload loads. */
+const pageLocale = (): string => {
+	const cms = page.data?.cms as CmsPayload | undefined;
+	return cms?.locale ?? '';
+};
+
 class CmsStore {
 	isEditing = $state(false);
 	drafts = $state<Record<string, DraftBucket>>({});
@@ -116,42 +145,46 @@ class CmsStore {
 		this.isEditing = !this.isEditing;
 	}
 
-	/** Base doc (server-rendered) for a scope. */
+	/** Base doc (server-rendered) for a scope. Already locale-resolved by `resolveCmsPayload`. */
 	private baseDoc(scope: CmsScopeRef): Tree {
 		const cms = page.data?.cms as CmsPayload | undefined;
 		return (cms?.docs?.[scope.scopeId] ?? {}) as Tree;
 	}
 
-	/** Merged read tree: base ∪ overlay (∪ draft when editing). */
-	private mergedTree(scope: CmsScopeRef): Tree {
-		const key = composeKey(scope);
-		const base = this.baseDoc(scope);
+	/** Merged read tree: base ∪ overlay (∪ draft when editing) for the given locale. */
+	private mergedTree(scope: CmsScopeRef, locale: string): Tree {
+		const key = composeKey(scope, locale);
+		// Only fold in base when the requested locale matches the page's
+		// resolved locale — `page.data.cms.docs` only carries that one.
+		const base = locale === pageLocale() ? this.baseDoc(scope) : {};
 		const ov = this.overlay[key];
 		const draft = this.isEditing ? this.drafts[key]?.tree : undefined;
 		return mergeTree(base, ov, draft);
 	}
 
 	/** Read the merged value at `path`. Returns `undefined` if missing. */
-	getValue(scope: CmsScopeRef, path: string): unknown {
-		return get(this.mergedTree(scope), path);
+	getValue(scope: CmsScopeRef, path: string, locale?: string): unknown {
+		return get(this.mergedTree(scope, locale ?? pageLocale()), path);
 	}
 
 	/** Whether the editor's draft tree contains a value at `path`. */
-	hasDraft(scope: CmsScopeRef, path: string): boolean {
-		const bucket = this.drafts[composeKey(scope)];
+	hasDraft(scope: CmsScopeRef, path: string, locale?: string): boolean {
+		const bucket = this.drafts[composeKey(scope, locale ?? pageLocale())];
 		return bucket ? has(bucket.tree, path) : false;
 	}
 
 	/** Whether the client overlay (published+release) contains a value at `path`. */
-	hasOverlay(scope: CmsScopeRef, path: string): boolean {
-		const ov = this.overlay[composeKey(scope)];
+	hasOverlay(scope: CmsScopeRef, path: string, locale?: string): boolean {
+		const ov = this.overlay[composeKey(scope, locale ?? pageLocale())];
 		return ov ? has(ov, path) : false;
 	}
 
 	/** Write a value at `path` into the draft tree. Creates the bucket if needed. */
-	setValue(scope: CmsScopeRef, path: string, value: unknown): void {
-		const key = composeKey(scope);
-		const bucket = this.drafts[key] ?? (this.drafts[key] = { scope, tree: {} });
+	setValue(scope: CmsScopeRef, path: string, value: unknown, locale?: string): void {
+		const lc = locale ?? pageLocale();
+		const key = composeKey(scope, lc);
+		const bucket =
+			this.drafts[key] ?? (this.drafts[key] = { scope, locale: lc, tree: {} });
 		set(bucket.tree, path, value);
 	}
 
@@ -171,6 +204,10 @@ class CmsStore {
 	 * `opts.versionKey` (mutually exclusive with `previewKey`) requests the
 	 * snapshot at a published release's publish time — `?version=…`.
 	 *
+	 * `opts.locale` is the BCP-47 locale to request — required, scopes the
+	 * overlay cache key so different locales don't collide. Default-locale
+	 * fallback for missing fields is the server's job here too.
+	 *
 	 * `opts.reset` replaces the overlay map wholesale (mount with release,
 	 * post-publish, post-discard). Otherwise we merge — keeps unchanged-layout
 	 * overlays applied during navigation while new-page scopes load.
@@ -179,16 +216,18 @@ class CmsStore {
 		endpoint: string,
 		scopes: CmsScopeEntry[],
 		previewKey: string | null,
-		opts: { reset?: boolean; versionKey?: string | null } = {}
+		opts: { reset?: boolean; versionKey?: string | null; locale: string }
 	): Promise<void> {
 		const token = ++this.overlayFetchToken;
 		const versionKey = opts.versionKey ?? null;
+		const locale = opts.locale;
 
 		const fetchOne = async (scope: CmsScopeEntry) => {
 			const qs = new URLSearchParams({
 				kind: scope.kind,
 				routeId: scope.routeId,
-				params: JSON.stringify(scope.params)
+				params: JSON.stringify(scope.params),
+				locale
 			});
 			if (versionKey) qs.set('version', versionKey);
 			else if (previewKey) qs.set('preview', previewKey);
@@ -204,11 +243,14 @@ class CmsStore {
 		const next: Record<string, Tree> = {};
 		for (const r of results) {
 			if (!r) continue;
-			const key = composeKey({
-				scopeId: r.scope.scopeId,
-				routeId: r.scope.routeId,
-				params: r.scope.params
-			});
+			const key = composeKey(
+				{
+					scopeId: r.scope.scopeId,
+					routeId: r.scope.routeId,
+					params: r.scope.params
+				},
+				locale
+			);
 			next[key] = r.contents ?? {};
 		}
 
@@ -221,16 +263,17 @@ class CmsStore {
 
 	/**
 	 * Refresh the per-routeId entries overlay used by `<CmsEntries>`. One fetch
-	 * to `${endpoint}/pages?preview=…` covers all `routeIds`; we filter the
-	 * response per route. With `previewKey` set, draft and pending-delete
-	 * entries are kept; with `previewKey === null`, they're filtered out — used
-	 * post-publish to mask stale `page.data.cms.entries` on static-export sites.
+	 * to `${endpoint}/pages?preview=…&locale=…` covers all `routeIds`; we
+	 * filter the response per route. With `previewKey` set, draft and
+	 * pending-delete entries are kept; with `previewKey === null`, they're
+	 * filtered out — used post-publish to mask stale
+	 * `page.data.cms.entries` on static-export sites.
 	 */
 	async loadAndApplyEntriesOverlay(
 		endpoint: string,
 		routeIds: string[],
 		previewKey: string | null,
-		opts: { reset?: boolean; versionKey?: string | null } = {}
+		opts: { reset?: boolean; versionKey?: string | null; locale: string }
 	): Promise<void> {
 		const token = ++this.entriesFetchToken;
 		if (routeIds.length === 0) {
@@ -239,14 +282,12 @@ class CmsStore {
 		}
 
 		const versionKey = opts.versionKey ?? null;
-		const querySuffix = versionKey
-			? `?version=${encodeURIComponent(versionKey)}`
-			: previewKey
-				? `?preview=${encodeURIComponent(previewKey)}`
-				: '';
+		const qs = new URLSearchParams({ locale: opts.locale });
+		if (versionKey) qs.set('version', versionKey);
+		else if (previewKey) qs.set('preview', previewKey);
 		let res: Response;
 		try {
-			res = await fetch(`${endpoint}/pages${querySuffix}`, { credentials: 'include' });
+			res = await fetch(`${endpoint}/pages?${qs}`, { credentials: 'include' });
 		} catch {
 			return;
 		}
@@ -260,6 +301,8 @@ class CmsStore {
 					params: Record<string, string>;
 					isDraft?: boolean;
 					isDeletePending?: boolean;
+					redirectTo?: string;
+					gone?: boolean;
 					metadata?: Record<string, unknown>;
 				}>;
 			}>;
@@ -269,10 +312,14 @@ class CmsStore {
 		const wanted = new Set(routeIds);
 		for (const r of body.routes) {
 			if (!wanted.has(r.routeId)) continue;
-			const filtered =
-				versionKey || previewKey
-					? r.entries
-					: r.entries.filter((e) => !e.isDraft && !e.isDeletePending);
+			// Tombstones (redirect / gone) and pending deletes never appear in
+			// consumer-facing `<CmsEntries>` lists. Drafts are visible only in
+			// preview / version mode where the editor inspects working state.
+			const filtered = r.entries.filter((e) => {
+				if (e.redirectTo || e.gone || e.isDeletePending) return false;
+				if (versionKey || previewKey) return true;
+				return !e.isDraft;
+			});
 			next[r.routeId] = filtered.map((e) => ({
 				params: e.params,
 				metadata: e.metadata ?? {}
@@ -306,6 +353,26 @@ class CmsStore {
 		return { pages, layouts, total: pages + layouts };
 	}
 
+	/**
+	 * Per-locale breakdown of the open release's working-copy items. Powers
+	 * the Locales panel ("default has 6 edits, es missing 2"). Locales with
+	 * zero items don't appear in the map; the panel iterates `cms.locales` to
+	 * surface them as "0 edits".
+	 */
+	get workingCopyCountsByLocale(): Record<
+		string,
+		{ pages: number; layouts: number; total: number }
+	> {
+		const out: Record<string, { pages: number; layouts: number; total: number }> = {};
+		for (const item of this.openRelease?.items ?? []) {
+			const bucket = (out[item.locale] ??= { pages: 0, layouts: 0, total: 0 });
+			if (item.kind === 'layout') bucket.layouts += 1;
+			else bucket.pages += 1;
+			bucket.total += 1;
+		}
+		return out;
+	}
+
 	clearDrafts(): void {
 		this.drafts = {};
 	}
@@ -322,6 +389,35 @@ class CmsStore {
 		}
 		const data = (await res.json()) as { release: OpenRelease | null };
 		this.openRelease = data.release;
+	}
+
+	/**
+	 * Atomically rename a page's slug: stage a draft `page` item at the new
+	 * params copying content from the published entry, plus a `page-delete`
+	 * with a redirect outcome on the old params pointing at the new URL. Both
+	 * items go into the open release as a transactional pair, so undo removes
+	 * them together. The backend composes this on `POST /pages/rename`.
+	 */
+	async renameSlug(
+		endpoint: string,
+		args: {
+			routeId: string;
+			fromParams: Record<string, string>;
+			toParams: Record<string, string>;
+			locale: string;
+			toUrl: string;
+		}
+	): Promise<{ ok: boolean; release?: OpenRelease }> {
+		const res = await fetch(`${endpoint}/pages/rename`, {
+			credentials: 'include',
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(args)
+		});
+		if (!res.ok) return { ok: false };
+		const data = (await res.json()) as { release: OpenRelease };
+		this.openRelease = data.release;
+		return { ok: true, release: data.release };
 	}
 
 	/**
@@ -374,14 +470,20 @@ class CmsStore {
 	}
 
 	/**
-	 * Flush dirty drafts to the server's open release as one item per scope,
-	 * each carrying a partial tree. The server deep-merges each tree into its
-	 * matching item in the working copy without publishing.
+	 * Flush dirty drafts to the server's open release as one item per
+	 * (scope, locale), each carrying a partial tree. The server deep-merges
+	 * each tree into its matching item in the working copy without publishing.
 	 */
 	async save(endpoint: string): Promise<{ ok: boolean; release?: OpenRelease }> {
 		type SaveInput =
-			| { kind: 'page'; routeId: string; params: Record<string, string>; tree: Tree }
-			| { kind: 'layout'; routeId: string; tree: Tree };
+			| {
+					kind: 'page';
+					routeId: string;
+					params: Record<string, string>;
+					locale: string;
+					tree: Tree;
+			  }
+			| { kind: 'layout'; routeId: string; locale: string; tree: Tree };
 
 		const items: SaveInput[] = [];
 		for (const bucket of Object.values(this.drafts)) {
@@ -392,10 +494,16 @@ class CmsStore {
 					kind: 'page',
 					routeId: bucket.scope.routeId,
 					params: bucket.scope.params,
+					locale: bucket.locale,
 					tree: bucket.tree
 				});
 			} else {
-				items.push({ kind: 'layout', routeId: bucket.scope.routeId, tree: bucket.tree });
+				items.push({
+					kind: 'layout',
+					routeId: bucket.scope.routeId,
+					locale: bucket.locale,
+					tree: bucket.tree
+				});
 			}
 		}
 
@@ -433,11 +541,14 @@ class Cms {
 
 		const docs: Record<string, Tree> = {};
 		for (const [scopeId, scopeEntry] of Object.entries(base.scopes)) {
-			const overlayKey = composeKey({
-				scopeId: scopeEntry.scopeId,
-				routeId: scopeEntry.routeId,
-				params: scopeEntry.params
-			});
+			const overlayKey = composeKey(
+				{
+					scopeId: scopeEntry.scopeId,
+					routeId: scopeEntry.routeId,
+					params: scopeEntry.params
+				},
+				base.locale
+			);
 			const overlayBucket = cmsStore.overlay[overlayKey];
 			const baseDoc = (base.docs[scopeId] ?? {}) as Tree;
 			docs[scopeId] = overlayBucket ? mergeTree(baseDoc, overlayBucket) : baseDoc;
@@ -462,6 +573,9 @@ class Cms {
 
 	get locale(): string {
 		return this.#merged?.locale ?? '';
+	}
+	get locales(): string[] {
+		return this.#merged?.locales ?? [];
 	}
 	get docs(): Record<string, Record<string, unknown>> {
 		return this.#merged?.docs ?? {};

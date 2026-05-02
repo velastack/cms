@@ -8,10 +8,14 @@
 	} from '$app/navigation';
 	import { page } from '$app/state';
 	import { pages } from 'virtual:vela-cms/pages';
-	import { cmsStore } from '$lib/components/cms/cms-store.svelte.js';
+	import { cmsStore, type PageDeleteOutcome } from '$lib/components/cms/cms-store.svelte.js';
 	import type { CmsPayload, CmsScopeEntry } from '$lib/components/cms/scope.js';
 	import CssRoot from './css-root.svelte';
 	import { adminBarTheme, type AdminBarTheme } from './theme.svelte.js';
+	import DeletePageDialog, {
+		type DeletePageMode,
+		type RedirectTarget
+	} from './delete-page-dialog.svelte';
 	import HistoryPanel from './history-panel.svelte';
 	import KeyboardShortcutsDialog from './keyboard-shortcuts-dialog.svelte';
 	import MediaPanel from './media-panel.svelte';
@@ -72,6 +76,7 @@
 	let historyOpen = $state(false);
 	let pagesOpen = $state(false);
 	let mediaOpen = $state(false);
+	let localesOpen = $state(false);
 	let publishOpen = $state(false);
 	let chooserOpen = $state(false);
 	let shareLinkOpen = $state(false);
@@ -81,6 +86,7 @@
 			historyOpen ||
 			pagesOpen ||
 			mediaOpen ||
+			localesOpen ||
 			publishOpen ||
 			chooserOpen ||
 			shareLinkOpen ||
@@ -92,6 +98,29 @@
 	let newDialog = $state<CmsCreatablePageConfigWithRouteId | null>(null);
 	let newPageError = $state<string | null>(null);
 	let newPageCreating = $state(false);
+
+	// Delete-page dialog. Shared between the in-panel "Delete" button and the
+	// `Page → Delete Page…` menu entry; pages-panel calls `requestDelete` via
+	// its `onRequestDelete` prop, the menu calls it directly.
+	type WirePageEntry = {
+		params: Record<string, string>;
+		isDraft?: boolean;
+		isDeletePending?: boolean;
+		redirectTo?: string;
+		gone?: boolean;
+		metadata?: Record<string, unknown>;
+	};
+	type WirePageRoute = { routeId: string; entries: WirePageEntry[] };
+	let deleteDialogOpen = $state(false);
+	let deleteTarget = $state<{
+		routeId: string;
+		params: Record<string, string>;
+		url: string;
+		isDraft: boolean;
+	} | null>(null);
+	let deleteRoutes = $state<WirePageRoute[]>([]);
+	let deleteError = $state<string | null>(null);
+	let deleting = $state(false);
 	// Source content captured when the dialog is opened in duplicate mode.
 	// `metadata` seeds the input field values; `tree` is the rest of the
 	// source's content (non-`metadata` branch) that gets copied to the new
@@ -107,6 +136,7 @@
 		historyOpen = false;
 		pagesOpen = false;
 		mediaOpen = false;
+		localesOpen = false;
 		publishOpen = false;
 		chooserOpen = false;
 		shareLinkOpen = false;
@@ -114,6 +144,11 @@
 		newDialog = null;
 		newPageError = null;
 		duplicateSource = null;
+		if (!deleting) {
+			deleteDialogOpen = false;
+			deleteTarget = null;
+			deleteError = null;
+		}
 	};
 
 	const counts = $derived(cmsStore.workingCopyCounts);
@@ -124,6 +159,16 @@
 	// suppress draft overlays/auto-add and disable edit-mode entry.
 	const versionKey = $derived(page.url.searchParams.get('version'));
 	let versionRelease = $state<{ id: string; preview_key: string; name?: string } | null>(null);
+
+	// `cms.locale` is what the consumer's `getLocale(url)` returned this request,
+	// resolved server-side by `loadCms`. The admin bar uses it for overlay-fetch
+	// keying and to drive the Locales panel's "current preview locale" indicator.
+	// Switching locale goes through `setLocaleParam` → SvelteKit nav → server
+	// reload → new `cms.locale`.
+	const currentLocale = $derived((page.data.cms as CmsPayload | undefined)?.locale ?? '');
+	const supportedLocales = $derived(
+		(page.data.cms as CmsPayload | undefined)?.locales ?? []
+	);
 
 	// Sub-bar (DESIGN.md §2) hangs below the main bar in edit/pending modes,
 	// holding the contextual status pill + action buttons. Only the clean state
@@ -200,6 +245,31 @@
 		}
 	};
 
+	// Override the consumer's pathname-derived locale for the editor preview.
+	// The lib doesn't read `?locale=` itself; the consumer's `getLocale(url)` is
+	// expected to honor it (typical pattern: `?locale=` wins over pathname).
+	// Setting it triggers a SvelteKit nav, which re-runs `loadCms` with the new
+	// locale and refreshes `page.data.cms`. Like the other gating params, we
+	// strip the param when `null`.
+	const setLocaleParam = async (locale: string | null, opts: { replace?: boolean } = {}) => {
+		const url = new URL(page.url);
+		const current = url.searchParams.get('locale');
+		if (locale) {
+			if (current === locale) return;
+			url.searchParams.set('locale', locale);
+		} else {
+			if (!current) return;
+			url.searchParams.delete('locale');
+		}
+		const path = url.pathname + url.search + url.hash;
+		if (opts.replace) {
+			replaceState(path, page.state);
+		} else {
+			await goto(path, { keepFocus: true, noScroll: true });
+			await invalidateAll();
+		}
+	};
+
 	// Set true while exitVersionView is mid-flight so beforeNavigate doesn't
 	// re-inject `?version=` and undo the exit.
 	let exitingVersion = false;
@@ -249,11 +319,13 @@
 				await Promise.all([
 					cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), null, {
 						reset: true,
-						versionKey
+						versionKey,
+						locale: currentLocale
 					}),
 					cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), null, {
 						reset: true,
-						versionKey
+						versionKey,
+						locale: currentLocale
 					})
 				]);
 				return;
@@ -269,9 +341,13 @@
 			}
 			if (key) {
 				await Promise.all([
-					cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), key, { reset: true }),
+					cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), key, {
+						reset: true,
+						locale: currentLocale
+					}),
 					cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), key, {
-						reset: true
+						reset: true,
+						locale: currentLocale
 					})
 				]);
 			} else {
@@ -280,22 +356,40 @@
 		})();
 	});
 
-	// Carry the active gating param (`?version=` if in version-view, else
-	// `?preview=`) into every internal navigation so the overlay survives
-	// link clicks (and any `goto()` in app code). We cancel the in-flight
-	// nav and re-issue with the param appended; already-correct nav targets
-	// pass through unchanged. Full-page unloads (`willUnload`) and
-	// external/hash-only navs bypass.
+	// Carry the active gating params (`?version=` if in version-view, else
+	// `?preview=`, plus `?locale=` if set) into every internal navigation so
+	// the overlay and preview-locale survive link clicks (and any `goto()` in
+	// app code). We cancel the in-flight nav and re-issue with the params
+	// appended; already-correct nav targets pass through unchanged. Full-page
+	// unloads (`willUnload`) and external/hash-only navs bypass.
 	beforeNavigate((nav) => {
 		if (nav.type === 'leave' || nav.willUnload) return;
 		if (!nav.to) return;
 		if (nav.to.url.origin !== location.origin) return;
 
+		const localeParam = page.url.searchParams.get('locale');
+		const localeNeedsCarry = (target: URL) =>
+			!!localeParam && target.searchParams.get('locale') !== localeParam;
+		const carryLocaleOnto = (url: URL) => {
+			if (localeParam) url.searchParams.set('locale', localeParam);
+		};
+
 		if (versionKey) {
 			const targetVersion = nav.to.url.searchParams.get('version');
 			// Target carries its own `?version=` (same or different — e.g. clicking
-			// View on another release): respect it, don't clobber.
-			if (targetVersion) return;
+			// View on another release): respect it, don't clobber. Locale still
+			// rides along if missing on target.
+			if (targetVersion) {
+				if (!localeNeedsCarry(nav.to.url)) return;
+				nav.cancel();
+				const url = new URL(nav.to.url);
+				carryLocaleOnto(url);
+				void goto(url.pathname + url.search + url.hash, {
+					keepFocus: true,
+					noScroll: true
+				});
+				return;
+			}
 			// Target has no `?version=`. If we're exiting on purpose, let the nav
 			// proceed; otherwise it's a normal link click and we carry version over.
 			if (exitingVersion) return;
@@ -303,6 +397,7 @@
 			const url = new URL(nav.to.url);
 			url.searchParams.delete('preview');
 			url.searchParams.set('version', versionKey);
+			carryLocaleOnto(url);
 			void goto(url.pathname + url.search + url.hash, {
 				keepFocus: true,
 				noScroll: true
@@ -311,17 +406,27 @@
 		}
 
 		// Target is jumping to a `?version=` URL (e.g. View button from history
-		// panel) — let it through unmodified, don't paste the draft `?preview=`
-		// onto a past-release link.
-		if (nav.to.url.searchParams.get('version')) return;
+		// panel) — let it through unmodified except for locale carry.
+		if (nav.to.url.searchParams.get('version')) {
+			if (!localeNeedsCarry(nav.to.url)) return;
+			nav.cancel();
+			const url = new URL(nav.to.url);
+			carryLocaleOnto(url);
+			void goto(url.pathname + url.search + url.hash, {
+				keepFocus: true,
+				noScroll: true
+			});
+			return;
+		}
 
 		const key = cmsStore.openRelease?.preview_key ?? null;
-		if (!key) return;
-		if (nav.to.url.searchParams.get('preview') === key) return;
+		const previewMatches = !key || nav.to.url.searchParams.get('preview') === key;
+		if (previewMatches && !localeNeedsCarry(nav.to.url)) return;
 
 		nav.cancel();
 		const url = new URL(nav.to.url);
-		url.searchParams.set('preview', key);
+		if (key) url.searchParams.set('preview', key);
+		carryLocaleOnto(url);
 		void goto(url.pathname + url.search + url.hash, {
 			keepFocus: true,
 			noScroll: true
@@ -346,11 +451,13 @@
 			// the new release doesn't touch.
 			void cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), null, {
 				reset: true,
-				versionKey
+				versionKey,
+				locale: currentLocale
 			});
 			void cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), null, {
 				reset: true,
-				versionKey
+				versionKey,
+				locale: currentLocale
 			});
 			return;
 		}
@@ -369,8 +476,10 @@
 			url.searchParams.set('preview', key);
 			replaceState(url.pathname + url.search + url.hash, page.state);
 		}
-		void cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), key);
-		void cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), key);
+		void cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), key, { locale: currentLocale });
+		void cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), key, {
+			locale: currentLocale
+		});
 	});
 
 	const onSave = async () => {
@@ -381,8 +490,12 @@
 		const newKey = result.release?.preview_key ?? null;
 		if (newKey) await setPreviewParam(newKey, { replace: true });
 		await Promise.all([
-			cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), newKey),
-			cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), newKey)
+			cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), newKey, {
+				locale: currentLocale
+			}),
+			cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), newKey, {
+				locale: currentLocale
+			})
 		]);
 	};
 
@@ -416,6 +529,11 @@
 		mediaOpen = true;
 	};
 
+	const onOpenLocales = () => {
+		closeAllPanels();
+		localesOpen = true;
+	};
+
 	const onOpenHistory = () => {
 		closeAllPanels();
 		historyOpen = true;
@@ -445,9 +563,13 @@
 			// pre-publish published state and we can't re-run server load on
 			// static-export sites; the fresh overlays mask that staleness.
 			await Promise.all([
-				cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), null, { reset: true }),
+				cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), null, {
+					reset: true,
+					locale: currentLocale
+				}),
 				cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), null, {
-					reset: true
+					reset: true,
+					locale: currentLocale
 				})
 			]);
 		} finally {
@@ -459,9 +581,13 @@
 		const key = cmsStore.openRelease?.preview_key ?? null;
 		await setPreviewParam(key, { replace: true });
 		await Promise.all([
-			cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), key, { reset: true }),
+			cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), key, {
+				reset: true,
+				locale: currentLocale
+			}),
 			cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), key, {
-				reset: true
+				reset: true,
+				locale: currentLocale
 			})
 		]);
 	};
@@ -486,6 +612,168 @@
 		})
 	);
 	const hasCurrentPageDrafts = $derived(currentPageItems.length > 0);
+
+	/**
+	 * Current page identity + creatable config when it has owned params (i.e.
+	 * is a parameterized template instance). Drives the `Page → Delete Page…`
+	 * menu's enable state — static pages and unconfigured routes can't be
+	 * deleted from the data layer alone.
+	 */
+	const currentDeletableConfig = $derived.by((): CmsCreatablePageConfigWithRouteId | null => {
+		const cms = page.data.cms as CmsPayload | undefined;
+		const pp = cms?.page;
+		if (!pp) return null;
+		if (Object.keys(pp.params).length === 0) return null;
+		const config = pages[pp.routeId];
+		if (!config) return null;
+		return isCreatable(config) ? config : null;
+	});
+
+	const paramsEqual = (
+		a: Record<string, string>,
+		b: Record<string, string>
+	): boolean => {
+		const aKeys = Object.keys(a);
+		if (aKeys.length !== Object.keys(b).length) return false;
+		for (const k of aKeys) if (a[k] !== b[k]) return false;
+		return true;
+	};
+
+	const isCurrentPage = (routeId: string, params: Record<string, string>): boolean => {
+		const cms = page.data.cms as CmsPayload | undefined;
+		const pp = cms?.page;
+		return !!pp && pp.routeId === routeId && paramsEqual(pp.params, params);
+	};
+
+	/**
+	 * Selectable redirect targets for the delete dialog — every published,
+	 * non-tombstoned, non-draft entry across all routes. Sourced from the
+	 * cached `/pages` snapshot fetched by `requestDelete`.
+	 */
+	const redirectTargets = $derived.by((): RedirectTarget[] => {
+		const out: RedirectTarget[] = [];
+		for (const r of deleteRoutes) {
+			for (const e of r.entries) {
+				if (e.isDraft || e.isDeletePending || e.redirectTo || e.gone) continue;
+				let url: string;
+				try {
+					url = resolveRouteUrl(r.routeId, e.params);
+				} catch {
+					continue;
+				}
+				out.push({ url, routeId: r.routeId, params: e.params });
+			}
+		}
+		out.sort((a, b) => a.url.localeCompare(b.url));
+		return out;
+	});
+
+	/**
+	 * Map of source-url → terminal-redirect-url across published tombstones
+	 * plus the working release. Lets the dialog auto-flatten `A → B → C` to
+	 * `A → C` at submit time so we don't write redirect chains.
+	 */
+	const redirectsByUrl = $derived.by((): Record<string, string> => {
+		const out: Record<string, string> = {};
+		for (const r of deleteRoutes) {
+			for (const e of r.entries) {
+				if (!e.redirectTo) continue;
+				try {
+					out[resolveRouteUrl(r.routeId, e.params)] = e.redirectTo;
+				} catch {
+					/* skip */
+				}
+			}
+		}
+		for (const item of cmsStore.openRelease?.items ?? []) {
+			if (item.kind !== 'page-delete') continue;
+			if (item.outcome?.kind !== 'redirect') continue;
+			try {
+				out[resolveRouteUrl(item.routeId, item.params)] = item.outcome.to;
+			} catch {
+				/* skip */
+			}
+		}
+		return out;
+	});
+
+	/**
+	 * Open the delete dialog targeting `(routeId, params)`. Both the
+	 * `pages-panel` row button and the `Page → Delete Page…` menu route
+	 * through here. Re-fetches `/pages` so target/chain data and the entry's
+	 * draft flag are fresh.
+	 */
+	const requestDelete = async (
+		routeId: string,
+		params: Record<string, string>,
+		isDraftHint = false
+	) => {
+		let url: string;
+		try {
+			url = resolveRouteUrl(routeId, params);
+		} catch {
+			return;
+		}
+
+		let isDraft = isDraftHint;
+		try {
+			const res = await fetch(`${endpoint}/pages`, { credentials: 'include' });
+			if (res.ok) {
+				const data = (await res.json()) as { routes: WirePageRoute[] };
+				deleteRoutes = data.routes;
+				const route = data.routes.find((r) => r.routeId === routeId);
+				const entry = route?.entries.find((e) => paramsEqual(e.params, params));
+				if (entry) isDraft = entry.isDraft ?? false;
+			}
+		} catch {
+			/* keep stale `deleteRoutes` and the caller's hint */
+		}
+
+		deleteTarget = { routeId, params, url, isDraft };
+		deleteError = null;
+		deleteDialogOpen = true;
+	};
+
+	const onDeletePage = () => {
+		const cms = page.data.cms as CmsPayload | undefined;
+		const pp = cms?.page;
+		if (!pp || !currentDeletableConfig) return;
+		closeAllPanels();
+		void requestDelete(pp.routeId, pp.params);
+	};
+
+	const onDeleteConfirm = async (mode: DeletePageMode, target?: string) => {
+		if (!deleteTarget) return;
+		const { routeId, params, isDraft } = deleteTarget;
+		const onCurrent = isCurrentPage(routeId, params);
+		deleting = true;
+		deleteError = null;
+		try {
+			let outcome: PageDeleteOutcome | undefined;
+			if (mode === 'gone') outcome = { kind: 'gone' };
+			else if (mode === 'redirect' && target) outcome = { kind: 'redirect', to: target };
+			const body: Record<string, unknown> = { routeId, params };
+			// Drafts always hard-discard regardless of mode — the dialog gates
+			// gone/redirect off when isDraft, but defend in depth.
+			if (!isDraft && outcome) body.outcome = outcome;
+			const res = await fetch(`${endpoint}/pages`, {
+				method: 'DELETE',
+				credentials: 'include',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+			if (!res.ok) {
+				deleteError = 'Could not delete page.';
+				return;
+			}
+			deleteDialogOpen = false;
+			deleteTarget = null;
+			await cmsStore.fetchOpenRelease(endpoint);
+			if (!onCurrent) await refreshAfterReleaseChange();
+		} finally {
+			deleting = false;
+		}
+	};
 
 	const onCopyPreviewLink = async () => {
 		if (!previewUrl) return;
@@ -514,11 +802,13 @@
 			await Promise.all([
 				cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), null, {
 					reset: true,
-					versionKey: data.preview_key
+					versionKey: data.preview_key,
+					locale: currentLocale
 				}),
 				cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), null, {
 					reset: true,
-					versionKey: data.preview_key
+					versionKey: data.preview_key,
+					locale: currentLocale
 				})
 			]);
 			return;
@@ -597,8 +887,12 @@
 		const newKey = result.release?.preview_key ?? null;
 		if (newKey) await setPreviewParam(newKey, { replace: true });
 		await Promise.all([
-			cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), newKey),
-			cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), newKey)
+			cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), newKey, {
+				locale: currentLocale
+			}),
+			cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), newKey, {
+				locale: currentLocale
+			})
 		]);
 	};
 
@@ -874,6 +1168,14 @@
 								Publish…
 								<KbdShortcut keys="⌘P" class={menuShortcutClass} />
 							</Menubar.Item>
+							<Menubar.Separator class={menuSeparatorClass} />
+							<Menubar.Item
+								class={menuItemDestructiveClass}
+								onSelect={onDeletePage}
+								disabled={!currentDeletableConfig}
+							>
+								Delete Page…
+							</Menubar.Item>
 						</Menubar.Content>
 					</Menubar.Menu>
 
@@ -895,6 +1197,11 @@
 							<Menubar.Item class={menuItemClass} onSelect={onOpenMedia}>
 								Media Library
 							</Menubar.Item>
+							{#if supportedLocales.length > 1}
+								<Menubar.Item class={menuItemClass} onSelect={onOpenLocales}>
+									Locales
+								</Menubar.Item>
+							{/if}
 
 							<Menubar.Label class={menuLabelClass}>Working copy</Menubar.Label>
 							<Menubar.Item
@@ -1168,11 +1475,27 @@
 				onChanged={refreshAfterReleaseChange}
 				onRequestNew={openNewPageDialog}
 				{onRequestDuplicate}
+				onRequestDelete={(routeId, params, isDraft) =>
+					void requestDelete(routeId, params, isDraft)}
 			/>
 		{/if}
 
 		{#if mediaOpen}
 			<MediaPanel {endpoint} onClose={() => (mediaOpen = false)} />
+		{/if}
+
+		{#if localesOpen}
+			{#await import('./locales-panel.svelte') then { default: LocalesPanel }}
+				<LocalesPanel
+					currentLocale={currentLocale}
+					locales={supportedLocales}
+					onClose={() => (localesOpen = false)}
+					onSelectLocale={(locale) => {
+						const target = locale === supportedLocales[0] ? null : locale;
+						void setLocaleParam(target);
+					}}
+				/>
+			{/await}
 		{/if}
 
 		{#if cmsStore.openRelease}
@@ -1209,6 +1532,22 @@
 					: {}}
 			/>
 		{/if}
+
+		<DeletePageDialog
+			open={deleteDialogOpen}
+			onOpenChange={(next) => {
+				if (!next && deleting) return;
+				deleteDialogOpen = next;
+				if (!next) deleteTarget = null;
+			}}
+			url={deleteTarget?.url ?? ''}
+			isDraft={deleteTarget?.isDraft ?? false}
+			targets={redirectTargets}
+			{redirectsByUrl}
+			{deleting}
+			error={deleteError}
+			onConfirm={onDeleteConfirm}
+		/>
 
 		<NewPageChooserDialog
 			open={chooserOpen}

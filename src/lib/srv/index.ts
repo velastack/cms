@@ -12,6 +12,8 @@ export type {
 	CmsAdapter,
 	CmsAdapterContext,
 	CmsAdapterDoc,
+	CmsAdapterResolution,
+	CmsAdapterTombstone,
 	CmsEntry,
 	CmsScopeQuery
 } from './types.ts';

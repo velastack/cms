@@ -7,7 +7,10 @@ const config = {
 	kit: {
 		adapter: adapter({
 			fallback: '200.html'
-		})
+		}),
+		alias: {
+			$locales: 'src/locales'
+		}
 	}
 };
 
