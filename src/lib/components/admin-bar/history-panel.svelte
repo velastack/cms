@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import PanelFooter from './panel-footer.svelte';
 	import PanelHeader from './panel-header.svelte';
 	import Panel from './panel.svelte';
@@ -21,6 +23,7 @@
 		name?: string;
 		publishedBy: string;
 		publishedAt: string;
+		preview_key: string;
 		revertedAt?: string;
 		items: ReleaseItem[];
 	};
@@ -137,8 +140,13 @@
 		})
 	);
 
-	const onView = (_release: PublishedRelease) => {
-		// Stub — opening release diff/preview is a future feature (DESIGN §6.2).
+	const onView = async (release: PublishedRelease) => {
+		const url = new URL(page.url);
+		url.searchParams.delete('preview');
+		url.searchParams.delete('edit');
+		url.searchParams.set('version', release.preview_key);
+		await goto(url.pathname + url.search + url.hash, { keepFocus: true, noScroll: true });
+		onClose();
 	};
 </script>
 

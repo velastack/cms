@@ -51,7 +51,8 @@
       "Bash(curl -s 'http://localhost:5174/api/cms/docs?routeId=%2F%28marketing%29%2Frooms%2F%5Bslug%5D&params=%7B%22slug%22%3A%22garden-loft%22%7D&version=1&preview=__TRACKED_VAR__')",
       "Bash(curl -s -o /dev/null -w '%{http_code}\\\\n' 'http://localhost:5174/rooms/garden-loft?version=1&preview=__TRACKED_VAR__')",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:5174/rooms/garden-loft\")",
-      "Bash(kill bta5o3jc3 *)"
+      "Bash(kill bta5o3jc3 *)",
+      "Bash(npx svelte-check *)"
     ]
   }
 }

@@ -26,11 +26,15 @@ export type CmsAdapterDoc = {
  * adapters that need cookie forwarding during SSR. `previewKey`, when set,
  * is the value of `?preview=…` from the request URL — adapters that support
  * release previews use it to overlay an open release's pending edits onto
- * published content.
+ * published content. `versionKey`, when set, is the value of `?version=…` —
+ * adapters resolve it to a past published release and return that release's
+ * snapshot. Mutually exclusive with `previewKey`; when both are present
+ * `versionKey` wins.
  */
 export type CmsAdapterContext = {
 	fetch: typeof fetch;
 	previewKey?: string | null;
+	versionKey?: string | null;
 };
 
 /**

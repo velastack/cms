@@ -36,9 +36,11 @@ export const apiAdapter = (options: ApiAdapterOptions): CmsAdapter => {
 			context: CmsAdapterContext
 		): Promise<Record<string, CmsAdapterDoc>> {
 			const out: Record<string, CmsAdapterDoc> = {};
-			const previewSuffix = context.previewKey
-				? `&preview=${encodeURIComponent(context.previewKey)}`
-				: '';
+			const extraSuffix = context.versionKey
+				? `&version=${encodeURIComponent(context.versionKey)}`
+				: context.previewKey
+					? `&preview=${encodeURIComponent(context.previewKey)}`
+					: '';
 			await Promise.all(
 				queries.map(async (q) => {
 					const qs = new URLSearchParams({
@@ -46,7 +48,7 @@ export const apiAdapter = (options: ApiAdapterOptions): CmsAdapter => {
 						routeId: q.routeId,
 						params: JSON.stringify(q.params)
 					}).toString();
-					const res = await context.fetch(`${endpoint}/docs?${qs}${previewSuffix}`, {
+					const res = await context.fetch(`${endpoint}/docs?${qs}${extraSuffix}`, {
 						credentials: 'include'
 					});
 					if (res.status === 404) return;
@@ -70,10 +72,16 @@ export const apiAdapter = (options: ApiAdapterOptions): CmsAdapter => {
 			// With `previewKey`: forward as `?preview=…` so the backend overlays
 			// the matching open release, and skip the filter so the editor sees
 			// staged additions/deletions.
-			const previewSuffix = context.previewKey
-				? `?preview=${encodeURIComponent(context.previewKey)}`
-				: '';
-			const res = await context.fetch(`${endpoint}/pages${previewSuffix}`, {
+			//
+			// With `versionKey`: forward as `?version=…`; the backend returns
+			// the entry list as it was at that release's publish time. No drafts,
+			// no pending deletes — past releases are immutable.
+			const querySuffix = context.versionKey
+				? `?version=${encodeURIComponent(context.versionKey)}`
+				: context.previewKey
+					? `?preview=${encodeURIComponent(context.previewKey)}`
+					: '';
+			const res = await context.fetch(`${endpoint}/pages${querySuffix}`, {
 				credentials: 'include'
 			});
 			if (!res.ok) throw new Error(`apiAdapter.fetchEntries: ${res.status}`);
@@ -90,9 +98,10 @@ export const apiAdapter = (options: ApiAdapterOptions): CmsAdapter => {
 			};
 			const route = body.routes.find((r) => r.routeId === routeId);
 			if (!route) return [];
-			const entries = context.previewKey
-				? route.entries
-				: route.entries.filter((e) => !e.isDraft && !e.isDeletePending);
+			const entries =
+				context.versionKey || context.previewKey
+					? route.entries
+					: route.entries.filter((e) => !e.isDraft && !e.isDeletePending);
 			return entries.map((e) => ({ params: e.params, metadata: e.metadata ?? {} }));
 		}
 	};

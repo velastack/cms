@@ -168,6 +168,9 @@ class CmsStore {
 	 * to fetch published-only content (used post-publish to mask the now-stale
 	 * `page.data.cms.docs` on static-export sites).
 	 *
+	 * `opts.versionKey` (mutually exclusive with `previewKey`) requests the
+	 * snapshot at a published release's publish time — `?version=…`.
+	 *
 	 * `opts.reset` replaces the overlay map wholesale (mount with release,
 	 * post-publish, post-discard). Otherwise we merge — keeps unchanged-layout
 	 * overlays applied during navigation while new-page scopes load.
@@ -176,9 +179,10 @@ class CmsStore {
 		endpoint: string,
 		scopes: CmsScopeEntry[],
 		previewKey: string | null,
-		opts: { reset?: boolean } = {}
+		opts: { reset?: boolean; versionKey?: string | null } = {}
 	): Promise<void> {
 		const token = ++this.overlayFetchToken;
+		const versionKey = opts.versionKey ?? null;
 
 		const fetchOne = async (scope: CmsScopeEntry) => {
 			const qs = new URLSearchParams({
@@ -186,7 +190,8 @@ class CmsStore {
 				routeId: scope.routeId,
 				params: JSON.stringify(scope.params)
 			});
-			if (previewKey) qs.set('preview', previewKey);
+			if (versionKey) qs.set('version', versionKey);
+			else if (previewKey) qs.set('preview', previewKey);
 			const res = await fetch(`${endpoint}/docs?${qs}`, { credentials: 'include' });
 			if (!res.ok) return null;
 			const data = (await res.json()) as { contents: Tree };
@@ -225,7 +230,7 @@ class CmsStore {
 		endpoint: string,
 		routeIds: string[],
 		previewKey: string | null,
-		opts: { reset?: boolean } = {}
+		opts: { reset?: boolean; versionKey?: string | null } = {}
 	): Promise<void> {
 		const token = ++this.entriesFetchToken;
 		if (routeIds.length === 0) {
@@ -233,10 +238,15 @@ class CmsStore {
 			return;
 		}
 
-		const previewSuffix = previewKey ? `?preview=${encodeURIComponent(previewKey)}` : '';
+		const versionKey = opts.versionKey ?? null;
+		const querySuffix = versionKey
+			? `?version=${encodeURIComponent(versionKey)}`
+			: previewKey
+				? `?preview=${encodeURIComponent(previewKey)}`
+				: '';
 		let res: Response;
 		try {
-			res = await fetch(`${endpoint}/pages${previewSuffix}`, { credentials: 'include' });
+			res = await fetch(`${endpoint}/pages${querySuffix}`, { credentials: 'include' });
 		} catch {
 			return;
 		}
@@ -259,9 +269,10 @@ class CmsStore {
 		const wanted = new Set(routeIds);
 		for (const r of body.routes) {
 			if (!wanted.has(r.routeId)) continue;
-			const filtered = previewKey
-				? r.entries
-				: r.entries.filter((e) => !e.isDraft && !e.isDeletePending);
+			const filtered =
+				versionKey || previewKey
+					? r.entries
+					: r.entries.filter((e) => !e.isDraft && !e.isDeletePending);
 			next[r.routeId] = filtered.map((e) => ({
 				params: e.params,
 				metadata: e.metadata ?? {}

@@ -1,5 +1,11 @@
 <script lang="ts">
-	import { afterNavigate, beforeNavigate, goto, replaceState } from '$app/navigation';
+	import {
+		afterNavigate,
+		beforeNavigate,
+		goto,
+		invalidateAll,
+		replaceState
+	} from '$app/navigation';
 	import { page } from '$app/state';
 	import { pages } from 'virtual:vela-cms/pages';
 	import { cmsStore } from '$lib/components/cms/cms-store.svelte.js';
@@ -113,12 +119,25 @@
 	const counts = $derived(cmsStore.workingCopyCounts);
 	const previewKey = $derived(cmsStore.openRelease?.preview_key ?? null);
 
+	// `?version=<key>` opens a past published release in read-only snapshot
+	// view. Mutually exclusive with the draft `?preview=` flow: when set, we
+	// suppress draft overlays/auto-add and disable edit-mode entry.
+	const versionKey = $derived(page.url.searchParams.get('version'));
+	let versionRelease = $state<{ id: string; preview_key: string; name?: string } | null>(null);
+
 	// Sub-bar (DESIGN.md §2) hangs below the main bar in edit/pending modes,
 	// holding the contextual status pill + action buttons. Only the clean state
 	// pill remains in the main bar.
-	const subBarVisible = $derived(cmsStore.isEditing || counts.total > 0);
+	const subBarVisible = $derived(cmsStore.isEditing || counts.total > 0 || !!versionKey);
 
 	const previewUrl = $derived.by(() => {
+		if (versionKey) {
+			const url = new URL(page.url);
+			url.searchParams.delete('edit');
+			url.searchParams.delete('preview');
+			url.searchParams.set('version', versionKey);
+			return url.toString();
+		}
 		const key = previewKey;
 		if (!key) return '';
 		const url = new URL(page.url);
@@ -156,15 +175,91 @@
 		}
 	};
 
+	const setVersionParam = async (key: string | null, opts: { replace?: boolean } = {}) => {
+		const url = new URL(page.url);
+		const current = url.searchParams.get('version');
+		url.searchParams.delete('edit');
+		url.searchParams.delete('preview');
+		if (key) {
+			if (current === key) return;
+			url.searchParams.set('version', key);
+		} else {
+			if (!current) return;
+			url.searchParams.delete('version');
+		}
+		const path = url.pathname + url.search + url.hash;
+		if (opts.replace) {
+			replaceState(path, page.state);
+		} else {
+			await goto(path, { keepFocus: true, noScroll: true });
+			// Force the server load to re-fetch. SvelteKit's URL tracking
+			// doesn't always pick up our `?version=` access (it lives behind
+			// the `loadCms` helper) — visible on Exit, where we'd otherwise
+			// keep showing the past release's `page.data.cms.docs`.
+			await invalidateAll();
+		}
+	};
+
+	// Set true while exitVersionView is mid-flight so beforeNavigate doesn't
+	// re-inject `?version=` and undo the exit.
+	let exitingVersion = false;
+
+	const exitVersionView = async () => {
+		exitingVersion = true;
+		try {
+			await setVersionParam(null);
+		} finally {
+			exitingVersion = false;
+		}
+	};
+
+	// Resolve the `?version=` URL param to its `PublishedRelease` (so we know
+	// the id for regenerate). Re-fetched whenever the version key changes.
+	const fetchVersionRelease = async (key: string) => {
+		const res = await fetch(`${endpoint}/release/history`, { credentials: 'include' });
+		if (!res.ok) {
+			versionRelease = null;
+			return;
+		}
+		const data = (await res.json()) as {
+			history: Array<{ id: string; preview_key: string; name?: string }>;
+		};
+		const match = data.history.find((r) => r.preview_key === key) ?? null;
+		versionRelease = match
+			? { id: match.id, preview_key: match.preview_key, name: match.name }
+			: null;
+	};
+
 	// On mount: hydrate the open release, then sync the URL's `?preview=` to
 	// the release's preview key (or strip it). Apply a fresh client-side
 	// overlay by fetching `${endpoint}/docs` for each current-route scope —
 	// this is what makes the editor experience work on static-export sites
 	// where SvelteKit's server load can't be re-run. With no release, leave
 	// the overlay empty: `page.data.cms.docs` is the published source.
+	//
+	// `?version=` shortcuts the draft sync: we don't auto-add `?preview=`,
+	// don't strip `?version=`, and load the past-release snapshot via
+	// `versionKey` so editors can preview a past release alongside their bar.
 	$effect(() => {
 		void (async () => {
 			await cmsStore.fetchOpenRelease(endpoint);
+
+			if (versionKey) {
+				await fetchVersionRelease(versionKey);
+				await Promise.all([
+					cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), null, {
+						reset: true,
+						versionKey
+					}),
+					cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), null, {
+						reset: true,
+						versionKey
+					})
+				]);
+				return;
+			}
+
+			versionRelease = null;
 			const key = cmsStore.openRelease?.preview_key ?? null;
 			const current = page.url.searchParams.get('preview');
 			if (key && current !== key) {
@@ -185,17 +280,43 @@
 		})();
 	});
 
-	// Carry `?preview=…` into every internal navigation so the editor's
-	// release overlay survives link clicks (and any `goto()` in app code).
-	// We cancel the in-flight nav and re-issue it with the param appended;
-	// already-correct nav targets pass through unchanged. Full-page unloads
-	// (`willUnload`) and external/hash-only navs bypass.
+	// Carry the active gating param (`?version=` if in version-view, else
+	// `?preview=`) into every internal navigation so the overlay survives
+	// link clicks (and any `goto()` in app code). We cancel the in-flight
+	// nav and re-issue with the param appended; already-correct nav targets
+	// pass through unchanged. Full-page unloads (`willUnload`) and
+	// external/hash-only navs bypass.
 	beforeNavigate((nav) => {
-		const key = cmsStore.openRelease?.preview_key ?? null;
-		if (!key) return;
 		if (nav.type === 'leave' || nav.willUnload) return;
 		if (!nav.to) return;
 		if (nav.to.url.origin !== location.origin) return;
+
+		if (versionKey) {
+			const targetVersion = nav.to.url.searchParams.get('version');
+			// Target carries its own `?version=` (same or different — e.g. clicking
+			// View on another release): respect it, don't clobber.
+			if (targetVersion) return;
+			// Target has no `?version=`. If we're exiting on purpose, let the nav
+			// proceed; otherwise it's a normal link click and we carry version over.
+			if (exitingVersion) return;
+			nav.cancel();
+			const url = new URL(nav.to.url);
+			url.searchParams.delete('preview');
+			url.searchParams.set('version', versionKey);
+			void goto(url.pathname + url.search + url.hash, {
+				keepFocus: true,
+				noScroll: true
+			});
+			return;
+		}
+
+		// Target is jumping to a `?version=` URL (e.g. View button from history
+		// panel) — let it through unmodified, don't paste the draft `?preview=`
+		// onto a past-release link.
+		if (nav.to.url.searchParams.get('version')) return;
+
+		const key = cmsStore.openRelease?.preview_key ?? null;
+		if (!key) return;
 		if (nav.to.url.searchParams.get('preview') === key) return;
 
 		nav.cancel();
@@ -208,12 +329,41 @@
 	});
 
 	// Re-apply the overlay on every internal navigation. SvelteKit may strip
-	// the `?preview=` param when nav targets aren't preserve-params links, so
-	// we reapply it via replaceState too. Merge (not reset) so unchanged
-	// layout overlays keep showing while new-page-scope fetches resolve.
+	// the gating param when nav targets aren't preserve-params links, so we
+	// reapply it via replaceState too. Merge (not reset) so unchanged-layout
+	// overlays keep showing while new-page-scope fetches resolve.
 	afterNavigate(() => {
+		if (versionKey) {
+			const url = new URL(page.url);
+			if (url.searchParams.get('version') !== versionKey) {
+				url.searchParams.delete('preview');
+				url.searchParams.set('version', versionKey);
+				replaceState(url.pathname + url.search + url.hash, page.state);
+			}
+			// `reset` so a nav from one release to another wipes the prior
+			// snapshot's overlay before merging in the new one — otherwise
+			// stale fields from the previous release leak through on scopes
+			// the new release doesn't touch.
+			void cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), null, {
+				reset: true,
+				versionKey
+			});
+			void cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), null, {
+				reset: true,
+				versionKey
+			});
+			return;
+		}
+
 		const key = cmsStore.openRelease?.preview_key ?? null;
-		if (!key) return;
+		if (!key) {
+			// No draft and no version → clear any overlay left over from a
+			// previous version-mode visit. Without this, exiting version view
+			// leaves the past release's content stuck on top of the freshly
+			// re-fetched `page.data.cms.docs`.
+			cmsStore.clearOverlay();
+			return;
+		}
 		const url = new URL(page.url);
 		if (url.searchParams.get('preview') !== key) {
 			url.searchParams.set('preview', key);
@@ -237,6 +387,8 @@
 	};
 
 	const onToggleEdit = () => {
+		// Past releases are read-only — no edit, no save, no publish flow.
+		if (versionKey) return;
 		if (cmsStore.isEditing) {
 			if (cmsStore.isDirty && !confirm('Discard unsaved changes?')) return;
 			cmsStore.clearDrafts();
@@ -350,6 +502,28 @@
 	};
 
 	const onRegeneratePreviewKey = async () => {
+		if (versionKey && versionRelease) {
+			const res = await fetch(
+				`${endpoint}/release/history/${versionRelease.id}/preview-key`,
+				{ method: 'POST', credentials: 'include' }
+			);
+			if (!res.ok) return;
+			const data = (await res.json()) as { preview_key: string };
+			versionRelease = { ...versionRelease, preview_key: data.preview_key };
+			await setVersionParam(data.preview_key, { replace: true });
+			await Promise.all([
+				cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), null, {
+					reset: true,
+					versionKey: data.preview_key
+				}),
+				cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), null, {
+					reset: true,
+					versionKey: data.preview_key
+				})
+			]);
+			return;
+		}
+
 		const res = await fetch(`${endpoint}/release/preview-key`, {
 			method: 'POST',
 			credentials: 'include'
@@ -663,7 +837,7 @@
 							<Menubar.Item
 								class={menuItemClass}
 								onSelect={onToggleEdit}
-								disabled={cmsStore.isEditing}
+								disabled={cmsStore.isEditing || !!versionKey}
 							>
 								Edit
 								<KbdShortcut keys="⌘E" class={menuShortcutClass} />
@@ -904,7 +1078,14 @@
 					: 'vela:top-10 vela:pb-2 vela:items-end vela:rounded-b-3xl'}"
 			>
 				<div class="vela:flex vela:items-center">
-					{#if cmsStore.isEditing}
+					{#if versionKey}
+						<StatusPill
+							variant="edit"
+							class="vela:h-5.5 vela:pl-2 vela:pr-2.5 vela:gap-1 vela:text-[11px]"
+						>
+							Viewing release {versionRelease?.name ?? versionRelease?.id.slice(0, 8) ?? ''}
+						</StatusPill>
+					{:else if cmsStore.isEditing}
 						<StatusPill
 							variant="edit"
 							class="vela:h-5.5 vela:pl-2 vela:pr-2.5 vela:gap-1 vela:text-[11px]"
@@ -924,7 +1105,15 @@
 				</div>
 
 				<div class="vela:flex vela:items-center vela:gap-1.5">
-					{#if cmsStore.isEditing}
+					{#if versionKey}
+						<Button
+							size="pill"
+							onclick={exitVersionView}
+							class="vela:h-5.5 vela:px-2.5 vela:text-[10px]"
+						>
+							Exit
+						</Button>
+					{:else if cmsStore.isEditing}
 						<Button
 							variant="ghost"
 							size="pill"

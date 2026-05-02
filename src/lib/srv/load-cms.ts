@@ -39,6 +39,7 @@ export type ResolveCmsPayloadArgs = {
 	routeId: string | null;
 	params: Record<string, string>;
 	previewKey: string | null;
+	versionKey?: string | null;
 	locale: string;
 	adapter: CmsAdapter;
 	fetch: typeof fetch;
@@ -64,6 +65,7 @@ const emptyPayload = (locale: string, endpoint: string): CmsPayload => ({
  */
 export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<LoadCmsResult> => {
 	const { manifest, routeId, params, previewKey, locale, adapter, fetch } = args;
+	const versionKey = args.versionKey ?? null;
 	const endpoint = adapter.endpoint ?? DEFAULT_ENDPOINT;
 
 	if (!routeId) return { cms: emptyPayload(locale, endpoint), notFound: false };
@@ -88,11 +90,11 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
 
 	const entriesRouteIds = route.entriesRouteIds ?? [];
 	const [rawDocs, entriesPairs] = await Promise.all([
-		adapter.fetchDocs(queries, { fetch, previewKey }),
+		adapter.fetchDocs(queries, { fetch, previewKey, versionKey }),
 		Promise.all(
 			entriesRouteIds.map(async (rid): Promise<[string, CmsEntry[]]> => [
 				rid,
-				await adapter.fetchEntries(rid, { fetch, previewKey })
+				await adapter.fetchEntries(rid, { fetch, previewKey, versionKey })
 			])
 		)
 	]);
@@ -174,6 +176,7 @@ export const loadCms = (event: ServerLoadEvent, options: LoadCmsOptions): Promis
 		routeId: event.route.id,
 		params: event.params as Record<string, string>,
 		previewKey: building ? null : event.url.searchParams.get('preview'),
+		versionKey: building ? null : event.url.searchParams.get('version'),
 		locale: options.locale,
 		adapter: options.adapter,
 		fetch: event.fetch
