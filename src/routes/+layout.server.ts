@@ -14,7 +14,6 @@ export const load = async (event) => {
 	});
 
 	const { cms, notFound, gone, redirectTo } = await loadCms(event, { locale });
-	console.log(redirectTo, gone, notFound);
 	if (redirectTo) redirect(308, redirectTo);
 	if (gone) error(410, 'Gone');
 	if (notFound) error(404, 'Not found');

@@ -53,7 +53,9 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:5174/rooms/garden-loft\")",
       "Bash(kill bta5o3jc3 *)",
       "Bash(npx svelte-check *)",
-      "Bash(npx vitest *)"
+      "Bash(npx vitest *)",
+      "Bash(find /Users/nathancahill/code/cms.velastack/src/routes/v1/projects/[project_id]/cms -name \"+server.ts\")",
+      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && head -30 {}')"
     ]
   }
 }
