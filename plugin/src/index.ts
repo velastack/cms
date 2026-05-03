@@ -6,9 +6,11 @@ import { setPageCmsModules } from './build-state.js';
 import {
 	buildManifest,
 	type BuildManifestResult,
+	type CmsManifest,
 	type ExternalCmsComponentSpec,
 	type ImportResolver
 } from './manifest.js';
+import { deriveUploadsBase, downloadMedia, extractMediaUrls } from './media.js';
 import {
 	PAGE_CMS_VIRTUAL_PREFIX,
 	buildPagesModuleSource,
@@ -34,6 +36,25 @@ export type CmsPluginOptions = {
 	 * Auto-populated with every entry from `components`.
 	 */
 	traverse?: (string | RegExp)[];
+	/**
+	 * CMS API endpoint, same shape as `apiAdapter`'s. e.g.
+	 * `'https://cms.example.com/v1/projects/p1/cms'`. When set, `vite build`
+	 * downloads every media file referenced by published content into
+	 * `mediaDir`, and `apiAdapter` rewrites URLs in fetched content from
+	 * `<origin>/uploads/<file>` (or `/uploads/<file>`) to
+	 * `<mediaPrefix>/<file>` so prerendered output references local paths.
+	 * Omit (or use `mockAdapter`) to opt out — the build steps become no-ops.
+	 */
+	endpoint?: string;
+	/**
+	 * BCP-47 locales to walk during media discovery. Mirror this with
+	 * `createCms({ locales })`. Defaults to `['en']`.
+	 */
+	locales?: string[];
+	/** Local directory (relative to Vite root) to download media into. Defaults to `'static/cms-media'`. */
+	mediaDir?: string;
+	/** URL prefix used in rewritten content. Defaults to `'/cms-media'`. */
+	mediaPrefix?: string;
 };
 
 const VIRTUAL_ID = 'virtual:vela-cms/manifest';
@@ -41,6 +62,9 @@ const RESOLVED_VIRTUAL_ID = '\0' + VIRTUAL_ID;
 
 const PAGES_VIRTUAL_ID = 'virtual:vela-cms/pages';
 const PAGES_RESOLVED_VIRTUAL_ID = '\0' + PAGES_VIRTUAL_ID;
+
+const BUILD_CONFIG_VIRTUAL_ID = 'virtual:vela-cms/build-config';
+const BUILD_CONFIG_RESOLVED_VIRTUAL_ID = '\0' + BUILD_CONFIG_VIRTUAL_ID;
 
 /**
  * Walk up from `start` looking for the nearest `package.json`. Returns the
@@ -65,6 +89,160 @@ const matchPackageName = (dir: string, name: string): string | null => {
 	} catch {
 		return null;
 	}
+};
+
+/**
+ * Cache for the media-discovery + download pass, deduplicating it across
+ * the two `Vite.build()` invocations SvelteKit makes per `npm run build`
+ * (one for the client environment, one for SSR).
+ *
+ * Why `globalThis` rather than module or closure scope: SvelteKit's two
+ * Vite invocations both run on the main thread (same pid, no
+ * worker_threads), but Vite drops its in-memory module cache between
+ * them, so the plugin's source file is re-evaluated and any
+ * module-/closure-scoped state resets. `globalThis` is the one place
+ * that survives the module reload while still being process-local — a
+ * fresh `npm run build` in a new process gets a fresh `globalThis` and
+ * re-runs the discovery.
+ *
+ * Keyed by endpoint so a project using two `cms({ endpoint })` calls
+ * with different endpoints (rare) doesn't collide.
+ */
+type MediaPassCache = Map<string, Promise<void>>;
+const MEDIA_PASS_CACHE_KEY = Symbol.for('@velastack/cms.mediaPassCache');
+const getMediaPassCache = (): MediaPassCache => {
+	const g = globalThis as Record<symbol, unknown>;
+	let cache = g[MEDIA_PASS_CACHE_KEY] as MediaPassCache | undefined;
+	if (!cache) {
+		cache = new Map();
+		g[MEDIA_PASS_CACHE_KEY] = cache;
+	}
+	return cache;
+};
+
+type PagesResponse = {
+	routes: Array<{
+		routeId: string;
+		entries: Array<{
+			params: Record<string, string>;
+			isDraft?: boolean;
+			isDeletePending?: boolean;
+			redirectTo?: string;
+			gone?: boolean;
+			metadata?: Record<string, unknown>;
+		}>;
+	}>;
+};
+
+type DocsResponse =
+	| { contents: Record<string, unknown> }
+	| { kind: 'gone' }
+	| { kind: 'redirect'; to: string };
+
+/**
+ * Walk the project's published content over HTTP to find every media URL
+ * referenced. Issues one `/pages?locale=L` per locale to enumerate
+ * (routeId, params) entries, then one `/docs` per (scope × entry × locale)
+ * tuple — deduped so layout-kind scopes (no owned params) are fetched once
+ * per locale even when reachable from many pages. Drafts, tombstoned and
+ * redirected entries contribute no media (they aren't part of the public
+ * payload). Failures during discovery are warned about but never throw —
+ * a build with one offline scope shouldn't fail outright.
+ */
+const discoverProjectMedia = async ({
+	endpoint,
+	locales,
+	manifest,
+	uploadsBase
+}: {
+	endpoint: string;
+	locales: string[];
+	manifest: CmsManifest;
+	uploadsBase: string;
+}): Promise<Set<string>> => {
+	const found = new Set<string>();
+	const fetchedDocs = new Set<string>();
+	const docFetches: Array<Promise<void>> = [];
+
+	const queueDocFetch = (
+		kind: 'page' | 'layout',
+		routeId: string,
+		params: Record<string, string>,
+		locale: string
+	) => {
+		const paramsJson = JSON.stringify(params);
+		const cacheKey = `${kind}|${routeId}|${paramsJson}|${locale}`;
+		if (fetchedDocs.has(cacheKey)) return;
+		fetchedDocs.add(cacheKey);
+		const qs = new URLSearchParams({ kind, routeId, params: paramsJson, locale }).toString();
+		docFetches.push(
+			fetch(`${endpoint}/docs?${qs}`)
+				.then(async (res) => {
+					if (res.status === 404 || !res.ok) return;
+					const body = (await res.json()) as DocsResponse;
+					if (!('contents' in body)) return;
+					for (const url of extractMediaUrls(body.contents, uploadsBase)) {
+						found.add(url);
+					}
+				})
+				.catch(() => {
+					// Single-scope failures are non-fatal — log nothing here;
+					// the worst-case impact is a missed media file we'd have to
+					// fall back to backend-served. Caller logs the high-level
+					// download summary.
+				})
+		);
+	};
+
+	for (const locale of locales) {
+		let pages: PagesResponse;
+		try {
+			const res = await fetch(`${endpoint}/pages?locale=${encodeURIComponent(locale)}`);
+			if (!res.ok) continue;
+			pages = (await res.json()) as PagesResponse;
+		} catch {
+			continue;
+		}
+
+		for (const route of pages.routes) {
+			const m = manifest.routes[route.routeId];
+			if (!m) continue;
+
+			// Entry metadata can include images for index/listing pages —
+			// scoop those without an extra request.
+			for (const entry of route.entries) {
+				if (entry.isDraft || entry.isDeletePending || entry.gone || entry.redirectTo) {
+					continue;
+				}
+				if (entry.metadata) {
+					for (const url of extractMediaUrls(entry.metadata, uploadsBase)) {
+						found.add(url);
+					}
+				}
+			}
+
+			const publishableEntries = route.entries.filter(
+				(e) => !e.isDraft && !e.isDeletePending && !e.gone && !e.redirectTo
+			);
+
+			// A route with no owned params still resolves once with `{}`.
+			const fanOut: Array<Record<string, string>> =
+				publishableEntries.length > 0 ? publishableEntries.map((e) => e.params) : [{}];
+
+			for (const params of fanOut) {
+				for (const scope of m.scopes) {
+					const scopeParams: Record<string, string> = {};
+					for (const p of scope.ownedParams) {
+						if (params[p] !== undefined) scopeParams[p] = params[p];
+					}
+					queueDocFetch(scope.kind, scope.routeId, scopeParams, locale);
+				}
+			}
+		}
+	}
+
+	await Promise.all(docFetches);
+	return found;
 };
 
 /**
@@ -163,19 +341,76 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 			libDir = resolve(config.root, options.libDir ?? 'src/lib');
 		},
 
-		buildStart() {
+		async buildStart() {
 			cached = null;
 			cachedSync = null;
 			velacmsRoots = null;
+
+			// Media discovery + download is only meaningful for `vite build`.
+			// In dev (`vite serve`), images load from the backend as today.
+			if (config.command !== 'build') return;
+			if (!options.endpoint) return;
+
+			const endpoint = options.endpoint.replace(/\/$/, '');
+			const resolver = makeResolver(this as unknown as { resolve: RollupResolver });
+			const locales = options.locales ?? ['en'];
+			const uploadsBase = deriveUploadsBase(endpoint);
+			const mediaDir = resolve(viteRoot, options.mediaDir ?? 'static/cms-media');
+			const logger = config.logger;
+
+			const cache = getMediaPassCache();
+			let pass = cache.get(endpoint);
+			if (!pass) {
+				pass = (async () => {
+					const result = await ensureManifest(resolver);
+
+					const filenames = await discoverProjectMedia({
+						endpoint,
+						locales,
+						manifest: result.manifest,
+						uploadsBase
+					});
+
+					if (filenames.size === 0) return;
+
+					const dl = await downloadMedia(filenames, uploadsBase, mediaDir);
+					const total = dl.written + dl.skipped;
+					logger.info(
+						`@velastack/cms: media — discovered ${filenames.size}, wrote ${dl.written}, skipped ${dl.skipped}${
+							dl.failed.length ? `, failed ${dl.failed.length}` : ''
+						} (of ${total})`
+					);
+					for (const f of dl.failed) {
+						logger.warn(`@velastack/cms: media download failed for ${f.filename}: ${f.reason}`);
+					}
+				})();
+				cache.set(endpoint, pass);
+			}
+			await pass;
 		},
 
 		resolveId(id) {
 			if (id === VIRTUAL_ID) return RESOLVED_VIRTUAL_ID;
 			if (id === PAGES_VIRTUAL_ID) return PAGES_RESOLVED_VIRTUAL_ID;
+			if (id === BUILD_CONFIG_VIRTUAL_ID) return BUILD_CONFIG_RESOLVED_VIRTUAL_ID;
 			if (id.startsWith(PAGE_CMS_VIRTUAL_PREFIX)) return '\0' + id;
 		},
 
 		async load(id) {
+			if (id === BUILD_CONFIG_RESOLVED_VIRTUAL_ID) {
+				// Inlined into the bundle so the apiAdapter reads it during
+				// SvelteKit prerender — even when prerender runs in a worker
+				// thread that doesn't share `globalThis` with the plugin
+				// process. When no `endpoint` is configured, `media` is null
+				// and the rewrite is a pass-through.
+				const media = options.endpoint
+					? {
+							uploadsBase: deriveUploadsBase(options.endpoint),
+							mediaPrefix: options.mediaPrefix ?? '/cms-media'
+						}
+					: null;
+				return `export const buildConfig = ${JSON.stringify({ media })};\n`;
+			}
 			if (id === RESOLVED_VIRTUAL_ID) {
 				const result = await ensureManifest(
 					makeResolver(this as unknown as { resolve: RollupResolver })

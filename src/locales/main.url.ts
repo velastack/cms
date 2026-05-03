@@ -1,1 +1,1 @@
-export const getLocale = (url: URL) => url.searchParams.get('locale') ?? 'en';
+export const getLocale = (_url: URL) => 'en';

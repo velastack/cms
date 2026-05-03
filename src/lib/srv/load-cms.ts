@@ -14,7 +14,7 @@ import type {
 	CmsAdapterTombstone,
 	CmsScopeQuery
 } from './types.ts';
-import { building } from '$app/environment';
+import { browser, building } from '$app/environment';
 
 const builtManifest = cmsManifest as CmsManifest;
 
@@ -295,8 +295,18 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
  * };
  * ```
  */
-export const loadCms = (event: ServerLoadEvent, options: LoadCmsOptions): Promise<LoadCmsResult> =>
-	resolveCmsPayload({
+export const loadCms = (
+	event: ServerLoadEvent,
+	options: LoadCmsOptions
+): Promise<LoadCmsResult> => {
+	if (browser) {
+		throw new Error(
+			"[@velastack/cms] loadCms() is server-only — call it from `+layout.server.ts` " +
+				'or `+page.server.ts`, not from a `+page.svelte` or universal `+page.ts`. ' +
+				"For browser-side preview/editing, use `cmsStore` from '@velastack/cms'."
+		);
+	}
+	return resolveCmsPayload({
 		manifest: builtManifest,
 		routeId: event.route.id,
 		params: event.params as Record<string, string>,
@@ -307,3 +317,4 @@ export const loadCms = (event: ServerLoadEvent, options: LoadCmsOptions): Promis
 		adapter: options.adapter,
 		fetch: event.fetch
 	});
+};

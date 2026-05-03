@@ -159,6 +159,46 @@ Along with optional `<MetaTags />` handling.
 
 That's it — the plugin handles scope and the loader handles data fetching.
 
+## Production builds: prerender + media download
+
+`loadCms` is **server-only** — call it from `+layout.server.ts` (or `+page.server.ts`), never from a `+page.svelte` or universal `+page.ts`. Calling it in the browser throws. Editing/preview happens through `cmsStore` from `@velastack/cms`, which is gated by your `cms_session` cookie and opaque preview/version keys.
+
+The recommended production shape is **prerender by default**:
+
+```ts
+// src/routes/+layout.server.ts
+export const prerender = true;
+```
+
+When the customer app is also built against a real backend, configure the Vite plugin with the same endpoint your `apiAdapter` uses:
+
+```ts
+// vite.config.ts
+import { cms } from '@velastack/cms/vite';
+
+export default defineConfig({
+	plugins: [
+		cms({
+			endpoint: 'https://cms.example.com/v1/projects/p1/cms',
+			locales: ['en', 'es', 'fr']
+		}),
+		sveltekit()
+	]
+});
+```
+
+With `endpoint` set, `vite build`:
+
+1. Walks every locale's published content over HTTP and collects every `/uploads/<file>` URL it sees in `cms.docs` trees and entry metadata.
+2. Downloads each unique file into `static/cms-media/<file>` (override with `mediaDir`). Files already on disk are skipped — second builds are fast.
+3. While SvelteKit prerenders, the `apiAdapter` rewrites those same URLs to `/cms-media/<file>` (override with `mediaPrefix`) inside the responses it hands back. Prerendered HTML/JSON references local paths only — the CMS backend stays off the production hot path.
+
+Only URLs that flow through `apiAdapter` responses are rewritten. If you build a media URL by hand (e.g. `<img src={`${cms.endpoint}/uploads/${slug}.png`}>`), it stays pointing at the backend — read it through `<CmsImage/>` or `cms.docs[scope][field].url` to get the local path.
+
+**`@sveltejs/enhanced-img` interop:** since media lands in `static/`, you can reference specific images by static path (e.g. `<enhanced:img src="/cms-media/hero.webp" />`) and get all the usual `<picture>`/`srcset` benefits. Fully dynamic enhanced-img on CMS-driven images isn't built in.
+
+If `endpoint` is omitted (e.g. when using `mockAdapter` for tests/demos), the plugin's media steps are no-ops — builds proceed exactly as before.
+
 ## CMS components
 
 All four included CMS components share the same prop shape:
@@ -561,7 +601,13 @@ cms({
 	traverse: [
 		// bare specifiers whose .svelte files should be walked
 		'my-design-system'
-	]
+	],
+
+	// Production build options — see "Production builds" above.
+	endpoint: 'https://cms.example.com/v1/projects/p1/cms',
+	locales: ['en'], // mirror createCms({ locales })
+	mediaDir: 'static/cms-media', // download target (default)
+	mediaPrefix: '/cms-media' // URL prefix in rewritten content (default)
 });
 ```
 

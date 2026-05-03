@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { resolveCmsPayload } from './load-cms.ts';
 import { mockAdapter } from './mock-adapter.ts';
 import type { CmsManifest } from '../components/cms/scope.ts';
@@ -558,6 +558,26 @@ describe('resolveCmsPayload — tombstones', () => {
 		const slugs =
 			result.cms.entries['/(marketing)/rooms/[slug]']?.map((e) => e.params.slug) ?? [];
 		expect(slugs).toEqual(['live']);
+	});
+});
+
+describe('loadCms — server-only guard', () => {
+	it('throws when called from the browser', async () => {
+		vi.resetModules();
+		vi.doMock('$app/environment', () => ({ browser: true, building: false }));
+		const { loadCms } = await import('./load-cms.ts');
+		const adapter = mockAdapter({});
+		const event = {
+			route: { id: '/' },
+			params: {},
+			url: new URL('http://example/'),
+			fetch: globalThis.fetch
+		} as unknown as Parameters<typeof loadCms>[0];
+		expect(() => loadCms(event, { locale: 'en', locales: ['en'], adapter })).toThrow(
+			/server-only/
+		);
+		vi.doUnmock('$app/environment');
+		vi.resetModules();
 	});
 });
 

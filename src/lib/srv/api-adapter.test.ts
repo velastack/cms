@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { apiAdapter } from './api-adapter.ts';
 import type { CmsScopeQuery } from './types.ts';
 
@@ -313,6 +313,122 @@ describe('apiAdapter — fetchEntries', () => {
 			{ params: { slug: 'a' }, metadata: { title: 'A' } },
 			{ params: { slug: 'redirected' }, metadata: { title: 'R' }, redirectTo: '/r/a' }
 		]);
+	});
+
+	describe('build-time media URL rewrite', () => {
+		const mockBuildConfig = (
+			media: { uploadsBase: string; mediaPrefix: string } | null
+		) => {
+			vi.doMock('virtual:vela-cms/build-config', () => ({ buildConfig: { media } }));
+		};
+
+		beforeEach(() => {
+			vi.resetModules();
+			vi.doMock('$app/environment', () => ({ browser: false, building: true }));
+		});
+
+		afterEach(() => {
+			vi.doUnmock('$app/environment');
+			vi.doUnmock('virtual:vela-cms/build-config');
+			vi.resetModules();
+		});
+
+		it('rewrites /uploads/* in fetched contents when build state is configured', async () => {
+			mockBuildConfig({ uploadsBase: 'http://api.example/uploads', mediaPrefix: '/cms-media' });
+			const { apiAdapter } = await import('./api-adapter.ts');
+			const adapter = apiAdapter({ endpoint: 'http://api.example/v1/projects/p1/cms' });
+			const { fetch } = stubFetch(() => ({
+				status: 200,
+				json: {
+					contents: {
+						hero: { image: { url: '/uploads/abc.png' } },
+						banner: 'http://api.example/uploads/xyz.jpg'
+					}
+				}
+			}));
+			const result = await adapter.fetchDocs([layoutQuery('layout:/', '/')], {
+				fetch,
+				previewKey: null,
+				locale: 'en',
+				locales: ['en']
+			});
+			expect(result['layout:/']).toEqual({
+				contents: {
+					hero: { image: { url: '/cms-media/abc.png' } },
+					banner: '/cms-media/xyz.jpg'
+				}
+			});
+		});
+
+		it('leaves contents untouched when build state has no media config', async () => {
+			mockBuildConfig(null);
+			const { apiAdapter } = await import('./api-adapter.ts');
+			const adapter = apiAdapter({ endpoint: 'http://api.example/v1/projects/p1/cms' });
+			const { fetch } = stubFetch(() => ({
+				status: 200,
+				json: { contents: { hero: { url: '/uploads/abc.png' } } }
+			}));
+			const result = await adapter.fetchDocs([layoutQuery('layout:/', '/')], {
+				fetch,
+				previewKey: null,
+				locale: 'en',
+				locales: ['en']
+			});
+			expect(result['layout:/']).toEqual({
+				contents: { hero: { url: '/uploads/abc.png' } }
+			});
+		});
+
+		it('rewrites entry metadata too', async () => {
+			mockBuildConfig({ uploadsBase: 'http://api.example/uploads', mediaPrefix: '/cms-media' });
+			const { apiAdapter } = await import('./api-adapter.ts');
+			const adapter = apiAdapter({ endpoint: 'http://api.example/v1/projects/p1/cms' });
+			const { fetch } = stubFetch(() => ({
+				status: 200,
+				json: {
+					routes: [
+						{
+							routeId: '/r/[slug]',
+							entries: [
+								{ params: { slug: 'a' }, metadata: { ogImage: '/uploads/og.png' } }
+							]
+						}
+					]
+				}
+			}));
+			const entries = await adapter.fetchEntries('/r/[slug]', {
+				fetch,
+				previewKey: null,
+				locale: 'en',
+				locales: ['en']
+			});
+			expect(entries).toEqual([
+				{ params: { slug: 'a' }, metadata: { ogImage: '/cms-media/og.png' } }
+			]);
+		});
+
+		it('does not rewrite tombstone bodies', async () => {
+			mockBuildConfig({ uploadsBase: 'http://api.example/uploads', mediaPrefix: '/cms-media' });
+			const { apiAdapter } = await import('./api-adapter.ts');
+			const adapter = apiAdapter({ endpoint: 'http://api.example/v1/projects/p1/cms' });
+			const { fetch } = stubFetch(() => ({
+				status: 200,
+				json: { kind: 'redirect', to: '/uploads/should-not-rewrite' }
+			}));
+			const result = await adapter.fetchDocs([layoutQuery('page:/old', '/old')], {
+				fetch,
+				previewKey: null,
+				locale: 'en',
+				locales: ['en']
+			});
+			// Tombstone payload passes through verbatim — the `to` URL is the
+			// redirect target, not a media reference. Rewrite only touches
+			// `contents` trees.
+			expect(result['page:/old']).toEqual({
+				kind: 'redirect',
+				to: '/uploads/should-not-rewrite'
+			});
+		});
 	});
 
 	it('passes through redirect/gone flags on entries in preview mode', async () => {

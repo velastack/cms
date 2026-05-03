@@ -1,3 +1,5 @@
+import { building } from '$app/environment';
+import { buildConfig } from 'virtual:vela-cms/build-config';
 import type {
 	CmsAdapter,
 	CmsAdapterContext,
@@ -13,6 +15,61 @@ export type ApiAdapterOptions = {
 	 * stripped.
 	 */
 	endpoint: string;
+};
+
+type BuildMediaConfig = { uploadsBase: string; mediaPrefix: string };
+
+/**
+ * The Vite plugin generates `virtual:vela-cms/build-config` with the
+ * project's resolved `{ uploadsBase, mediaPrefix }` (or `null` when the
+ * customer hasn't passed `cms({ endpoint })`). Inlining the value via a
+ * virtual module is the only way it survives into SvelteKit's prerender
+ * worker thread, which doesn't share `globalThis` with the plugin process.
+ */
+const getBuildMediaConfig = (): BuildMediaConfig | null => {
+	if (!building) return null;
+	return buildConfig.media;
+};
+
+const RELATIVE_UPLOADS_RE = /^\/uploads\/([^/?#]+)$/;
+
+/**
+ * Deep-clone `value` and replace every `/uploads/<file>` (relative) and
+ * `<uploadsBase>/<file>` (absolute) string with `<mediaPrefix>/<file>`. Pure;
+ * cycle-safe via a WeakMap. Mirrors the helper in `plugin/src/media.ts` —
+ * deliberately duplicated to keep the runtime adapter free of plugin imports.
+ */
+const rewriteMediaUrls = <T>(value: T, uploadsBase: string, mediaPrefix: string): T => {
+	const seen = new WeakMap<object, unknown>();
+	const prefix = `${uploadsBase}/`;
+	const normalizedPrefix = mediaPrefix.replace(/\/$/, '');
+	const walk = (v: unknown): unknown => {
+		if (typeof v === 'string') {
+			const m = RELATIVE_UPLOADS_RE.exec(v);
+			if (m) return `${normalizedPrefix}/${m[1]}`;
+			if (v.startsWith(prefix)) {
+				const rest = v.slice(prefix.length).split(/[?#]/)[0];
+				if (rest && !rest.includes('/')) return `${normalizedPrefix}/${rest}`;
+			}
+			return v;
+		}
+		if (!v || typeof v !== 'object') return v;
+		const cached = seen.get(v as object);
+		if (cached !== undefined) return cached;
+		if (Array.isArray(v)) {
+			const arr: unknown[] = [];
+			seen.set(v as object, arr);
+			for (const x of v) arr.push(walk(x));
+			return arr;
+		}
+		const obj: Record<string, unknown> = {};
+		seen.set(v as object, obj);
+		for (const k of Object.keys(v as Record<string, unknown>)) {
+			obj[k] = walk((v as Record<string, unknown>)[k]);
+		}
+		return obj;
+	};
+	return walk(value) as T;
 };
 
 /**
@@ -36,6 +93,7 @@ export const apiAdapter = (options: ApiAdapterOptions): CmsAdapter => {
 			context: CmsAdapterContext
 		): Promise<Record<string, CmsAdapterResolution>> {
 			const out: Record<string, CmsAdapterResolution> = {};
+			const mediaConfig = getBuildMediaConfig();
 			const extraSuffix = context.versionKey
 				? `&version=${encodeURIComponent(context.versionKey)}`
 				: context.previewKey
@@ -63,7 +121,10 @@ export const apiAdapter = (options: ApiAdapterOptions): CmsAdapter => {
 					if ('kind' in body) {
 						out[q.scopeId] = body;
 					} else {
-						out[q.scopeId] = { contents: body.contents };
+						const contents = mediaConfig
+							? rewriteMediaUrls(body.contents, mediaConfig.uploadsBase, mediaConfig.mediaPrefix)
+							: body.contents;
+						out[q.scopeId] = { contents };
 					}
 				})
 			);
@@ -114,12 +175,19 @@ export const apiAdapter = (options: ApiAdapterOptions): CmsAdapter => {
 					: route.entries.filter(
 							(e) => !e.isDraft && !e.isDeletePending && !e.gone
 						);
-			return entries.map((e) => ({
-				params: e.params,
-				metadata: e.metadata ?? {},
-				...(e.redirectTo ? { redirectTo: e.redirectTo } : {}),
-				...(e.gone ? { gone: true as const } : {})
-			}));
+			const mediaConfig = getBuildMediaConfig();
+			return entries.map((e) => {
+				const metadata = e.metadata ?? {};
+				const rewritten = mediaConfig
+					? rewriteMediaUrls(metadata, mediaConfig.uploadsBase, mediaConfig.mediaPrefix)
+					: metadata;
+				return {
+					params: e.params,
+					metadata: rewritten,
+					...(e.redirectTo ? { redirectTo: e.redirectTo } : {}),
+					...(e.gone ? { gone: true as const } : {})
+				};
+			});
 		}
 	};
 };

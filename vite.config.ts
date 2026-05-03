@@ -9,7 +9,14 @@ const testManifestFixture = fileURLToPath(
 );
 
 export default defineConfig({
-	plugins: [tailwindcss(), cms(), sveltekit()],
+	plugins: [
+		tailwindcss(),
+		cms({
+			endpoint: 'http://localhost:5174/v1/projects/project_id/cms',
+			locales: ['en', 'es']
+		}),
+		sveltekit()
+	],
 	build: {
 		sourcemap: true
 	},

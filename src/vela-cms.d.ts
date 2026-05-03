@@ -7,3 +7,9 @@ declare module 'virtual:vela-cms/pages' {
 	import type { CmsPageConfigWithRouteId } from '$lib/components/admin-bar/page-config.js';
 	export const pages: Record<string, CmsPageConfigWithRouteId>;
 }
+
+declare module 'virtual:vela-cms/build-config' {
+	export const buildConfig: {
+		media: { uploadsBase: string; mediaPrefix: string } | null;
+	};
+}
