@@ -364,6 +364,7 @@ Single-letter shortcuts only fire when no input is focused.
 | `esc` | Cancel edit / close panel |
 | `⌘S` | Save |
 | `⌘K` | Open All pages panel |
+| `⌘L` | Open Locales panel (when site has multiple locales) |
 | `⌘N` | New page |
 | `⌘H` | Open Recent releases panel |
 | `⌘I` | Open SEO panel for current page |

@@ -1009,6 +1009,10 @@
 					e.preventDefault();
 					if (seoOpen) seoOpen = false;
 					else onOpenSeo();
+				} else if (k === 'l' && supportedLocales.length > 1) {
+					e.preventDefault();
+					if (localesOpen) localesOpen = false;
+					else onOpenLocales();
 				} else if (k === 'n') {
 					e.preventDefault();
 					onNewPage();
@@ -1276,6 +1280,7 @@
 							{#if supportedLocales.length > 1}
 								<Menubar.Item class={menuItemClass} onSelect={onOpenLocales}>
 									Locales
+									<KbdShortcut keys="⌘L" class={menuShortcutClass} />
 								</Menubar.Item>
 							{/if}
 

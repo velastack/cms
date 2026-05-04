@@ -26,6 +26,7 @@
 			heading: 'Navigate',
 			entries: [
 				{ keys: '⌘K', label: 'All pages' },
+				{ keys: '⌘L', label: 'Locales' },
 				{ keys: '⌘H', label: 'Recent releases' },
 				{ keys: '/', label: 'Focus search (when a panel is open)' }
 			]

@@ -32,9 +32,6 @@
 		padding: 0;
 		margin: 1.5rem 0 0;
 	}
-	.rooms li + li {
-		margin-top: 0.5rem;
-	}
 	.rooms a {
 		display: block;
 		padding: 0.75rem 1rem;

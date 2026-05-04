@@ -17,7 +17,8 @@
 const KEY = Symbol.for('@velastack/cms.buildState');
 
 /** @type {{ pageCmsModules: PageCmsModule[] }} */
-const store = /** @type {any} */ ((globalThis)[KEY] ??= { pageCmsModules: [] });
+// @ts-ignore
+const store = /** @type {any} */ (globalThis[KEY] ??= { pageCmsModules: [] });
 
 /** @param {PageCmsModule[]} modules */
 export const setPageCmsModules = (modules) => {

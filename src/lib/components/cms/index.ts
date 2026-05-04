@@ -1,7 +1,10 @@
 export { default as CmsText } from './cms-text.svelte';
 export { default as CmsRichText } from './cms-rich-text.svelte';
+export { default as CmsMarkdown } from './cms-markdown.svelte';
 export { default as CmsImage } from './cms-image.svelte';
 export { default as CmsBoolean } from './cms-boolean.svelte';
+export { default as CmsNumber } from './cms-number.svelte';
+export { default as CmsDateTime } from './cms-date-time.svelte';
 export { default as CmsLink } from './cms-link.svelte';
 export type { CmsLinkValue, CmsLinkRenderProps } from './cms-link.svelte';
 export { default as CmsRepeater } from './cms-repeater.svelte';

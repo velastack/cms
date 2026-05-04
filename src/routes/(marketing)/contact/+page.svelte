@@ -1,5 +1,17 @@
 <script lang="ts">
-	import { CmsBoolean, CmsLink, CmsRichText, CmsText } from '$lib/index.js';
+	import { CmsBoolean, CmsDateTime, CmsLink, CmsRichText, CmsText } from '$lib/index.js';
+
+	const formatDateTime = (raw: string): string => {
+		const d = new Date(raw);
+		if (Number.isNaN(d.getTime())) return raw;
+		return d.toLocaleString('en-US', {
+			weekday: 'short',
+			month: 'short',
+			day: 'numeric',
+			hour: 'numeric',
+			minute: '2-digit'
+		});
+	};
 </script>
 
 <article>
@@ -12,7 +24,10 @@
 					<span class="dot" aria-hidden="true"></span>
 					Currently accepting walk-ins.
 				{:else}
-					By appointment only this week.
+					By appointment only this week. Next opening:
+					<CmsDateTime name="hero.nextOpening" fallback="2026-05-10T10:00">
+						{#snippet children(value)}<strong>{formatDateTime(value)}</strong>{/snippet}
+					</CmsDateTime>
 				{/if}
 			</p>
 		{/snippet}

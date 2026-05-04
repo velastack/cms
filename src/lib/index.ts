@@ -8,8 +8,13 @@
 // Display components
 export { default as CmsText } from './components/cms/cms-text.svelte';
 export { default as CmsRichText } from './components/cms/cms-rich-text.svelte';
+export { default as CmsMarkdown } from './components/cms/cms-markdown.svelte';
 export { default as CmsImage } from './components/cms/cms-image.svelte';
 export { default as CmsBoolean } from './components/cms/cms-boolean.svelte';
+export { default as CmsNumber } from './components/cms/cms-number.svelte';
+export type { CmsNumberProps } from './components/cms/cms-number.svelte';
+export { default as CmsDateTime } from './components/cms/cms-date-time.svelte';
+export type { CmsDateTimeMode, CmsDateTimeProps } from './components/cms/cms-date-time.svelte';
 export { default as CmsLink } from './components/cms/cms-link.svelte';
 export type { CmsLinkValue, CmsLinkRenderProps } from './components/cms/cms-link.svelte';
 export { default as CmsRepeater } from './components/cms/cms-repeater.svelte';

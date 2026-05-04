@@ -1,4 +1,4 @@
-import type { CmsManifest } from '$lib/components/cms/scope.ts';
+import type { CmsManifest } from '$lib/components/cms/scope.js';
 
 export const cmsManifest: CmsManifest = {
 	version: 1,

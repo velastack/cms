@@ -62,7 +62,8 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5174/uploads/suite1-view-1.svg)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5174/uploads/suite1-view-2.svg)",
       "Bash(curl -s \"http://localhost:5174/v1/projects/project_id/cms/docs?kind=page&routeId=%2F\\(marketing\\)%2Frooms%2F%5Bslug%5D&params=%7B%22slug%22%3A%22suite-1%22%7D&locale=en\")",
-      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\"; cat {} | head -c 800; echo')"
+      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\"; cat {} | head -c 800; echo')",
+      "Bash(npx svelte-kit *)"
     ]
   }
 }
