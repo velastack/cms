@@ -58,6 +58,13 @@
 	let mutating = $state<string | null>(null);
 	let query = $state('');
 	let searchEl = $state<HTMLInputElement | null>(null);
+
+	/** Active editor preview locale: URL `?locale=` overrides server-resolved
+	 *  `cms.locale`. Used to scope the page listing AND the per-row draft flag,
+	 *  so the panel reflects exactly what the editor is previewing. */
+	const activeLocale = $derived(
+		page.url.searchParams.get('locale') ?? page.data.cms?.locale ?? ''
+	);
 	let scrollContainerEl = $state<HTMLElement | null>(null);
 	let highlightedIndex = $state(-1);
 
@@ -80,10 +87,11 @@
 		return true;
 	};
 
-	const fetchList = async (): Promise<void> => {
+	const fetchList = async (forLocale: string): Promise<void> => {
 		loading = true;
 		try {
-			const res = await fetch(`${endpoint}/pages`, { credentials: 'include' });
+			const qs = forLocale ? `?locale=${encodeURIComponent(forLocale)}` : '';
+			const res = await fetch(`${endpoint}/pages${qs}`, { credentials: 'include' });
 			if (!res.ok) {
 				error = 'Could not load pages.';
 				return;
@@ -99,17 +107,21 @@
 	};
 
 	$effect(() => {
-		void fetchList();
+		void fetchList(activeLocale);
 	});
 
 	$effect(() => {
 		searchEl?.focus();
 	});
 
+	/** Active-locale-scoped draft flag: a page row is "edited" when there's a
+	 *  release item targeting THIS locale on its `(routeId, params)`. Edits in
+	 *  other locales don't mark this row — switching locale rotates the panel. */
 	const editedKeys = $derived.by(() => {
 		const set = new Set<string>();
 		for (const item of cmsStore.openRelease?.items ?? []) {
 			if (item.kind === 'layout') continue;
+			if (item.locale !== activeLocale) continue;
 			set.add(rowKey(item.routeId, item.params));
 		}
 		return set;
@@ -235,14 +247,19 @@
 				method: 'DELETE',
 				credentials: 'include',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ kind: 'page', routeId, params })
+				body: JSON.stringify({
+					kind: 'page',
+					routeId,
+					locale: page.url.searchParams.get('locale') ?? page.data.cms?.locale ?? '',
+					params
+				})
 			});
 			if (!res.ok) {
 				error = 'Could not discard.';
 				return;
 			}
 			await cmsStore.fetchOpenRelease(endpoint);
-			await fetchList();
+			await fetchList(activeLocale);
 			await onChanged();
 		} finally {
 			mutating = null;
@@ -307,7 +324,11 @@
 				renameError = 'New slug matches the existing one.';
 				return;
 			}
-			const locale = page.data.cms?.locale ?? '';
+			// Active editor locale (URL `?locale=` overrides the server-resolved
+			// locale) so renames within a non-default-locale preview target the
+			// right bucket.
+			const locale =
+				page.url.searchParams.get('locale') ?? page.data.cms?.locale ?? '';
 			let toUrl: string;
 			try {
 				toUrl = resolveRouteUrl(config.routeId, toParams);
@@ -329,7 +350,7 @@
 			}
 			renameConfig = null;
 			renameFromParams = null;
-			await fetchList();
+			await fetchList(activeLocale);
 			if (!onCurrent) await onChanged();
 		} finally {
 			renameRunning = false;
@@ -345,14 +366,19 @@
 				method: 'DELETE',
 				credentials: 'include',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ kind: 'page-delete', routeId, params })
+				body: JSON.stringify({
+					kind: 'page-delete',
+					routeId,
+					locale: page.url.searchParams.get('locale') ?? page.data.cms?.locale ?? '',
+					params
+				})
 			});
 			if (!res.ok) {
 				error = 'Could not undo delete.';
 				return;
 			}
 			await cmsStore.fetchOpenRelease(endpoint);
-			await fetchList();
+			await fetchList(activeLocale);
 			if (!onCurrent) await onChanged();
 		} finally {
 			mutating = null;

@@ -7,7 +7,7 @@ import type {
 	CmsPayload,
 	CmsScopeEntry
 } from '../components/cms/scope.ts';
-import { mergeTree } from '../components/cms/path.ts';
+import { mergeLocaleDocs, mergeLocaleEntries } from '../components/cms/locale-merge.ts';
 import type {
 	CmsAdapter,
 	CmsAdapterResolution,
@@ -169,18 +169,12 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
 	// prerender path can visit redirected URLs. The consumer-facing payload
 	// drops them — `<CmsEntries>` lists shouldn't display deleted pages.
 	const isListable = (e: CmsEntry): boolean => !e.redirectTo && !e.gone;
+	const requestedEntries = Object.fromEntries(entriesPairs);
+	const fallbackEntries = needsFallback ? Object.fromEntries(fallbackEntriesPairs) : null;
+	const mergedEntries = mergeLocaleEntries(requestedEntries, fallbackEntries);
 	const entries: Record<string, CmsEntry[]> = {};
-	const fallbackEntries: Record<string, CmsEntry[]> = Object.fromEntries(fallbackEntriesPairs);
-	for (const [rid, list] of entriesPairs) {
-		if (!needsFallback) {
-			entries[rid] = list.filter(isListable);
-			continue;
-		}
-		// Union by stringified params; requested-locale entries win on metadata.
-		const merged = new Map<string, CmsEntry>();
-		for (const e of fallbackEntries[rid] ?? []) merged.set(JSON.stringify(e.params), e);
-		for (const e of list) merged.set(JSON.stringify(e.params), e);
-		entries[rid] = [...merged.values()].filter(isListable);
+	for (const [rid, list] of Object.entries(mergedEntries)) {
+		entries[rid] = list.filter(isListable);
 	}
 
 	const pageQuery = queries.find((q) => q.kind === 'page');
@@ -206,21 +200,15 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
 	}
 
 	let pagePointer: CmsPagePointer | null = null;
-	const docs: Record<string, Record<string, unknown>> = {};
-	const allScopeIds = new Set<string>([...Object.keys(rawDocs), ...Object.keys(fallbackDocs)]);
-	for (const scopeId of allScopeIds) {
-		const r = rawDocs[scopeId];
-		const f = fallbackDocs[scopeId];
-		const requested = isTombstone(r) ? undefined : r?.contents;
-		const fallback = isTombstone(f) ? undefined : f?.contents;
-		if (needsFallback && fallback && requested) {
-			docs[scopeId] = mergeTree(fallback, requested);
-		} else if (needsFallback && fallback) {
-			docs[scopeId] = fallback;
-		} else if (requested) {
-			docs[scopeId] = requested;
-		}
+	const requestedTrees: Record<string, Record<string, unknown> | undefined> = {};
+	const fallbackTrees: Record<string, Record<string, unknown> | undefined> = {};
+	for (const [scopeId, r] of Object.entries(rawDocs)) {
+		requestedTrees[scopeId] = isTombstone(r) ? undefined : r?.contents;
 	}
+	for (const [scopeId, f] of Object.entries(fallbackDocs)) {
+		fallbackTrees[scopeId] = isTombstone(f) ? undefined : f?.contents;
+	}
+	const docs = mergeLocaleDocs(requestedTrees, needsFallback ? fallbackTrees : null);
 
 	let metadata: Record<string, unknown> = {};
 	if (pageQuery) {

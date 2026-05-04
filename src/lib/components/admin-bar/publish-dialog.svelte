@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import type { ReleaseItem } from '../cms/cms-store.svelte.js';
+	import type { CmsPayload } from '../cms/scope.js';
 	import { diffPaths, type Tree } from '../cms/path.js';
 	import { resolveRouteOnlyParams, resolveRouteUrl } from './resolve-route.js';
 	import { Badge, type BadgeVariant } from './ui/badge/index.js';
@@ -19,13 +21,66 @@
 	};
 	let { open, onOpenChange, items, publishing, error, user, endpoint, onConfirm }: Props = $props();
 
-	const itemKey = (item: ReleaseItem): string => {
-		if (item.kind === 'layout') return `layout:${item.routeId}`;
-		const prefix = item.kind === 'page-delete' ? 'page-delete' : 'page';
-		return `${prefix}:${item.routeId}?${JSON.stringify(item.params)}`;
+	const defaultLocale = $derived((page.data.cms as CmsPayload | undefined)?.locales?.[0] ?? '');
+
+	/**
+	 * Identity key shared across locales — `(kind, routeId, params)`. Two
+	 * items with the same key are "the same page" edited in different locales
+	 * and render as one row with both locales tagged. Treats `page` and
+	 * `page-delete` as one identity so the row classifier can decide if the
+	 * net effect is delete vs edit.
+	 */
+	const groupKey = (item: ReleaseItem): string => {
+		if (item.kind === 'layout') return `layout|${item.routeId}`;
+		const sortedKeys = Object.keys(item.params).sort();
+		const qp = sortedKeys.map((k) => `${k}=${item.params[k]}`).join('&');
+		return `page|${item.routeId}|${qp}`;
 	};
 
+	type Group = {
+		key: string;
+		items: ReleaseItem[];
+		locales: string[];
+		/** Earliest-added item — used for the URL label and primary classification. */
+		primary: ReleaseItem;
+		/** Latest `addedAt` across all locales — drives the "X minutes ago" suffix. */
+		latestAddedAt: string;
+	};
+
+	const groups = $derived.by<Group[]>(() => {
+		const map = new Map<string, Group>();
+		for (const item of items) {
+			const key = groupKey(item);
+			const existing = map.get(key);
+			if (existing) {
+				existing.items.push(item);
+				if (!existing.locales.includes(item.locale)) existing.locales.push(item.locale);
+				if (item.addedAt < existing.primary.addedAt) existing.primary = item;
+				if (item.addedAt > existing.latestAddedAt) existing.latestAddedAt = item.addedAt;
+			} else {
+				map.set(key, {
+					key,
+					items: [item],
+					locales: [item.locale],
+					primary: item,
+					latestAddedAt: item.addedAt
+				});
+			}
+		}
+		// Sort locales: default first, then alphabetical.
+		for (const g of map.values()) {
+			g.locales.sort((a, b) => {
+				if (a === defaultLocale) return -1;
+				if (b === defaultLocale) return 1;
+				return a < b ? -1 : a > b ? 1 : 0;
+			});
+		}
+		return [...map.values()];
+	});
+
 	let releaseName = $state('');
+	/** Identity keys (locale-stripped) of pages that have NO published entry
+	 *  in *any* locale yet — used to classify a row as "new" rather than "edited". */
 	let draftPageKeys = $state<Set<string>>(new Set());
 
 	const initials = $derived(
@@ -39,6 +94,9 @@
 
 	// Fetch the page map once on open so we can distinguish "new page" items
 	// (page kind, no published entry yet) from "edited" or "SEO-only" items.
+	// Across locales: a page with a published entry in ANY locale is "edited"
+	// in every locale (the storage already exists; we're adding a translation),
+	// not "new". So we union draft-status across locales here.
 	$effect(() => {
 		if (!open) return;
 		void (async () => {
@@ -51,10 +109,14 @@
 						entries: Array<{ params: Record<string, string>; isDraft: boolean }>;
 					}>;
 				};
+				const sortedParamsKey = (params: Record<string, string>): string => {
+					const ks = Object.keys(params).sort();
+					return ks.map((k) => `${k}=${params[k]}`).join('&');
+				};
 				const set = new Set<string>();
 				for (const r of data.routes) {
 					for (const e of r.entries) {
-						if (e.isDraft) set.add(`page:${r.routeId}?${JSON.stringify(e.params)}`);
+						if (e.isDraft) set.add(`page|${r.routeId}|${sortedParamsKey(e.params)}`);
 					}
 				}
 				draftPageKeys = set;
@@ -81,16 +143,30 @@
 	const nonMetadataPaths = (tree: Tree): string[] =>
 		editedPaths(tree).filter((p) => !p.startsWith(META_PREFIX));
 
-	const changeTypeOf = (item: ReleaseItem): ChangeType => {
-		if (item.kind === 'page-delete') {
-			if (item.outcome?.kind === 'redirect') return 'redirect';
-			if (item.outcome?.kind === 'gone') return 'gone';
+	/** Classify a group: page-delete > new > seo > edited, evaluated across
+	 *  all locales in the group. If any locale stages a delete, the row is a
+	 *  delete. If ANY locale has only `metadata.*` edits and none have body
+	 *  edits, it's "SEO". */
+	const changeTypeOfGroup = (group: Group): ChangeType => {
+		// page-delete in any locale wins; the publish summary should reflect
+		// that the row's net effect is removal. Outcome priority: redirect > gone > delete.
+		const deletes = group.items.filter((i) => i.kind === 'page-delete');
+		if (deletes.length > 0) {
+			if (deletes.some((d) => d.kind === 'page-delete' && d.outcome?.kind === 'redirect'))
+				return 'redirect';
+			if (deletes.some((d) => d.kind === 'page-delete' && d.outcome?.kind === 'gone'))
+				return 'gone';
 			return 'delete';
 		}
-		if (item.kind === 'layout') return 'edited';
-		if (draftPageKeys.has(itemKey(item))) return 'new';
-		const non = nonMetadataPaths(item.tree);
-		if (non.length === 0 && metadataPaths(item.tree).length > 0) return 'seo';
+		if (group.primary.kind === 'layout') return 'edited';
+		if (draftPageKeys.has(group.key)) return 'new';
+		const anyNonMeta = group.items.some(
+			(i) => i.kind === 'page' && nonMetadataPaths(i.tree).length > 0
+		);
+		const anyMeta = group.items.some(
+			(i) => i.kind === 'page' && metadataPaths(i.tree).length > 0
+		);
+		if (!anyNonMeta && anyMeta) return 'seo';
 		return 'edited';
 	};
 
@@ -109,17 +185,45 @@
 		return `${verb} ${names[0]} +${names.length - 1} more`;
 	};
 
-	const metaTextFor = (item: ReleaseItem): string => {
-		if (item.kind === 'page-delete') {
-			if (item.outcome?.kind === 'redirect') return `Redirects to ${item.outcome.to}`;
-			if (item.outcome?.kind === 'gone') return 'Marked permanently gone';
+	const unionPaths = (group: Group, filter: (paths: string[]) => string[]): string[] => {
+		const seen = new Set<string>();
+		const out: string[] = [];
+		for (const i of group.items) {
+			if (i.kind === 'page-delete') continue;
+			for (const p of filter(editedPaths(i.tree))) {
+				if (seen.has(p)) continue;
+				seen.add(p);
+				out.push(p);
+			}
+		}
+		return out;
+	};
+
+	const metaTextForGroup = (group: Group): string => {
+		const deletes = group.items.filter((i) => i.kind === 'page-delete');
+		if (deletes.length > 0) {
+			// Delete description follows the same outcome priority as classification.
+			const redirect = deletes.find(
+				(d) => d.kind === 'page-delete' && d.outcome?.kind === 'redirect'
+			);
+			if (redirect && redirect.kind === 'page-delete' && redirect.outcome?.kind === 'redirect')
+				return `Redirects to ${redirect.outcome.to}`;
+			if (deletes.some((d) => d.kind === 'page-delete' && d.outcome?.kind === 'gone'))
+				return 'Marked permanently gone';
 			return 'Marked for deletion';
 		}
-		if (item.kind === 'layout') return summarizeNames(editedPaths(item.tree), 'Edited');
-		if (changeTypeOf(item) === 'new') return 'Created';
-		const non = nonMetadataPaths(item.tree);
+		if (group.primary.kind === 'layout') {
+			return summarizeNames(unionPaths(group, (p) => p), 'Edited');
+		}
+		if (changeTypeOfGroup(group) === 'new') return 'Created';
+		const non = unionPaths(group, (paths) =>
+			paths.filter((p) => !p.startsWith(META_PREFIX))
+		);
 		if (non.length > 0) return summarizeNames(non, 'Edited');
-		return summarizeNames(metadataPaths(item.tree), 'Updated');
+		const meta = unionPaths(group, (paths) =>
+			paths.filter((p) => p.startsWith(META_PREFIX)).map((p) => p.slice(META_PREFIX.length))
+		);
+		return summarizeNames(meta, 'Updated');
 	};
 
 	const formatRelative = (iso: string): string => {
@@ -152,6 +256,8 @@
 		return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	};
 
+	/** Submit-disabled gate: nothing to publish when there are no items at all.
+	 *  (Group count is fine here too — no items → no groups.) */
 	const total = $derived(items.length);
 
 	const submit = () => {
@@ -194,15 +300,33 @@
 			<ul
 				class="vela:list-none vela:m-0 vela:px-6 vela:pb-4 vela:flex vela:flex-col vela:gap-3 vela:overflow-y-auto vela:max-h-[40vh]"
 			>
-				{#each items as item (itemKey(item))}
-					{@const t = changeTypeOf(item)}
+				{#each groups as group (group.key)}
+					{@const t = changeTypeOfGroup(group)}
+					{@const showLocaleTags =
+						group.locales.length > 1 ||
+						(group.locales.length === 1 && group.locales[0] !== defaultLocale)}
 					<li class="vela:flex vela:items-start vela:gap-3">
 						<span class="vela:flex vela:flex-col vela:min-w-0 vela:flex-1">
-							<span class="vela:font-mono vela:text-[14px] vela:text-bar-text vela:truncate">
-								{labelFor(item)}
+							<span
+								class="vela:flex vela:items-center vela:gap-1.5 vela:min-w-0"
+							>
+								<span
+									class="vela:font-mono vela:text-[14px] vela:text-bar-text vela:truncate"
+								>
+									{labelFor(group.primary)}
+								</span>
+								{#if showLocaleTags}
+									{#each group.locales as locale (locale)}
+										<Badge variant="default" size="sm" class="vela:shrink-0 vela:font-mono">
+											{locale}
+										</Badge>
+									{/each}
+								{/if}
 							</span>
-							<span class="vela:mt-0.5 vela:text-[12px] vela:text-bar-text-secondary vela:truncate">
-								{metaTextFor(item)} · {formatRelative(item.addedAt)}
+							<span
+								class="vela:mt-0.5 vela:text-[12px] vela:text-bar-text-secondary vela:truncate"
+							>
+								{metaTextForGroup(group)} · {formatRelative(group.latestAddedAt)}
 							</span>
 						</span>
 						<Badge variant={badgeVariantOf(t)} class="vela:shrink-0 vela:mt-0.5">

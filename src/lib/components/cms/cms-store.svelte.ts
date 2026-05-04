@@ -28,6 +28,8 @@
  * working-copy state without switching the page.
  */
 import { page } from '$app/state';
+import { mergeLocaleDocs, mergeLocaleEntries } from './locale-merge.js';
+import { composeKey } from './overlay-sync.js';
 import { get, has, mergeTree, set, type Tree } from './path.js';
 import type { CmsEntry, CmsPagePointer, CmsPayload, CmsScopeEntry } from './scope.js';
 
@@ -41,15 +43,6 @@ type DraftBucket = {
 	scope: CmsScopeRef;
 	locale: string;
 	tree: Tree;
-};
-
-const composeKey = (scope: CmsScopeRef, locale: string): string => {
-	const keys = Object.keys(scope.params).sort();
-	const base =
-		keys.length === 0
-			? scope.scopeId
-			: `${scope.scopeId}?${keys.map((k) => `${k}=${scope.params[k]}`).join('&')}`;
-	return `${base}|locale=${locale}`;
 };
 
 /**
@@ -131,6 +124,17 @@ const pageLocale = (): string => {
 	return cms?.locale ?? '';
 };
 
+/**
+ * Default (fallback) locale for the project — `cms.locales[0]` by convention
+ * (matches `resolveCmsPayload`). Used by `loadAndApply*` to fetch the default
+ * locale's content alongside the requested one for `requested → default`
+ * fallback merging.
+ */
+const pageDefaultLocale = (): string => {
+	const cms = page.data?.cms as CmsPayload | undefined;
+	return cms?.locales?.[0] ?? cms?.locale ?? '';
+};
+
 class CmsStore {
 	isEditing = $state(false);
 	drafts = $state<Record<string, DraftBucket>>({});
@@ -138,11 +142,27 @@ class CmsStore {
 	overlay = $state<Record<string, Tree>>({});
 	/** Per-routeId entries overlay populated by `loadAndApplyEntriesOverlay`. */
 	entriesOverlay = $state<Record<string, CmsEntry[]>>({});
+	/**
+	 * Active editor preview locale, pushed in by the admin bar from the URL
+	 * (`?locale=`). Falls back to `page.data.cms.locale` when unset (read-only
+	 * consumer, or no override). Field components read/write through the
+	 * default locale below, so editing in `?locale=es` keys drafts to `es`
+	 * even if the consumer's `getLocale(url)` doesn't honor the param.
+	 */
+	private _activeLocale = $state<string | null>(null);
 	private overlayFetchToken = 0;
 	private entriesFetchToken = 0;
 
 	toggleEdit(): void {
 		this.isEditing = !this.isEditing;
+	}
+
+	setActiveLocale(locale: string | null): void {
+		this._activeLocale = locale || null;
+	}
+
+	private effectiveLocale(): string {
+		return this._activeLocale ?? pageLocale();
 	}
 
 	/** Base doc (server-rendered) for a scope. Already locale-resolved by `resolveCmsPayload`. */
@@ -164,24 +184,24 @@ class CmsStore {
 
 	/** Read the merged value at `path`. Returns `undefined` if missing. */
 	getValue(scope: CmsScopeRef, path: string, locale?: string): unknown {
-		return get(this.mergedTree(scope, locale ?? pageLocale()), path);
+		return get(this.mergedTree(scope, locale ?? this.effectiveLocale()), path);
 	}
 
 	/** Whether the editor's draft tree contains a value at `path`. */
 	hasDraft(scope: CmsScopeRef, path: string, locale?: string): boolean {
-		const bucket = this.drafts[composeKey(scope, locale ?? pageLocale())];
+		const bucket = this.drafts[composeKey(scope, locale ?? this.effectiveLocale())];
 		return bucket ? has(bucket.tree, path) : false;
 	}
 
 	/** Whether the client overlay (published+release) contains a value at `path`. */
 	hasOverlay(scope: CmsScopeRef, path: string, locale?: string): boolean {
-		const ov = this.overlay[composeKey(scope, locale ?? pageLocale())];
+		const ov = this.overlay[composeKey(scope, locale ?? this.effectiveLocale())];
 		return ov ? has(ov, path) : false;
 	}
 
 	/** Write a value at `path` into the draft tree. Creates the bucket if needed. */
 	setValue(scope: CmsScopeRef, path: string, value: unknown, locale?: string): void {
-		const lc = locale ?? pageLocale();
+		const lc = locale ?? this.effectiveLocale();
 		const key = composeKey(scope, lc);
 		const bucket =
 			this.drafts[key] ?? (this.drafts[key] = { scope, locale: lc, tree: {} });
@@ -205,8 +225,14 @@ class CmsStore {
 	 * snapshot at a published release's publish time — `?version=…`.
 	 *
 	 * `opts.locale` is the BCP-47 locale to request — required, scopes the
-	 * overlay cache key so different locales don't collide. Default-locale
-	 * fallback for missing fields is the server's job here too.
+	 * overlay cache key so different locales don't collide.
+	 *
+	 * `opts.defaultLocale` (the consumer's `cms.locales[0]`) enables the
+	 * fallback fetch: when `locale !== defaultLocale`, we fetch the default
+	 * locale's content in parallel and `mergeLocaleDocs` it under the
+	 * requested locale. Adapters return only what's stored for the requested
+	 * locale (per the mock-adapter contract); the library composes the
+	 * `requested → default → undefined` chain. Mirrors `resolveCmsPayload`.
 	 *
 	 * `opts.reset` replaces the overlay map wholesale (mount with release,
 	 * post-publish, post-discard). Otherwise we merge — keeps unchanged-layout
@@ -216,18 +242,25 @@ class CmsStore {
 		endpoint: string,
 		scopes: CmsScopeEntry[],
 		previewKey: string | null,
-		opts: { reset?: boolean; versionKey?: string | null; locale: string }
+		opts: {
+			reset?: boolean;
+			versionKey?: string | null;
+			locale: string;
+			defaultLocale?: string;
+		}
 	): Promise<void> {
 		const token = ++this.overlayFetchToken;
 		const versionKey = opts.versionKey ?? null;
 		const locale = opts.locale;
+		const defaultLocale = opts.defaultLocale ?? pageDefaultLocale() ?? locale;
+		const needsFallback = !!defaultLocale && locale !== defaultLocale;
 
-		const fetchOne = async (scope: CmsScopeEntry) => {
+		const fetchScope = async (scope: CmsScopeEntry, forLocale: string) => {
 			const qs = new URLSearchParams({
 				kind: scope.kind,
 				routeId: scope.routeId,
 				params: JSON.stringify(scope.params),
-				locale
+				locale: forLocale
 			});
 			if (versionKey) qs.set('version', versionKey);
 			else if (previewKey) qs.set('preview', previewKey);
@@ -237,21 +270,42 @@ class CmsStore {
 			return { scope, contents: data.contents };
 		};
 
-		const results = await Promise.all(scopes.map(fetchOne));
+		const collect = (
+			pairs: Array<{ scope: CmsScopeEntry; contents: Tree } | null>
+		): Record<string, Tree> => {
+			const out: Record<string, Tree> = {};
+			for (const r of pairs) {
+				if (!r) continue;
+				out[r.scope.scopeId] = r.contents ?? {};
+			}
+			return out;
+		};
+
+		const [requestedPairs, fallbackPairs] = await Promise.all([
+			Promise.all(scopes.map((s) => fetchScope(s, locale))),
+			needsFallback
+				? Promise.all(scopes.map((s) => fetchScope(s, defaultLocale)))
+				: Promise.resolve(null as Array<{ scope: CmsScopeEntry; contents: Tree } | null> | null)
+		]);
 		if (token !== this.overlayFetchToken) return;
 
+		const merged = mergeLocaleDocs(
+			collect(requestedPairs),
+			fallbackPairs ? collect(fallbackPairs) : null
+		);
+
+		const scopeIndex = new Map<string, CmsScopeEntry>();
+		for (const s of scopes) scopeIndex.set(s.scopeId, s);
+
 		const next: Record<string, Tree> = {};
-		for (const r of results) {
-			if (!r) continue;
+		for (const [scopeId, contents] of Object.entries(merged)) {
+			const scope = scopeIndex.get(scopeId);
+			if (!scope) continue;
 			const key = composeKey(
-				{
-					scopeId: r.scope.scopeId,
-					routeId: r.scope.routeId,
-					params: r.scope.params
-				},
+				{ scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params },
 				locale
 			);
-			next[key] = r.contents ?? {};
+			next[key] = contents;
 		}
 
 		if (opts.reset) {
@@ -268,12 +322,22 @@ class CmsStore {
 	 * pending-delete entries are kept; with `previewKey === null`, they're
 	 * filtered out — used post-publish to mask stale
 	 * `page.data.cms.entries` on static-export sites.
+	 *
+	 * `opts.defaultLocale` enables the fallback fetch: when the requested
+	 * locale isn't the default, we fetch the default locale's entries in
+	 * parallel and union by params (requested-locale entries win on metadata
+	 * for shared params; default-locale-only entries surface as fallbacks).
 	 */
 	async loadAndApplyEntriesOverlay(
 		endpoint: string,
 		routeIds: string[],
 		previewKey: string | null,
-		opts: { reset?: boolean; versionKey?: string | null; locale: string }
+		opts: {
+			reset?: boolean;
+			versionKey?: string | null;
+			locale: string;
+			defaultLocale?: string;
+		}
 	): Promise<void> {
 		const token = ++this.entriesFetchToken;
 		if (routeIds.length === 0) {
@@ -282,49 +346,64 @@ class CmsStore {
 		}
 
 		const versionKey = opts.versionKey ?? null;
-		const qs = new URLSearchParams({ locale: opts.locale });
-		if (versionKey) qs.set('version', versionKey);
-		else if (previewKey) qs.set('preview', previewKey);
-		let res: Response;
-		try {
-			res = await fetch(`${endpoint}/pages?${qs}`, { credentials: 'include' });
-		} catch {
-			return;
-		}
-		if (token !== this.entriesFetchToken) return;
-		if (!res.ok) return;
+		const defaultLocale = opts.defaultLocale ?? pageDefaultLocale() ?? opts.locale;
+		const needsFallback = !!defaultLocale && opts.locale !== defaultLocale;
 
-		const body = (await res.json()) as {
-			routes: Array<{
-				routeId: string;
-				entries: Array<{
-					params: Record<string, string>;
-					isDraft?: boolean;
-					isDeletePending?: boolean;
-					redirectTo?: string;
-					gone?: boolean;
-					metadata?: Record<string, unknown>;
+		const fetchByLocale = async (forLocale: string): Promise<Record<string, CmsEntry[]> | null> => {
+			const qs = new URLSearchParams({ locale: forLocale });
+			if (versionKey) qs.set('version', versionKey);
+			else if (previewKey) qs.set('preview', previewKey);
+			let res: Response;
+			try {
+				res = await fetch(`${endpoint}/pages?${qs}`, { credentials: 'include' });
+			} catch {
+				return null;
+			}
+			if (!res.ok) return null;
+
+			const body = (await res.json()) as {
+				routes: Array<{
+					routeId: string;
+					entries: Array<{
+						params: Record<string, string>;
+						isDraft?: boolean;
+						isDeletePending?: boolean;
+						redirectTo?: string;
+						gone?: boolean;
+						metadata?: Record<string, unknown>;
+					}>;
 				}>;
-			}>;
+			};
+
+			const out: Record<string, CmsEntry[]> = {};
+			const wanted = new Set(routeIds);
+			for (const r of body.routes) {
+				if (!wanted.has(r.routeId)) continue;
+				// Tombstones (redirect / gone) and pending deletes never appear in
+				// consumer-facing `<CmsEntries>` lists. Drafts are visible only in
+				// preview / version mode where the editor inspects working state.
+				const filtered = r.entries.filter((e) => {
+					if (e.redirectTo || e.gone || e.isDeletePending) return false;
+					if (versionKey || previewKey) return true;
+					return !e.isDraft;
+				});
+				out[r.routeId] = filtered.map((e) => ({
+					params: e.params,
+					metadata: e.metadata ?? {}
+				}));
+			}
+			return out;
 		};
 
-		const next: Record<string, CmsEntry[]> = {};
-		const wanted = new Set(routeIds);
-		for (const r of body.routes) {
-			if (!wanted.has(r.routeId)) continue;
-			// Tombstones (redirect / gone) and pending deletes never appear in
-			// consumer-facing `<CmsEntries>` lists. Drafts are visible only in
-			// preview / version mode where the editor inspects working state.
-			const filtered = r.entries.filter((e) => {
-				if (e.redirectTo || e.gone || e.isDeletePending) return false;
-				if (versionKey || previewKey) return true;
-				return !e.isDraft;
-			});
-			next[r.routeId] = filtered.map((e) => ({
-				params: e.params,
-				metadata: e.metadata ?? {}
-			}));
-		}
+		const [requested, fallback] = await Promise.all([
+			fetchByLocale(opts.locale),
+			needsFallback ? fetchByLocale(defaultLocale) : Promise.resolve(null)
+		]);
+		if (token !== this.entriesFetchToken) return;
+		if (!requested) return;
+
+		const merged = mergeLocaleEntries(requested, fallback);
+		const next: Record<string, CmsEntry[]> = { ...merged };
 		for (const rid of routeIds) {
 			if (!(rid in next)) next[rid] = [];
 		}
@@ -343,14 +422,30 @@ class CmsStore {
 		return false;
 	}
 
+	/**
+	 * Counts distinct page identities and layout routes touched by the open
+	 * release, NOT raw item count: a page edited in `en` and `es` registers
+	 * as one. Powers the editor's "X pages draft" mental model — they think
+	 * "one page is in progress", not "two storage rows exist". For per-locale
+	 * breakdowns (locales panel "EN: 6, ES: 4"), use `workingCopyCountsByLocale`.
+	 */
 	get workingCopyCounts(): { pages: number; layouts: number; total: number } {
-		let pages = 0;
-		let layouts = 0;
+		const pageKeys = new Set<string>();
+		const layoutKeys = new Set<string>();
 		for (const item of this.openRelease?.items ?? []) {
-			if (item.kind === 'layout') layouts += 1;
-			else pages += 1;
+			if (item.kind === 'layout') {
+				layoutKeys.add(item.routeId);
+			} else {
+				const sortedParams = Object.keys(item.params).sort();
+				const qp = sortedParams.map((k) => `${k}=${item.params[k]}`).join('&');
+				pageKeys.add(`${item.routeId}?${qp}`);
+			}
 		}
-		return { pages, layouts, total: pages + layouts };
+		return {
+			pages: pageKeys.size,
+			layouts: layoutKeys.size,
+			total: pageKeys.size + layoutKeys.size
+		};
 	}
 
 	/**

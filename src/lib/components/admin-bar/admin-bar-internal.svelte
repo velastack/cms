@@ -9,6 +9,7 @@
 	import { page } from '$app/state';
 	import { pages } from 'virtual:vela-cms/pages';
 	import { cmsStore, type PageDeleteOutcome } from '$lib/components/cms/cms-store.svelte.js';
+	import { deriveOverlayIntents } from '$lib/components/cms/overlay-sync.js';
 	import type { CmsPayload, CmsScopeEntry } from '$lib/components/cms/scope.js';
 	import CssRoot from './css-root.svelte';
 	import { adminBarTheme, type AdminBarTheme } from './theme.svelte.js';
@@ -160,12 +161,15 @@
 	const versionKey = $derived(page.url.searchParams.get('version'));
 	let versionRelease = $state<{ id: string; preview_key: string; name?: string } | null>(null);
 
-	// `cms.locale` is what the consumer's `getLocale(url)` returned this request,
-	// resolved server-side by `loadCms`. The admin bar uses it for overlay-fetch
-	// keying and to drive the Locales panel's "current preview locale" indicator.
-	// Switching locale goes through `setLocaleParam` → SvelteKit nav → server
-	// reload → new `cms.locale`.
-	const currentLocale = $derived((page.data.cms as CmsPayload | undefined)?.locale ?? '');
+	// `?locale=` is the editor's preview override; it wins over the server-resolved
+	// `cms.locale` so locale switching works even when the consumer's `getLocale`
+	// doesn't honor the param (and on static-export sites where the server load
+	// can't be re-run). Falls back to `cms.locale` when no override is set.
+	const currentLocale = $derived(
+		page.url.searchParams.get('locale')
+			?? (page.data.cms as CmsPayload | undefined)?.locale
+			?? ''
+	);
 	const supportedLocales = $derived(
 		(page.data.cms as CmsPayload | undefined)?.locales ?? []
 	);
@@ -245,12 +249,15 @@
 		}
 	};
 
-	// Override the consumer's pathname-derived locale for the editor preview.
-	// The lib doesn't read `?locale=` itself; the consumer's `getLocale(url)` is
-	// expected to honor it (typical pattern: `?locale=` wins over pathname).
-	// Setting it triggers a SvelteKit nav, which re-runs `loadCms` with the new
-	// locale and refreshes `page.data.cms`. Like the other gating params, we
-	// strip the param when `null`.
+	// Set true while setLocaleParam(null) is mid-flight so beforeNavigate doesn't
+	// re-carry the old `?locale=` and undo the strip.
+	let clearingLocale = false;
+
+	// Override the locale for the editor preview. Pure client-side: the overlay
+	// effect re-fetches `${endpoint}/docs?locale=…` on the URL change, so this
+	// works whether or not the consumer's `getLocale(url)` honors `?locale=`
+	// (and on static-export sites with no server load to re-run). Like the
+	// other gating params, we strip the param when `null`.
 	const setLocaleParam = async (locale: string | null, opts: { replace?: boolean } = {}) => {
 		const url = new URL(page.url);
 		const current = url.searchParams.get('locale');
@@ -264,9 +271,17 @@
 		const path = url.pathname + url.search + url.hash;
 		if (opts.replace) {
 			replaceState(path, page.state);
+			return;
+		}
+		if (!locale) {
+			clearingLocale = true;
+			try {
+				await goto(path, { keepFocus: true, noScroll: true });
+			} finally {
+				clearingLocale = false;
+			}
 		} else {
 			await goto(path, { keepFocus: true, noScroll: true });
-			await invalidateAll();
 		}
 	};
 
@@ -300,58 +315,88 @@
 			: null;
 	};
 
-	// On mount: hydrate the open release, then sync the URL's `?preview=` to
-	// the release's preview key (or strip it). Apply a fresh client-side
-	// overlay by fetching `${endpoint}/docs` for each current-route scope —
-	// this is what makes the editor experience work on static-export sites
-	// where SvelteKit's server load can't be re-run. With no release, leave
-	// the overlay empty: `page.data.cms.docs` is the published source.
-	//
-	// `?version=` shortcuts the draft sync: we don't auto-add `?preview=`,
-	// don't strip `?version=`, and load the past-release snapshot via
-	// `versionKey` so editors can preview a past release alongside their bar.
+	// Push the URL-derived editor locale into the store so field components'
+	// `getValue`/`setValue` defaults route to the bucket the editor is actually
+	// previewing — even when the consumer's `getLocale(url)` doesn't honor the
+	// param. Without this, edits made in `?locale=es` would land in the `en`
+	// bucket and never appear.
 	$effect(() => {
+		cmsStore.setActiveLocale(currentLocale || null);
+	});
+
+	// Tracks whether `fetchOpenRelease` has resolved at least once this session.
+	// Until then, the overlay-sync effect must NOT strip `?preview=` from the
+	// URL — `cmsStore.openRelease` is null pre-fetch, but that's "unknown",
+	// not "no draft". Without this gate, a hard refresh on `?preview=<key>`
+	// would treat the param as stale and replaceState it away.
+	let openReleaseFetched = $state(false);
+
+	// On mount and on subsequent URL/store changes: derive what to do (URL sync,
+	// overlay loads, clears) as a list of pure intents, then dispatch.
+	// Decision logic lives in `overlay-sync.ts` and is unit-tested separately.
+	$effect(() => {
+		// Synchronous reads so Svelte tracks these as effect dependencies — reads
+		// inside the async IIFE below run on a microtask and aren't tracked.
+		const intents = deriveOverlayIntents({
+			versionKey,
+			locale: currentLocale,
+			pageLocale: (page.data.cms as CmsPayload | undefined)?.locale ?? currentLocale,
+			openReleaseKey: cmsStore.openRelease?.preview_key ?? null,
+			openReleaseFetched,
+			previewParam: page.url.searchParams.get('preview')
+		});
+
+		if (intents.length === 0) return;
+
 		void (async () => {
-			await cmsStore.fetchOpenRelease(endpoint);
-
-			if (versionKey) {
-				await fetchVersionRelease(versionKey);
-				await Promise.all([
-					cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), null, {
-						reset: true,
-						versionKey,
-						locale: currentLocale
-					}),
-					cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), null, {
-						reset: true,
-						versionKey,
-						locale: currentLocale
-					})
-				]);
-				return;
-			}
-
-			versionRelease = null;
-			const key = cmsStore.openRelease?.preview_key ?? null;
-			const current = page.url.searchParams.get('preview');
-			if (key && current !== key) {
-				await setPreviewParam(key, { replace: true });
-			} else if (!key && current) {
-				await setPreviewParam(null, { replace: true });
-			}
-			if (key) {
-				await Promise.all([
-					cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), key, {
-						reset: true,
-						locale: currentLocale
-					}),
-					cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), key, {
-						reset: true,
-						locale: currentLocale
-					})
-				]);
-			} else {
-				cmsStore.clearOverlay();
+			for (const intent of intents) {
+				switch (intent.kind) {
+					case 'fetch-open-release':
+						await cmsStore.fetchOpenRelease(endpoint);
+						openReleaseFetched = true;
+						break;
+					case 'fetch-version-release':
+						await fetchVersionRelease(intent.versionKey);
+						break;
+					case 'set-preview-param':
+						await setPreviewParam(intent.value, { replace: true });
+						break;
+					case 'load-version-overlay':
+						// Don't null versionRelease here — `fetch-version-release` ran
+						// just before and populated it. Only non-version paths null it.
+						await Promise.all([
+							cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), null, {
+								reset: true,
+								versionKey: intent.versionKey,
+								locale: intent.locale
+							}),
+							cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), null, {
+								reset: true,
+								versionKey: intent.versionKey,
+								locale: intent.locale
+							})
+						]);
+						break;
+					case 'load-overlay':
+						versionRelease = null;
+						await Promise.all([
+							cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), intent.previewKey, {
+								reset: true,
+								locale: intent.locale
+							}),
+							cmsStore.loadAndApplyEntriesOverlay(
+								endpoint,
+								currentEntriesRouteIds(),
+								intent.previewKey,
+								{ reset: true, locale: intent.locale }
+							)
+						]);
+						break;
+					case 'clear-overlay':
+						versionRelease = null;
+						cmsStore.clearOverlay();
+						break;
+				}
 			}
 		})();
 	});
@@ -367,7 +412,9 @@
 		if (!nav.to) return;
 		if (nav.to.url.origin !== location.origin) return;
 
-		const localeParam = page.url.searchParams.get('locale');
+		// While clearingLocale is true, the user intentionally stripped `?locale=`;
+		// don't re-carry the old value from `page.url` (which hasn't updated yet).
+		const localeParam = clearingLocale ? null : page.url.searchParams.get('locale');
 		const localeNeedsCarry = (target: URL) =>
 			!!localeParam && target.searchParams.get('locale') !== localeParam;
 		const carryLocaleOnto = (url: URL) => {
@@ -601,9 +648,14 @@
 	let previewAs = $state<'desktop' | 'tablet' | 'mobile' | 'signed-out'>('desktop');
 	let barPosition = $state<'top' | 'bottom'>('top');
 
+	// Items targeting the current page URL in the active editor locale. Used
+	// for "Discard changes on this page" and the visibility flag for that
+	// button. Cross-locale isn't intended here — the editor's intent is
+	// "discard what I'm currently editing", not "every locale's edits".
 	const currentPageItems = $derived(
 		(cmsStore.openRelease?.items ?? []).filter((item) => {
 			if (item.kind === 'layout') return false;
+			if (item.locale !== currentLocale) return false;
 			try {
 				return resolveRouteUrl(item.routeId, item.params) === page.url.pathname;
 			} catch {
@@ -685,9 +737,15 @@
 				}
 			}
 		}
+		// Only consider release items in the active editor locale: redirect
+		// flattening is a runtime URL-routing concern, and at runtime the
+		// locale's tombstone is what serves the request. Mixing locales here
+		// would let an `es`-only staged redirect bend the chain shown to an
+		// `en` editor staging a different redirect.
 		for (const item of cmsStore.openRelease?.items ?? []) {
 			if (item.kind !== 'page-delete') continue;
 			if (item.outcome?.kind !== 'redirect') continue;
+			if (item.locale !== currentLocale) continue;
 			try {
 				out[resolveRouteUrl(item.routeId, item.params)] = item.outcome.to;
 			} catch {
@@ -717,7 +775,14 @@
 
 		let isDraft = isDraftHint;
 		try {
-			const res = await fetch(`${endpoint}/pages`, { credentials: 'include' });
+			// `?locale=` so the published-state lookup matches what the editor
+			// is currently previewing — a row may be a published draft in `en`
+			// and not yet exist in `es`, and the delete dialog's flow must reflect
+			// the locale being acted on.
+			const res = await fetch(
+				`${endpoint}/pages?locale=${encodeURIComponent(currentLocale)}`,
+				{ credentials: 'include' }
+			);
 			if (res.ok) {
 				const data = (await res.json()) as { routes: WirePageRoute[] };
 				deleteRoutes = data.routes;
@@ -752,7 +817,7 @@
 			let outcome: PageDeleteOutcome | undefined;
 			if (mode === 'gone') outcome = { kind: 'gone' };
 			else if (mode === 'redirect' && target) outcome = { kind: 'redirect', to: target };
-			const body: Record<string, unknown> = { routeId, params };
+			const body: Record<string, unknown> = { routeId, locale: currentLocale, params };
 			// Drafts always hard-discard regardless of mode — the dialog gates
 			// gone/redirect off when isDraft, but defend in depth.
 			if (!isDraft && outcome) body.outcome = outcome;
@@ -844,7 +909,12 @@
 				method: 'DELETE',
 				credentials: 'include',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ kind: 'page', routeId: item.routeId, params: item.params })
+				body: JSON.stringify({
+					kind: 'page',
+					routeId: item.routeId,
+					locale: item.locale,
+					params: item.params
+				})
 			});
 		}
 		await cmsStore.fetchOpenRelease(endpoint);
@@ -1041,7 +1111,12 @@
 				method: 'POST',
 				credentials: 'include',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ routeId: target.routeId, params: newParams, metadata })
+				body: JSON.stringify({
+					routeId: target.routeId,
+					locale: currentLocale,
+					params: newParams,
+					metadata
+				})
 			});
 			if (createRes.status === 409) {
 				newPageError = 'A page with these values already exists.';
@@ -1062,6 +1137,7 @@
 							{
 								kind: 'page',
 								routeId: target.routeId,
+								locale: currentLocale,
 								params: newParams,
 								tree: dup.tree
 							}
