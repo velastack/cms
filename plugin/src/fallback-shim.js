@@ -155,7 +155,9 @@
 			// Splice the page doc's `metadata` branch into `cms.metadata`
 			// (currently `{}` at its index). Branch is just a sub-tree of `contents`.
 			var metaSrc =
-				contents.metadata && typeof contents.metadata === 'object' && !Array.isArray(contents.metadata)
+				contents.metadata &&
+				typeof contents.metadata === 'object' &&
+				!Array.isArray(contents.metadata)
 					? contents.metadata
 					: {};
 			var encodedMeta = {};

@@ -2,12 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {
-	deriveUploadsBase,
-	downloadMedia,
-	extractMediaUrls,
-	rewriteMediaUrls
-} from './media.js';
+import { deriveUploadsBase, downloadMedia, extractMediaUrls, rewriteMediaUrls } from './media.js';
 
 describe('deriveUploadsBase', () => {
 	it('uses the endpoint origin (not the project path)', () => {
@@ -32,11 +27,7 @@ describe('extractMediaUrls', () => {
 			gallery: [{ src: '/uploads/one.jpg' }, { src: '/uploads/two.jpg' }],
 			body: 'plain text — not a url'
 		};
-		expect([...extractMediaUrls(tree, base)].sort()).toEqual([
-			'abc.png',
-			'one.jpg',
-			'two.jpg'
-		]);
+		expect([...extractMediaUrls(tree, base)].sort()).toEqual(['abc.png', 'one.jpg', 'two.jpg']);
 	});
 
 	it('finds absolute URLs whose origin matches uploadsBase', () => {
@@ -112,7 +103,11 @@ describe('rewriteMediaUrls', () => {
 	});
 
 	it('preserves arrays', () => {
-		const out = rewriteMediaUrls([{ src: '/uploads/a.png' }, { src: '/uploads/b.png' }], base, '/cms-media');
+		const out = rewriteMediaUrls(
+			[{ src: '/uploads/a.png' }, { src: '/uploads/b.png' }],
+			base,
+			'/cms-media'
+		);
 		expect(out).toEqual([{ src: '/cms-media/a.png' }, { src: '/cms-media/b.png' }]);
 	});
 });
@@ -155,15 +150,11 @@ describe('downloadMedia', () => {
 	});
 
 	it('records failures without throwing', async () => {
-		globalThis.fetch = vi.fn(async () =>
-			new Response('not found', { status: 404 })
+		globalThis.fetch = vi.fn(
+			async () => new Response('not found', { status: 404 })
 		) as typeof fetch;
 
-		const result = await downloadMedia(
-			['missing.png'],
-			'https://cms.example.com/uploads',
-			tmpDir
-		);
+		const result = await downloadMedia(['missing.png'], 'https://cms.example.com/uploads', tmpDir);
 
 		expect(result.written).toBe(0);
 		expect(result.failed).toEqual([{ filename: 'missing.png', reason: 'HTTP 404' }]);

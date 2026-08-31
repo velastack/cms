@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { Menubar as MenubarPrimitive } from "bits-ui";
-	import { cn, type WithoutChild } from "$lib/components/admin-bar/utils.js";
+	import { Menubar as MenubarPrimitive } from 'bits-ui';
+	import { cn, type WithoutChild } from '$lib/components/admin-bar/utils.js';
 	import CheckIcon from '@lucide/svelte/icons/check';
 
 	let {
@@ -29,7 +29,7 @@
 			class="vela:left-1.5 vela:size-4 vela:[&_svg:not([class*='size-'])]:size-4 vela:pointer-events-none vela:absolute vela:flex vela:items-center vela:justify-center"
 		>
 			{#if checked}
-				<CheckIcon  />
+				<CheckIcon />
 			{/if}
 		</span>
 		{@render childrenProp?.({ checked })}

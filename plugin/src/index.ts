@@ -135,9 +135,7 @@ type PagesResponse = {
 };
 
 type DocsResponse =
-	| { contents: Record<string, unknown> }
-	| { kind: 'gone' }
-	| { kind: 'redirect'; to: string };
+	{ contents: Record<string, unknown> } | { kind: 'gone' } | { kind: 'redirect'; to: string };
 
 /**
  * Walk the project's published content over HTTP to find every media URL

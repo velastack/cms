@@ -166,9 +166,7 @@
 		const anyNonMeta = group.items.some(
 			(i) => i.kind === 'page' && nonMetadataPaths(i.tree).length > 0
 		);
-		const anyMeta = group.items.some(
-			(i) => i.kind === 'page' && metadataPaths(i.tree).length > 0
-		);
+		const anyMeta = group.items.some((i) => i.kind === 'page' && metadataPaths(i.tree).length > 0);
 		if (!anyNonMeta && anyMeta) return 'seo';
 		return 'edited';
 	};
@@ -217,12 +215,13 @@
 			return 'Marked for deletion';
 		}
 		if (group.primary.kind === 'site' || group.primary.kind === 'layout') {
-			return summarizeNames(unionPaths(group, (p) => p), 'Edited');
+			return summarizeNames(
+				unionPaths(group, (p) => p),
+				'Edited'
+			);
 		}
 		if (changeTypeOfGroup(group) === 'new') return 'Created';
-		const non = unionPaths(group, (paths) =>
-			paths.filter((p) => !p.startsWith(META_PREFIX))
-		);
+		const non = unionPaths(group, (paths) => paths.filter((p) => !p.startsWith(META_PREFIX)));
 		if (non.length > 0) return summarizeNames(non, 'Edited');
 		const meta = unionPaths(group, (paths) =>
 			paths.filter((p) => p.startsWith(META_PREFIX)).map((p) => p.slice(META_PREFIX.length))
@@ -311,12 +310,8 @@
 						(group.locales.length === 1 && group.locales[0] !== defaultLocale)}
 					<li class="vela:flex vela:items-start vela:gap-3">
 						<span class="vela:flex vela:flex-col vela:min-w-0 vela:flex-1">
-							<span
-								class="vela:flex vela:items-center vela:gap-1.5 vela:min-w-0"
-							>
-								<span
-									class="vela:font-mono vela:text-[14px] vela:text-bar-text vela:truncate"
-								>
+							<span class="vela:flex vela:items-center vela:gap-1.5 vela:min-w-0">
+								<span class="vela:font-mono vela:text-[14px] vela:text-bar-text vela:truncate">
 									{labelFor(group.primary)}
 								</span>
 								{#if showLocaleTags}
@@ -327,9 +322,7 @@
 									{/each}
 								{/if}
 							</span>
-							<span
-								class="vela:mt-0.5 vela:text-[12px] vela:text-bar-text-secondary vela:truncate"
-							>
+							<span class="vela:mt-0.5 vela:text-[12px] vela:text-bar-text-secondary vela:truncate">
 								{metaTextForGroup(group)} · {formatRelative(group.latestAddedAt)}
 							</span>
 						</span>

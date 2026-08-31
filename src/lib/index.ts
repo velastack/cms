@@ -55,4 +55,3 @@ export type {
 	CmsScope,
 	CmsScopeEntry
 } from './components/cms/scope.js';
-

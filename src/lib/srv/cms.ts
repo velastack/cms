@@ -65,8 +65,7 @@ export const createCms = (options: CreateCmsOptions): Cms => {
 	const defaultLocale = locales[0];
 	const siteSchema: SiteSchema = site ?? {};
 	return {
-		load: (event, { locale }) =>
-			loadCms(event, { adapter, locale, locales, siteSchema }),
+		load: (event, { locale }) => loadCms(event, { adapter, locale, locales, siteSchema }),
 		generateEntries: (async <R extends RouteId>(routeId?: R) => {
 			if (!routeId) {
 				throw new Error(

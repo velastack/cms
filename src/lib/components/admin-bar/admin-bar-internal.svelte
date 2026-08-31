@@ -169,13 +169,9 @@
 	// doesn't honor the param (and on static-export sites where the server load
 	// can't be re-run). Falls back to `cms.locale` when no override is set.
 	const currentLocale = $derived(
-		page.url.searchParams.get('locale')
-			?? (page.data.cms as CmsPayload | undefined)?.locale
-			?? ''
+		page.url.searchParams.get('locale') ?? (page.data.cms as CmsPayload | undefined)?.locale ?? ''
 	);
-	const supportedLocales = $derived(
-		(page.data.cms as CmsPayload | undefined)?.locales ?? []
-	);
+	const supportedLocales = $derived((page.data.cms as CmsPayload | undefined)?.locales ?? []);
 
 	// Sub-bar (DESIGN.md §2) hangs below the main bar in edit/pending modes,
 	// holding the contextual status pill + action buttons. Only the clean state
@@ -691,10 +687,7 @@
 		return isCreatable(config) ? config : null;
 	});
 
-	const paramsEqual = (
-		a: Record<string, string>,
-		b: Record<string, string>
-	): boolean => {
+	const paramsEqual = (a: Record<string, string>, b: Record<string, string>): boolean => {
 		const aKeys = Object.keys(a);
 		if (aKeys.length !== Object.keys(b).length) return false;
 		for (const k of aKeys) if (a[k] !== b[k]) return false;
@@ -789,10 +782,9 @@
 			// is currently previewing — a row may be a published draft in `en`
 			// and not yet exist in `es`, and the delete dialog's flow must reflect
 			// the locale being acted on.
-			const res = await fetch(
-				`${endpoint}/pages?locale=${encodeURIComponent(currentLocale)}`,
-				{ credentials: 'include' }
-			);
+			const res = await fetch(`${endpoint}/pages?locale=${encodeURIComponent(currentLocale)}`, {
+				credentials: 'include'
+			});
 			if (res.ok) {
 				const data = (await res.json()) as { routes: WirePageRoute[] };
 				deleteRoutes = data.routes;
@@ -866,10 +858,10 @@
 
 	const onRegeneratePreviewKey = async () => {
 		if (versionKey && versionRelease) {
-			const res = await fetch(
-				`${endpoint}/release/history/${versionRelease.id}/preview-key`,
-				{ method: 'POST', credentials: 'include' }
-			);
+			const res = await fetch(`${endpoint}/release/history/${versionRelease.id}/preview-key`, {
+				method: 'POST',
+				credentials: 'include'
+			});
 			if (!res.ok) return;
 			const data = (await res.json()) as { preview_key: string };
 			versionRelease = { ...versionRelease, preview_key: data.preview_key };
@@ -1593,10 +1585,7 @@
 
 		{#if siteSettingsOpen}
 			{#await import('./site-settings-panel.svelte') then { default: SiteSettingsPanel }}
-				<SiteSettingsPanel
-					onClose={() => (siteSettingsOpen = false)}
-					onSave={onSaveSiteSettings}
-				/>
+				<SiteSettingsPanel onClose={() => (siteSettingsOpen = false)} onSave={onSaveSiteSettings} />
 			{/await}
 		{/if}
 
@@ -1616,8 +1605,7 @@
 				onChanged={refreshAfterReleaseChange}
 				onRequestNew={openNewPageDialog}
 				{onRequestDuplicate}
-				onRequestDelete={(routeId, params, isDraft) =>
-					void requestDelete(routeId, params, isDraft)}
+				onRequestDelete={(routeId, params, isDraft) => void requestDelete(routeId, params, isDraft)}
 			/>
 		{/if}
 
@@ -1628,7 +1616,7 @@
 		{#if localesOpen}
 			{#await import('./locales-panel.svelte') then { default: LocalesPanel }}
 				<LocalesPanel
-					currentLocale={currentLocale}
+					{currentLocale}
 					locales={supportedLocales}
 					onClose={() => (localesOpen = false)}
 					onSelectLocale={(locale) => {

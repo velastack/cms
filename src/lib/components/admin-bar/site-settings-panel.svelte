@@ -3,11 +3,7 @@
 	import ImagesIcon from '@lucide/svelte/icons/images';
 	import { cmsStore, type MediaItem } from '$lib/components/cms/cms-store.svelte.js';
 	import CmsMediaPicker from '$lib/components/cms/cms-media-picker.svelte';
-	import type {
-		CmsPayload,
-		SiteFieldSchema,
-		SiteSchema
-	} from '$lib/components/cms/scope.js';
+	import type { CmsPayload, SiteFieldSchema, SiteSchema } from '$lib/components/cms/scope.js';
 	import { clickOutside } from './click-outside.js';
 	import PanelFooter from './panel-footer.svelte';
 	import PanelHeader from './panel-header.svelte';
@@ -190,10 +186,7 @@
 												vela:shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
 											use:clickOutside={() => (openLibrary = null)}
 										>
-											<CmsMediaPicker
-												{endpoint}
-												onSelect={(item) => onLibrarySelect(path, item)}
-											/>
+											<CmsMediaPicker {endpoint} onSelect={(item) => onLibrarySelect(path, item)} />
 										</div>
 									{/if}
 								</div>

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { HTMLAttributes } from "svelte/elements";
-	import { cn, type WithElementRef } from "$lib/components/admin-bar/utils.js";
+	import type { HTMLAttributes } from 'svelte/elements';
+	import { cn, type WithElementRef } from '$lib/components/admin-bar/utils.js';
 
 	let {
 		ref = $bindable(null),
@@ -13,7 +13,10 @@
 <span
 	bind:this={ref}
 	data-slot="menubar-shortcut"
-	class={cn("vela:text-muted-foreground vela:group-focus/menubar-item:text-accent-foreground vela:text-xs vela:tracking-widest vela:ml-auto", className)}
+	class={cn(
+		'vela:text-muted-foreground vela:group-focus/menubar-item:text-accent-foreground vela:text-xs vela:tracking-widest vela:ml-auto',
+		className
+	)}
 	{...restProps}
 >
 	{@render children?.()}

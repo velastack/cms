@@ -25,5 +25,7 @@
 	{...restProps}
 >
 	{@render children?.()}
-	<ChevronDownIcon class="vela:size-3.5 vela:text-bar-text-secondary vela:pointer-events-none vela:shrink-0" />
+	<ChevronDownIcon
+		class="vela:size-3.5 vela:text-bar-text-secondary vela:pointer-events-none vela:shrink-0"
+	/>
 </SelectPrimitive.Trigger>

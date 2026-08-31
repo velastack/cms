@@ -134,9 +134,7 @@
 	const enterPageMode = async (e: Event) => {
 		e.preventDefault();
 		e.stopPropagation();
-		selectedValue = current.routeId
-			? optionValueFor(current.routeId, current.params ?? {})
-			: '';
+		selectedValue = current.routeId ? optionValueFor(current.routeId, current.params ?? {}) : '';
 		mode = 'page';
 		if (!pagesLoaded) {
 			try {
@@ -221,136 +219,131 @@
 </script>
 
 <CssRoot>
-<span
-	class="cms-link-edit"
-	role="group"
-	aria-label={`Link slot ${name}`}
-	data-popover-open={pageSelectOpen ? '' : undefined}
->
-	{#if children}
-		<span class="cms-link-edit__custom">
-			{@render children(renderProps)}
-		</span>
-	{:else}
-		<a
-			class={className ?? 'cms-link'}
-			{href}
-			aria-label={current.label || name}
-			target={current.newTab ? '_blank' : undefined}
-			rel={current.newTab ? 'noopener noreferrer' : undefined}
-			onclick={blockNav}
-		>
-			<span
-				bind:this={labelEl}
-				class="cms-link-edit__label"
-				contenteditable="plaintext-only"
-				role="textbox"
-				tabindex="0"
-				aria-label={`${name} label`}
-				spellcheck="true"
-				data-placeholder={name}
-				oninput={onLabelInput}
-				onkeydown={onLabelKeydown}
-				oncompositionstart={() => (composing = true)}
-				oncompositionend={onLabelCompositionEnd}
-			></span>
-		</a>
-	{/if}
-
-	<div
-		class="cms-link-edit__toolbar"
-		role="toolbar"
-		tabindex="-1"
-		aria-label="Link target"
-		onmousedown={stopMouseDown}
+	<span
+		class="cms-link-edit"
+		role="group"
+		aria-label={`Link slot ${name}`}
+		data-popover-open={pageSelectOpen ? '' : undefined}
 	>
-		{#if mode === 'idle'}
-			<span class="cms-link-edit__href" title={href}>
-				<span class="cms-link-edit__href-arrow">{isInternal ? '↪' : '↗'}</span>
-				<span class="cms-link-edit__href-text">{href === '#' ? '(no target)' : href}</span>
+		{#if children}
+			<span class="cms-link-edit__custom">
+				{@render children(renderProps)}
 			</span>
-			<span class="cms-link-edit__divider"></span>
-			<Button
-				size="xs"
-				variant="ghost"
-				data-active={isInternal}
-				onclick={enterPageMode}
+		{:else}
+			<a
+				class={className ?? 'cms-link'}
+				{href}
+				aria-label={current.label || name}
+				target={current.newTab ? '_blank' : undefined}
+				rel={current.newTab ? 'noopener noreferrer' : undefined}
+				onclick={blockNav}
 			>
-				<FileIcon class="vela:size-3.5" />
-				Page
-			</Button>
-			<Button
-				size="xs"
-				variant="ghost"
-				data-active={!isInternal && !!current.href}
-				onclick={enterUrlMode}
-			>
-				<LinkIcon class="vela:size-3.5" />
-				URL
-			</Button>
-			<Button
-				size="icon"
-				variant="ghost"
-				data-active={!!current.newTab}
-				aria-label={current.newTab ? 'Open in new tab (on)' : 'Open in new tab (off)'}
-				onclick={toggleNewTab}
-			>
-				<ExternalIcon class="vela:size-3.5" />
-			</Button>
-			{#if current.href || current.routeId}
-				<Button size="icon" variant="ghost" aria-label="Clear link target" onclick={clearTarget}>
-					<Trash class="vela:size-3.5" />
+				<span
+					bind:this={labelEl}
+					class="cms-link-edit__label"
+					contenteditable="plaintext-only"
+					role="textbox"
+					tabindex="0"
+					aria-label={`${name} label`}
+					spellcheck="true"
+					data-placeholder={name}
+					oninput={onLabelInput}
+					onkeydown={onLabelKeydown}
+					oncompositionstart={() => (composing = true)}
+					oncompositionend={onLabelCompositionEnd}
+				></span>
+			</a>
+		{/if}
+
+		<div
+			class="cms-link-edit__toolbar"
+			role="toolbar"
+			tabindex="-1"
+			aria-label="Link target"
+			onmousedown={stopMouseDown}
+		>
+			{#if mode === 'idle'}
+				<span class="cms-link-edit__href" title={href}>
+					<span class="cms-link-edit__href-arrow">{isInternal ? '↪' : '↗'}</span>
+					<span class="cms-link-edit__href-text">{href === '#' ? '(no target)' : href}</span>
+				</span>
+				<span class="cms-link-edit__divider"></span>
+				<Button size="xs" variant="ghost" data-active={isInternal} onclick={enterPageMode}>
+					<FileIcon class="vela:size-3.5" />
+					Page
+				</Button>
+				<Button
+					size="xs"
+					variant="ghost"
+					data-active={!isInternal && !!current.href}
+					onclick={enterUrlMode}
+				>
+					<LinkIcon class="vela:size-3.5" />
+					URL
+				</Button>
+				<Button
+					size="icon"
+					variant="ghost"
+					data-active={!!current.newTab}
+					aria-label={current.newTab ? 'Open in new tab (on)' : 'Open in new tab (off)'}
+					onclick={toggleNewTab}
+				>
+					<ExternalIcon class="vela:size-3.5" />
+				</Button>
+				{#if current.href || current.routeId}
+					<Button size="icon" variant="ghost" aria-label="Clear link target" onclick={clearTarget}>
+						<Trash class="vela:size-3.5" />
+					</Button>
+				{/if}
+			{:else if mode === 'url'}
+				<Input
+					bind:ref={urlInputEl}
+					bind:value={urlInput}
+					type="url"
+					placeholder="https://example.com"
+					onkeydown={onUrlKey}
+					class="vela:h-7 vela:w-72 vela:text-xs"
+				/>
+				<Button size="icon" variant="ghost" aria-label="Apply URL" onclick={applyUrl}>
+					<CheckIcon class="vela:size-4" />
+				</Button>
+				<Button size="icon" variant="ghost" aria-label="Cancel" onclick={cancelMode}>
+					<XIcon class="vela:size-4" />
+				</Button>
+			{:else}
+				{#if !pagesLoaded}
+					<span class="cms-link-edit__status">Loading…</span>
+				{:else if pageOptions.length === 0}
+					<span class="cms-link-edit__status">No pages found</span>
+				{:else}
+					{@const selectedOpt = pageOptions.find((o) => o.value === selectedValue)}
+					<Select.Root
+						type="single"
+						value={selectedValue}
+						onValueChange={(v) => {
+							selectedValue = v;
+							applyPageValue(v);
+						}}
+						bind:open={pageSelectOpen}
+					>
+						<Select.Trigger size="sm" class="vela:min-w-56">
+							<span data-slot="select-value" class="vela:truncate">
+								{selectedOpt?.label ?? '— Select page —'}
+							</span>
+						</Select.Trigger>
+						<Select.Content sideOffset={6}>
+							{#each pageOptions as opt (opt.value)}
+								<Select.Item value={opt.value} label={opt.label}>{opt.label}</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root>
+				{/if}
+				<Button size="icon" variant="ghost" aria-label="Cancel" onclick={cancelMode}>
+					<XIcon class="vela:size-4" />
 				</Button>
 			{/if}
-		{:else if mode === 'url'}
-			<Input
-				bind:ref={urlInputEl}
-				bind:value={urlInput}
-				type="url"
-				placeholder="https://example.com"
-				onkeydown={onUrlKey}
-				class="vela:h-7 vela:w-72 vela:text-xs"
-			/>
-			<Button size="icon" variant="ghost" aria-label="Apply URL" onclick={applyUrl}>
-				<CheckIcon class="vela:size-4" />
-			</Button>
-			<Button size="icon" variant="ghost" aria-label="Cancel" onclick={cancelMode}>
-				<XIcon class="vela:size-4" />
-			</Button>
-		{:else}
-			{#if !pagesLoaded}
-				<span class="cms-link-edit__status">Loading…</span>
-			{:else if pageOptions.length === 0}
-				<span class="cms-link-edit__status">No pages found</span>
-			{:else}
-				{@const selectedOpt = pageOptions.find((o) => o.value === selectedValue)}
-				<Select.Root
-					type="single"
-					value={selectedValue}
-					onValueChange={(v) => {
-						selectedValue = v;
-						applyPageValue(v);
-					}}
-					bind:open={pageSelectOpen}
-				>
-					<Select.Trigger size="sm" class="vela:min-w-56">
-						<span data-slot="select-value" class="vela:truncate">
-							{selectedOpt?.label ?? '— Select page —'}
-						</span>
-					</Select.Trigger>
-					<Select.Content sideOffset={6}>
-						{#each pageOptions as opt (opt.value)}
-							<Select.Item value={opt.value} label={opt.label}>{opt.label}</Select.Item>
-						{/each}
-					</Select.Content>
-				</Select.Root>
-			{/if}
-			<Button size="icon" variant="ghost" aria-label="Cancel" onclick={cancelMode}>
-				<XIcon class="vela:size-4" />
-			</Button>
-		{/if}
-	</div>
-</span>
+		</div>
+	</span>
 </CssRoot>
 
 <style>

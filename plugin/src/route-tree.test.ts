@@ -67,10 +67,7 @@ describe('discoverRoutes', () => {
 			join(dir, '(marketing)', 'rooms', '[slug]', '+page.ts'),
 			'export const load = () => ({});'
 		);
-		writeFileSync(
-			join(dir, '(marketing)', 'rooms', '[slug]', 'page.cms.ts'),
-			'export default {};'
-		);
+		writeFileSync(join(dir, '(marketing)', 'rooms', '[slug]', 'page.cms.ts'), 'export default {};');
 		return dir;
 	};
 

@@ -1,9 +1,6 @@
 <script lang="ts">
 	import { SvelteMap } from 'svelte/reactivity';
-	import {
-		normalizeField,
-		type CmsCreatablePageConfigWithRouteId
-	} from './page-config.js';
+	import { normalizeField, type CmsCreatablePageConfigWithRouteId } from './page-config.js';
 	import { Button } from './ui/button/index.js';
 	import * as Dialog from './ui/dialog/index.js';
 	import { Input } from './ui/input/index.js';

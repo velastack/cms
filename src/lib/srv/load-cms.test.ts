@@ -118,7 +118,9 @@ describe('resolveCmsPayload — payload shape', () => {
 			'page:/(marketing)/rooms/[slug]'
 		]);
 		expect(result.cms.docs['layout:/']).toEqual({ footer: { copy: 'F' } });
-		expect(result.cms.docs['page:/(marketing)/rooms/[slug]']).toEqual({ hero: { title: 'Hero A' } });
+		expect(result.cms.docs['page:/(marketing)/rooms/[slug]']).toEqual({
+			hero: { title: 'Hero A' }
+		});
 	});
 
 	it('aliases the page doc `metadata` branch onto payload.metadata', async () => {
@@ -318,9 +320,7 @@ describe('resolveCmsPayload — locale fallback', () => {
 		const adapter = mockAdapter({
 			pageDocs: {
 				en: {
-					'/': [
-						{ params: {}, published: { welcome: { title: 'Hello' } } }
-					]
+					'/': [{ params: {}, published: { welcome: { title: 'Hello' } } }]
 				}
 			}
 		});
@@ -555,8 +555,7 @@ describe('resolveCmsPayload — tombstones', () => {
 			previewKey: null,
 			adapter
 		});
-		const slugs =
-			result.cms.entries['/(marketing)/rooms/[slug]']?.map((e) => e.params.slug) ?? [];
+		const slugs = result.cms.entries['/(marketing)/rooms/[slug]']?.map((e) => e.params.slug) ?? [];
 		expect(slugs).toEqual(['live']);
 	});
 });
@@ -573,9 +572,7 @@ describe('loadCms — server-only guard', () => {
 			url: new URL('http://example/'),
 			fetch: globalThis.fetch
 		} as unknown as Parameters<typeof loadCms>[0];
-		expect(() => loadCms(event, { locale: 'en', locales: ['en'], adapter })).toThrow(
-			/server-only/
-		);
+		expect(() => loadCms(event, { locale: 'en', locales: ['en'], adapter })).toThrow(/server-only/);
 		vi.doUnmock('$app/environment');
 		vi.resetModules();
 	});

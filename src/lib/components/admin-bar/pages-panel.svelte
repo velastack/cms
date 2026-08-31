@@ -36,11 +36,7 @@
 			config: CmsCreatablePageConfigWithRouteId,
 			sourceParams: Record<string, string>
 		) => void;
-		onRequestDelete: (
-			routeId: string,
-			params: Record<string, string>,
-			isDraft: boolean
-		) => void;
+		onRequestDelete: (routeId: string, params: Record<string, string>, isDraft: boolean) => void;
 	};
 	let {
 		endpoint,
@@ -62,9 +58,7 @@
 	/** Active editor preview locale: URL `?locale=` overrides server-resolved
 	 *  `cms.locale`. Used to scope the page listing AND the per-row draft flag,
 	 *  so the panel reflects exactly what the editor is previewing. */
-	const activeLocale = $derived(
-		page.url.searchParams.get('locale') ?? page.data.cms?.locale ?? ''
-	);
+	const activeLocale = $derived(page.url.searchParams.get('locale') ?? page.data.cms?.locale ?? '');
 	let scrollContainerEl = $state<HTMLElement | null>(null);
 	let highlightedIndex = $state(-1);
 
@@ -327,8 +321,7 @@
 			// Active editor locale (URL `?locale=` overrides the server-resolved
 			// locale) so renames within a non-default-locale preview target the
 			// right bucket.
-			const locale =
-				page.url.searchParams.get('locale') ?? page.data.cms?.locale ?? '';
+			const locale = page.url.searchParams.get('locale') ?? page.data.cms?.locale ?? '';
 			let toUrl: string;
 			try {
 				toUrl = resolveRouteUrl(config.routeId, toParams);
@@ -610,8 +603,7 @@
 											variant="outline-destructive"
 											size="xs"
 											disabled={mutating === k}
-											onclick={() =>
-												onRequestDelete(group.routeId, entry.params, entry.isDraft)}
+											onclick={() => onRequestDelete(group.routeId, entry.params, entry.isDraft)}
 										>
 											{mutating === k ? '…' : 'Delete'}
 										</Button>

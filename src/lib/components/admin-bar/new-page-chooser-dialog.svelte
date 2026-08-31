@@ -35,7 +35,9 @@
 							<span class="vela:text-[13px] vela:font-medium vela:text-bar-text vela:capitalize">
 								{cfg.type}
 							</span>
-							<span class="vela:font-mono vela:text-[12px] vela:text-bar-text-secondary vela:truncate">
+							<span
+								class="vela:font-mono vela:text-[12px] vela:text-bar-text-secondary vela:truncate"
+							>
 								{resolveRouteOnlyParams(cfg.routeId)}
 							</span>
 						</div>

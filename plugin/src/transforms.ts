@@ -30,7 +30,9 @@ export const buildPagesModuleSource = (
 	});
 	lines.push('export const pages = {');
 	modules.forEach((m, i) => {
-		lines.push(`	${JSON.stringify(m.routeId)}: { ..._${i}, routeId: ${JSON.stringify(m.routeId)} },`);
+		lines.push(
+			`	${JSON.stringify(m.routeId)}: { ..._${i}, routeId: ${JSON.stringify(m.routeId)} },`
+		);
 	});
 	lines.push('};');
 	return lines.join('\n') + '\n';

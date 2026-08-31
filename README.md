@@ -111,12 +111,12 @@ export const load: ServerLoad = async (event) => {
 
 `loadCms` returns four mutually-exclusive page-kind resolutions, in priority order:
 
-| Field        | Meaning                                                                              | Caller does          |
-| ------------ | ------------------------------------------------------------------------------------ | -------------------- |
-| `redirectTo` | Page was replaced with a permanent redirect to this URL.                             | `redirect(308, …)`   |
-| `gone`       | Page was deliberately, permanently removed.                                          | `error(410, …)`      |
-| `notFound`   | Page-kind scope had owned params and the adapter returned no doc and no tombstone.   | `error(404, …)`      |
-| (none set)   | Render normally with `data.cms`.                                                     | return `{ cms, … }`  |
+| Field        | Meaning                                                                            | Caller does         |
+| ------------ | ---------------------------------------------------------------------------------- | ------------------- |
+| `redirectTo` | Page was replaced with a permanent redirect to this URL.                           | `redirect(308, …)`  |
+| `gone`       | Page was deliberately, permanently removed.                                        | `error(410, …)`     |
+| `notFound`   | Page-kind scope had owned params and the adapter returned no doc and no tombstone. | `error(404, …)`     |
+| (none set)   | Render normally with `data.cms`.                                                   | return `{ cms, … }` |
 
 Layout scopes never tombstone — only page-kind scopes can resolve to `gone` / `redirectTo`.
 

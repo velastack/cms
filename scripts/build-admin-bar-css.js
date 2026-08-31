@@ -35,7 +35,9 @@ execFileSync(cli, ['-i', input, '-o', output, '--minify'], {
 
 const resolved = readFileSync(output, 'utf8');
 if (/@import\s+["']tailwindcss/.test(resolved)) {
-	console.error('[build-admin-bar-css] @import "tailwindcss" still present — Tailwind did not run.');
+	console.error(
+		'[build-admin-bar-css] @import "tailwindcss" still present — Tailwind did not run.'
+	);
 	process.exit(1);
 }
 

@@ -107,8 +107,7 @@ describe('parseSvelteSource — component usages', () => {
 
 	it('returns null fieldName when name attr is missing', () => {
 		const code =
-			`<script>\nimport { CmsText } from '$lib/components/cms';\n</script>` +
-			`\n<CmsText />`;
+			`<script>\nimport { CmsText } from '$lib/components/cms';\n</script>` + `\n<CmsText />`;
 		const { componentUsages } = parseSvelteSource(code);
 		expect(componentUsages[0].fieldName).toBeNull();
 	});

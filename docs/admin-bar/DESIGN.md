@@ -17,7 +17,7 @@ The bar uses **space-between** to separate two groups:
 - **Left group**: brand label (`CMS`) + status pill
 - **Right group**: contextual action buttons + menubar + user avatar + close (`×`)
 
-The status pill on the left answers *what is true right now*. The action buttons on the right answer *what can I do next*. This is a deliberate native-app convention (window title left, controls right).
+The status pill on the left answers _what is true right now_. The action buttons on the right answer _what can I do next_. This is a deliberate native-app convention (window title left, controls right).
 
 ### 1.2 The menubar
 
@@ -72,11 +72,11 @@ Save and Cancel replace each other in the same slot as `Edit` does in the idle s
 
 The status pill replaces the existing `1 page` chip. Three variants:
 
-| State | Background | Text color | Dot color |
-|---|---|---|---|
-| Clean | transparent | `#d4d4d4` | `#5DCAA5` (teal) |
-| Unpublished | `#2a2416` | `#FAC775` (amber) | `#EF9F27` |
-| Editing | `#182338` | `#85B7EB` (blue) | `#378ADD` |
+| State       | Background  | Text color        | Dot color        |
+| ----------- | ----------- | ----------------- | ---------------- |
+| Clean       | transparent | `#d4d4d4`         | `#5DCAA5` (teal) |
+| Unpublished | `#2a2416`   | `#FAC775` (amber) | `#EF9F27`        |
+| Editing     | `#182338`   | `#85B7EB` (blue)  | `#378ADD`        |
 
 The dot is 6×6px. The pill is 28px tall, padding `0 12px 0 10px`, gap 6px between dot and text. Use full-sentence text ("All published"), not noun fragments ("Clean"). The pill should be readable as plain English without prior context.
 
@@ -115,39 +115,44 @@ Panel surfaces (Pages, Releases, SEO) and the publish modal use the same `--cms-
 
 Scoped to the current URL.
 
-| Item | Shortcut | Notes |
-|---|---|---|
-| Edit | `⌘E` | Primary action; enters edit mode |
-| Edit SEO & metadata | `⌘I` | Opens SEO panel |
-| — divider — | | |
-| Copy preview link | | Copies the working-copy preview URL |
-| Open in new tab | `⌘↵` | |
-| — divider — | | |
-| Discard changes | | Disabled if no unpublished changes on this page |
-| Publish this page… | `⌘P` | Disabled if no unpublished changes; opens publish modal scoped to this page only |
+| Item                | Shortcut | Notes                                                                            |
+| ------------------- | -------- | -------------------------------------------------------------------------------- |
+| Edit                | `⌘E`     | Primary action; enters edit mode                                                 |
+| Edit SEO & metadata | `⌘I`     | Opens SEO panel                                                                  |
+| — divider —         |          |                                                                                  |
+| Copy preview link   |          | Copies the working-copy preview URL                                              |
+| Open in new tab     | `⌘↵`     |                                                                                  |
+| — divider —         |          |                                                                                  |
+| Discard changes     |          | Disabled if no unpublished changes on this page                                  |
+| Publish this page…  | `⌘P`     | Disabled if no unpublished changes; opens publish modal scoped to this page only |
 
 ### 5.2 Site menu
 
 Site-wide actions, grouped into five sections.
 
 **Navigate**
+
 - All pages… (`⌘K`) — opens the All pages panel
 
 **Create**
+
 - New page… (`⌘N`)
 - New from /rooms/[slug] ▸ — submenu, one entry per dynamic route template
 
 **Working copy**
+
 - Review & publish… (`⌘P`) — opens the publish modal, with an amber count badge if there are pending changes
 - Share preview link
 - Regenerate preview key
 - Discard all changes… — destructive (red text), opens confirmation
 
 **History**
+
 - Recent releases… (`⌘H`) — opens the Releases panel
 - Revert to release…
 
 **Settings**
+
 - Site settings (`⌘,`)
 
 ### 5.3 View menu
@@ -155,24 +160,29 @@ Site-wide actions, grouped into five sections.
 Overlay state and preview controls. Uses checkbox and radio item patterns from shadcn `Menubar`.
 
 **Bar**
+
 - Hide bar (`⌘.`) — toggle
 - Position ▸ — submenu (Top / Bottom)
 
 **Page indicators** (checkbox items)
+
 - ✓ Highlight editable areas (`⌘⇧E`)
 - ✓ Show draft markers on links
 - ☐ Show grid & spacing (`⌘G`)
 
 **Preview as** (radio group — exactly one active)
+
 - ● Desktop
 - ○ Tablet
 - ○ Mobile
 - ○ Signed-out visitor
 
 **Appearance**
+
 - Theme ▸
 
 **Help**
+
 - Keyboard shortcuts… (`?`)
 
 ---
@@ -186,6 +196,7 @@ Panels open below the bar, anchored to whichever menubar item triggered them. Sa
 Replaces the existing Pages panel.
 
 **Header**
+
 - Title: `All pages`
 - Subtitle (muted): `5 pages · 1 with draft` — shows total count and how many have unpublished changes
 - Close button
@@ -193,11 +204,13 @@ Replaces the existing Pages panel.
 **Search field** — full-text filter across paths and page titles. Shortcut `/` to focus.
 
 **Static routes section** — header `STATIC ROUTES`, count on right
+
 - Each row shows: amber draft-dot (or empty spacer) + path (monospace) + optional title metadata
 - A `draft` badge (amber) appears on the right for any page with unpublished changes
 - Clicking the row navigates to that page
 
 **Template groups** — for dynamic routes like `/rooms/[slug]`
+
 - Subtle background tint (`#181818`) to distinguish from static
 - Header: `Template /rooms/[slug]` (the template path in monospace purple `#AFA9EC`) + `+ New room` button on the right
 - Instances listed below, indented with a small connector line (1px gray, 8px wide)
@@ -211,10 +224,12 @@ Replaces the existing Pages panel.
 Replaces the existing History panel.
 
 **Header**
+
 - Title: `Recent releases`
 - Subtitle: `last 30 days`
 
 **Timeline of release entries**
+
 - Vertical rail on the left: 8×8 dot per release, connected by 1px line
 - Current/live release: teal dot (`#5DCAA5`)
 - Older releases: gray dot (`#444`)
@@ -225,6 +240,7 @@ Replaces the existing History panel.
   - **Actions**: `View` (opens diff/preview of what shipped) + `Revert` (hidden on the current live release)
 
 **Footer**
+
 - `4 releases shown` left-aligned
 - `Load older →` right-aligned
 
@@ -233,10 +249,12 @@ Replaces the existing History panel.
 Replaces the existing metadata panel.
 
 **Header**
+
 - Title: `SEO & metadata`
 - Subtitle: page path in monospace (e.g. `/`)
 
 **Search preview** — the headline feature
+
 - Light card (`#fafafa`) with Google-result styling
 - Favicon + hostname breadcrumb
 - Title in `#1a0dab` 18px regular
@@ -244,19 +262,23 @@ Replaces the existing metadata panel.
 - Updates live as the user types in the fields below
 
 **Title field**
+
 - Label + character counter (`4 / 60`)
 - Counter turns amber as it approaches 60, red if it exceeds
 - Counters are **soft feedback, not validation** — never block the user
 
 **Description field**
+
 - Same pattern, `155` character target
 - Textarea, min-height 56px
 
 **Advanced (collapsed by default)**
+
 - Contains: `Canonical URL`, `Robots`, future `Open Graph`, `Twitter card`, `schema.org type`
 - Hiding these is intentional — they're the fields where a non-technical admin can break SEO by accident
 
 **Footer**
+
 - Note: `Changes apply on Save` (left)
 - `Cancel` + `Save` buttons (right)
 
@@ -267,10 +289,12 @@ A true modal: blocking, requires a decision. Same dark surface as the rest of th
 The modal publishes **everything** in the working copy as a single atomic release. There is no per-item selection — partial publishes were removed; the working copy is the unit of release.
 
 **Header**
+
 - Title: `Review & publish`
 - Subtitle: `All changes will go live together.`
 
 **Change list** — read-only summary, one row per page with unpublished changes
+
 - Path (monospace)
 - Meta line: what changed + when (e.g. "Edited welcome.title · 2 minutes ago")
 - Change-type badge on the right (dark variants matching the bar palette):
@@ -280,10 +304,12 @@ The modal publishes **everything** in the working copy as a single atomic releas
   - `SEO` — `#182338` bg, `#85B7EB` text (edit tokens) — for releases that only touch metadata
 
 **Release name field**
+
 - Label: `Release name (optional)` + hint `Helps you find it in History`
 - Plain text input on `--cms-bar-bg-hover` with `--cms-accent` focus border
 
 **Footer**
+
 - Left: `Publishing as JD`
 - Right: `Cancel` (ghost) + `Publish N changes` (primary white-on-dark, count = total items in the working copy)
 
@@ -309,6 +335,7 @@ The `View → Highlight editable areas` toggle makes all slot outlines permanent
 ### 7.3 Inline toolbar
 
 When a text slot is active, a small dark toolbar floats above it:
+
 - Bold, italic, link buttons (depending on the slot's allowed formatting)
 - Divider
 - `Revert` button with `⌘Z` shortcut
@@ -330,6 +357,7 @@ If the user clicks `Cancel` with unsaved changes, show a confirmation modal: "Di
 ### 7.6 First-run legend
 
 For new users, show a small legend in the bottom-right of the page during edit mode:
+
 - dashed line: `editable area`
 - solid line: `currently editing`
 - dot: `unsaved change`
@@ -358,26 +386,26 @@ Dismiss permanently after the user has been in edit mode 3+ times. Never auto-sh
 
 Single-letter shortcuts only fire when no input is focused.
 
-| Shortcut | Action |
-|---|---|
-| `⌘E` | Enter edit mode |
-| `esc` | Cancel edit / close panel |
-| `⌘S` | Save |
-| `⌘K` | Open All pages panel |
-| `⌘M` | Open Media library panel |
-| `⌘L` | Open Locales panel (when site has multiple locales) |
-| `⌘N` | New page |
-| `⌘H` | Open Recent releases panel |
-| `⌘I` | Open SEO panel for current page |
-| `⌘P` | Open Review & publish modal |
-| `⌘⇧E` | Toggle highlight editable areas |
-| `⌘G` | Toggle grid & spacing overlay |
-| `⌘.` | Hide/show bar |
-| `⌘,` | Site settings |
-| `⌘↵` | Open current page in new tab |
-| `⌘Z` | Revert last edit (in edit mode) |
-| `?` | Open keyboard shortcuts cheat sheet |
-| `/` | Focus search field (when a panel is open) |
+| Shortcut | Action                                              |
+| -------- | --------------------------------------------------- |
+| `⌘E`     | Enter edit mode                                     |
+| `esc`    | Cancel edit / close panel                           |
+| `⌘S`     | Save                                                |
+| `⌘K`     | Open All pages panel                                |
+| `⌘M`     | Open Media library panel                            |
+| `⌘L`     | Open Locales panel (when site has multiple locales) |
+| `⌘N`     | New page                                            |
+| `⌘H`     | Open Recent releases panel                          |
+| `⌘I`     | Open SEO panel for current page                     |
+| `⌘P`     | Open Review & publish modal                         |
+| `⌘⇧E`    | Toggle highlight editable areas                     |
+| `⌘G`     | Toggle grid & spacing overlay                       |
+| `⌘.`     | Hide/show bar                                       |
+| `⌘,`     | Site settings                                       |
+| `⌘↵`     | Open current page in new tab                        |
+| `⌘Z`     | Revert last edit (in edit mode)                     |
+| `?`      | Open keyboard shortcuts cheat sheet                 |
+| `/`      | Focus search field (when a panel is open)           |
 
 ---
 

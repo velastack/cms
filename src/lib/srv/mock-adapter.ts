@@ -230,9 +230,7 @@ export const mockAdapter = (options: MockAdapterOptions = {}): CmsAdapter => {
 					? (m as Record<string, unknown>)
 					: {};
 			};
-			const tombstoneFlags = (
-				t: CmsAdapterTombstone
-			): { redirectTo?: string; gone?: boolean } =>
+			const tombstoneFlags = (t: CmsAdapterTombstone): { redirectTo?: string; gone?: boolean } =>
 				t.kind === 'redirect' ? { redirectTo: t.to } : { gone: true };
 			for (const e of entries ?? []) {
 				if (release) {

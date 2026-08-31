@@ -7,16 +7,14 @@
 		base: 'vela:inline-flex vela:items-center vela:justify-center vela:gap-2 vela:whitespace-nowrap vela:rounded-md vela:text-sm vela:font-medium vela:transition-colors vela:focus-visible:outline-none vela:focus-visible:ring-1 vela:focus-visible:ring-ring vela:disabled:pointer-events-none vela:disabled:opacity-50 vela:cursor-pointer',
 		variants: {
 			variant: {
-				default:
-					'vela:bg-primary vela:text-primary-foreground vela:hover:bg-primary/90',
+				default: 'vela:bg-primary vela:text-primary-foreground vela:hover:bg-primary/90',
 				destructive:
 					'vela:bg-destructive vela:text-destructive-foreground vela:hover:bg-destructive/90',
 				outline:
 					'vela:border vela:border-[var(--cms-bar-divider)] vela:bg-transparent vela:text-bar-text-secondary vela:hover:text-bar-text vela:hover:bg-[var(--cms-bar-bg-hover)]',
 				'outline-destructive':
 					'vela:border vela:border-[var(--cms-status-error-border)] vela:bg-transparent vela:text-[var(--cms-status-error-text-base)] vela:hover:text-[var(--cms-status-error-text-hover)] vela:hover:bg-[var(--cms-status-error-bg-hover)]',
-				secondary:
-					'vela:bg-secondary vela:text-secondary-foreground vela:hover:bg-secondary/80',
+				secondary: 'vela:bg-secondary vela:text-secondary-foreground vela:hover:bg-secondary/80',
 				ghost:
 					'vela:bg-transparent vela:text-bar-text-secondary vela:hover:text-bar-text vela:hover:bg-[var(--cms-bar-bg-hover)]',
 				link: 'vela:text-primary vela:underline-offset-4 vela:hover:underline'
@@ -60,12 +58,7 @@
 </script>
 
 {#if href}
-	<a
-		bind:this={ref}
-		class={cn(buttonVariants({ variant, size }), className)}
-		{href}
-		{...restProps}
-	>
+	<a bind:this={ref} class={cn(buttonVariants({ variant, size }), className)} {href} {...restProps}>
 		{@render children?.()}
 	</a>
 {:else}

@@ -4,10 +4,7 @@ import type { CmsEntry } from './scope.ts';
 
 describe('mergeLocaleDocs', () => {
 	it('returns requested verbatim when fallback is null (single-locale fetch)', () => {
-		const out = mergeLocaleDocs(
-			{ 'page:home': { title: 'Hello', body: 'world' } },
-			null
-		);
+		const out = mergeLocaleDocs({ 'page:home': { title: 'Hello', body: 'world' } }, null);
 		expect(out).toEqual({ 'page:home': { title: 'Hello', body: 'world' } });
 	});
 
@@ -17,18 +14,12 @@ describe('mergeLocaleDocs', () => {
 	});
 
 	it('returns fallback verbatim when requested is missing the scope', () => {
-		const out = mergeLocaleDocs(
-			{},
-			{ 'page:home': { title: 'Hola' } }
-		);
+		const out = mergeLocaleDocs({}, { 'page:home': { title: 'Hola' } });
 		expect(out).toEqual({ 'page:home': { title: 'Hola' } });
 	});
 
 	it('returns requested verbatim when fallback has the scope but requested also does and fallback is empty', () => {
-		const out = mergeLocaleDocs(
-			{ 'page:home': { title: 'Hi' } },
-			{}
-		);
+		const out = mergeLocaleDocs({ 'page:home': { title: 'Hi' } }, {});
 		expect(out).toEqual({ 'page:home': { title: 'Hi' } });
 	});
 
@@ -83,10 +74,7 @@ describe('mergeLocaleEntries', () => {
 	});
 
 	it('returns a shallow clone of requested when fallback is null', () => {
-		const out = mergeLocaleEntries(
-			{ '/posts/[slug]': [es({ slug: 'hola' })] },
-			null
-		);
+		const out = mergeLocaleEntries({ '/posts/[slug]': [es({ slug: 'hola' })] }, null);
 		expect(out).toEqual({ '/posts/[slug]': [es({ slug: 'hola' })] });
 	});
 

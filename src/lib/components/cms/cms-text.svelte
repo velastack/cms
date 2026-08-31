@@ -95,7 +95,8 @@
 {:else if children}
 	<span bind:this={childrenEl} class="cms-text-children">{@render children()}</span>
 {:else}
-	<span class="cms-missing" data-cms-name={name} data-cms-scope={scope?.scopeId ?? '?'}>{name}</span>
+	<span class="cms-missing" data-cms-name={name} data-cms-scope={scope?.scopeId ?? '?'}>{name}</span
+	>
 {/if}
 
 <style>

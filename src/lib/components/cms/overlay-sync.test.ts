@@ -62,9 +62,7 @@ describe('deriveOverlayIntents — draft mode (no version)', () => {
 				previewParam: 'old-key'
 			})
 		);
-		expect(intents).toEqual<OverlayIntent[]>([
-			{ kind: 'set-preview-param', value: 'real-key' }
-		]);
+		expect(intents).toEqual<OverlayIntent[]>([{ kind: 'set-preview-param', value: 'real-key' }]);
 	});
 
 	it('open release but no preview param: sync URL to add it', () => {
@@ -215,9 +213,9 @@ describe('deriveOverlayIntents — version mode', () => {
 
 describe('composeKey', () => {
 	it('encodes scopeId-only when no params', () => {
-		expect(
-			composeKey({ scopeId: 'page:home', routeId: '/', params: {} }, 'en')
-		).toBe('page:home|locale=en');
+		expect(composeKey({ scopeId: 'page:home', routeId: '/', params: {} }, 'en')).toBe(
+			'page:home|locale=en'
+		);
 	});
 
 	it('sorts param keys for stability', () => {

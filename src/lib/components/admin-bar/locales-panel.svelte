@@ -82,9 +82,7 @@
 
 	<div class="vela:overflow-y-auto vela:px-4 vela:pb-2">
 		{#if rows.length === 0}
-			<p class="vela:text-[13px] vela:text-bar-text-tertiary vela:py-2">
-				No locales configured.
-			</p>
+			<p class="vela:text-[13px] vela:text-bar-text-tertiary vela:py-2">No locales configured.</p>
 		{:else}
 			<ol class="vela:list-none vela:pl-0 vela:m-0 vela:flex vela:flex-col">
 				{#each rows as row (row.locale)}
@@ -92,9 +90,7 @@
 						<div class="vela:flex vela:items-start vela:justify-between vela:gap-3">
 							<div class="vela:flex vela:flex-col vela:min-w-0 vela:flex-1">
 								<div class="vela:flex vela:items-center vela:gap-2 vela:min-w-0">
-									<span
-										class="vela:font-mono vela:text-[13px] vela:font-medium vela:text-bar-text"
-									>
+									<span class="vela:font-mono vela:text-[13px] vela:font-medium vela:text-bar-text">
 										{row.locale}
 									</span>
 									{#if row.isDefault}
@@ -136,8 +132,6 @@
 			{rows.length}
 			{rows.length === 1 ? 'locale' : 'locales'}
 		</span>
-		<span class="vela:text-bar-text-tertiary">
-			Edits ride in one release across all locales.
-		</span>
+		<span class="vela:text-bar-text-tertiary"> Edits ride in one release across all locales. </span>
 	</PanelFooter>
 </Panel>

@@ -83,13 +83,7 @@
 		<span class="vela:text-[11px] vela:text-bar-text-tertiary">{rangeLabel}</span>
 	</div>
 
-	<input
-		bind:this={fileInputEl}
-		type="file"
-		accept="image/*"
-		hidden
-		onchange={onPickerChange}
-	/>
+	<input bind:this={fileInputEl} type="file" accept="image/*" hidden onchange={onPickerChange} />
 
 	{#if error}
 		<div
@@ -104,7 +98,9 @@
 	{/if}
 
 	{#if (loading && items.length === 0) || uploading}
-		<div class="vela:flex vela:items-center vela:justify-center vela:py-8 vela:text-bar-text-tertiary">
+		<div
+			class="vela:flex vela:items-center vela:justify-center vela:py-8 vela:text-bar-text-tertiary"
+		>
 			<LoaderIcon class="vela:size-5 vela:animate-spin" />
 		</div>
 	{:else if items.length === 0}

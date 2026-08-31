@@ -16,13 +16,13 @@ import { createCms, mockAdapter } from '@velastack/cms/server';
 import { createCms, mockAdapter } from '@velastack/cms/server';
 
 const adapter = mockAdapter({
-  layoutDocs: { /* keyed by [locale][routeId] */ },
-  pageDocs:   { /* keyed by [locale][routeId], list of entries */ }
+	layoutDocs: {/* keyed by [locale][routeId] */},
+	pageDocs: {/* keyed by [locale][routeId], list of entries */}
 });
 
 export const { load: loadCms, generateEntries } = createCms({
-  adapter,
-  locales: ['en', 'es']  // first entry is the default locale
+	adapter,
+	locales: ['en', 'es'] // first entry is the default locale
 });
 ```
 
@@ -32,14 +32,14 @@ import { error, redirect } from '@sveltejs/kit';
 import { loadCms } from '$lib/cms.js';
 
 export const load = async (event) => {
-  // Pick the locale however you like — pathname, Accept-Language, cookie, …
-  const locale = event.url.searchParams.get('locale') ?? 'en';
+	// Pick the locale however you like — pathname, Accept-Language, cookie, …
+	const locale = event.url.searchParams.get('locale') ?? 'en';
 
-  const { cms, notFound, gone, redirectTo } = await loadCms(event, { locale });
-  if (redirectTo) redirect(308, redirectTo);
-  if (gone) error(410, 'Gone');
-  if (notFound) error(404, 'Not found');
-  return { cms };
+	const { cms, notFound, gone, redirectTo } = await loadCms(event, { locale });
+	if (redirectTo) redirect(308, redirectTo);
+	if (gone) error(410, 'Gone');
+	if (notFound) error(404, 'Not found');
+	return { cms };
 };
 ```
 
@@ -49,11 +49,8 @@ Returns:
 
 ```ts
 type Cms = {
-  load: (
-    event: ServerLoadEvent,
-    options: { locale: string }
-  ) => Promise<LoadCmsResult>;
-  generateEntries: <R extends RouteId>(routeId?: R) => Promise<CmsEntry<RouteParams<R>>[]>;
+	load: (event: ServerLoadEvent, options: { locale: string }) => Promise<LoadCmsResult>;
+	generateEntries: <R extends RouteId>(routeId?: R) => Promise<CmsEntry<RouteParams<R>>[]>;
 };
 ```
 
@@ -80,17 +77,17 @@ adapter ad-hoc per request:
 import { loadCms } from '@velastack/cms/server';
 
 export const load = (event) =>
-  loadCms(event, { adapter, locale: 'es-MX', locales: ['en', 'es-MX'] });
+	loadCms(event, { adapter, locale: 'es-MX', locales: ['en', 'es-MX'] });
 ```
 
 ### `LoadCmsResult`
 
 ```ts
 type LoadCmsResult = {
-  cms: CmsPayload;
-  notFound: boolean;
-  gone: boolean;
-  redirectTo: string | null;
+	cms: CmsPayload;
+	notFound: boolean;
+	gone: boolean;
+	redirectTo: string | null;
 };
 ```
 
@@ -112,14 +109,14 @@ or `redirectTo`.
 
 ```ts
 type CmsPayload = {
-  locale: string;          // resolved locale for this request
-  locales: string[];       // supported set; first entry is the default locale
-  docs: Record<string, Record<string, unknown>>;    // keyed by scopeId
-  scopes: Record<string, CmsScopeEntry>;            // keyed by scopeId
-  metadata: Record<string, unknown>;                // alias of page-scope `metadata` branch
-  entries: Record<string, CmsEntry[]>;              // keyed by routeId (tombstones filtered)
-  endpoint: string;
-  page: CmsPagePointer | null;
+	locale: string; // resolved locale for this request
+	locales: string[]; // supported set; first entry is the default locale
+	docs: Record<string, Record<string, unknown>>; // keyed by scopeId
+	scopes: Record<string, CmsScopeEntry>; // keyed by scopeId
+	metadata: Record<string, unknown>; // alias of page-scope `metadata` branch
+	entries: Record<string, CmsEntry[]>; // keyed by routeId (tombstones filtered)
+	endpoint: string;
+	page: CmsPagePointer | null;
 };
 ```
 
@@ -127,47 +124,42 @@ type CmsPayload = {
 
 ```ts
 interface CmsAdapter {
-  readonly endpoint?: string;
+	readonly endpoint?: string;
 
-  fetchDocs(
-    queries: CmsScopeQuery[],
-    context: CmsAdapterContext
-  ): Promise<Record<string, CmsAdapterResolution>> | Record<string, CmsAdapterResolution>;
+	fetchDocs(
+		queries: CmsScopeQuery[],
+		context: CmsAdapterContext
+	): Promise<Record<string, CmsAdapterResolution>> | Record<string, CmsAdapterResolution>;
 
-  fetchEntries(
-    routeId: string,
-    context: CmsAdapterContext
-  ): Promise<CmsEntry[]> | CmsEntry[];
+	fetchEntries(routeId: string, context: CmsAdapterContext): Promise<CmsEntry[]> | CmsEntry[];
 }
 
 type CmsAdapterContext = {
-  fetch: typeof fetch;          // SvelteKit's request-scoped fetch
-  previewKey?: string | null;   // ?preview=
-  versionKey?: string | null;   // ?version= (mutually exclusive with previewKey; version wins)
-  locale: string;               // BCP-47 bound at loadCms({ locale }) time
-  locales: string[];            // supported set; first entry is the default locale
+	fetch: typeof fetch; // SvelteKit's request-scoped fetch
+	previewKey?: string | null; // ?preview=
+	versionKey?: string | null; // ?version= (mutually exclusive with previewKey; version wins)
+	locale: string; // BCP-47 bound at loadCms({ locale }) time
+	locales: string[]; // supported set; first entry is the default locale
 };
 
 type CmsScopeQuery = {
-  scopeId: string;
-  kind: 'layout' | 'page';
-  routeId: string;
-  params: Record<string, string>;   // owned params for this scope only
-  fields: string[];
-  locale: string;                   // mirrors context.locale, repeated per query for convenience
+	scopeId: string;
+	kind: 'layout' | 'page';
+	routeId: string;
+	params: Record<string, string>; // owned params for this scope only
+	fields: string[];
+	locale: string; // mirrors context.locale, repeated per query for convenience
 };
 
 type CmsAdapterResolution = CmsAdapterDoc | CmsAdapterTombstone;
 type CmsAdapterDoc = { contents: Record<string, unknown> };
-type CmsAdapterTombstone =
-  | { kind: 'gone' }
-  | { kind: 'redirect'; to: string };
+type CmsAdapterTombstone = { kind: 'gone' } | { kind: 'redirect'; to: string };
 
 type CmsEntry<P = Record<string, string>> = {
-  params: P;
-  metadata: Record<string, unknown>;
-  redirectTo?: string;   // set when this entry is a permanent-redirect tombstone
-  gone?: boolean;        // set when this entry is a 410-gone tombstone
+	params: P;
+	metadata: Record<string, unknown>;
+	redirectTo?: string; // set when this entry is a permanent-redirect tombstone
+	gone?: boolean; // set when this entry is a 410-gone tombstone
 };
 ```
 
@@ -242,12 +234,12 @@ ships all locales atomically.
 
 A page-kind URL has four possible outcomes:
 
-| Outcome             | HTTP | Source                                                            |
-| ------------------- | ---- | ----------------------------------------------------------------- |
-| Render normally     | 200  | Adapter returned `{ contents }` for the page scope.               |
-| `redirectTo`        | 308  | Adapter returned `{ kind: 'redirect', to }` for the page scope.   |
-| `gone`              | 410  | Adapter returned `{ kind: 'gone' }` for the page scope.           |
-| `notFound`          | 404  | Adapter returned nothing AND the page scope has owned params.     |
+| Outcome         | HTTP | Source                                                          |
+| --------------- | ---- | --------------------------------------------------------------- |
+| Render normally | 200  | Adapter returned `{ contents }` for the page scope.             |
+| `redirectTo`    | 308  | Adapter returned `{ kind: 'redirect', to }` for the page scope. |
+| `gone`          | 410  | Adapter returned `{ kind: 'gone' }` for the page scope.         |
+| `notFound`      | 404  | Adapter returned nothing AND the page scope has owned params.   |
 
 Tombstones come from two places in the adapter:
 
@@ -272,22 +264,27 @@ In-memory adapter for tests, demos, and local development:
 
 ```ts
 type MockAdapterOptions = {
-  layoutDocs?: Record<string /* locale */, Record<string /* routeId */, Record<string, unknown>>>;
-  pageDocs?:   Record<string /* locale */, Record<string /* routeId */, PageEntry[]>>;
-  resolvePreview?: (key: string) => ReleaseSnapshot | null | undefined;
+	layoutDocs?: Record<string /* locale */, Record<string /* routeId */, Record<string, unknown>>>;
+	pageDocs?: Record<string /* locale */, Record<string /* routeId */, PageEntry[]>>;
+	resolvePreview?: (key: string) => ReleaseSnapshot | null | undefined;
 };
 
 type PageEntry = {
-  params: Record<string, string>;
-  published: Record<string, unknown>;
-  tombstone?: CmsAdapterTombstone;     // mark as a published gone/redirect
+	params: Record<string, string>;
+	published: Record<string, unknown>;
+	tombstone?: CmsAdapterTombstone; // mark as a published gone/redirect
 };
 
 type ReleaseItemSnapshot =
-  | { kind: 'page';        routeId: string; params: Record<string, string>; locale: string; tree: Tree }
-  | { kind: 'layout';      routeId: string;                                 locale: string; tree: Tree }
-  | { kind: 'page-delete'; routeId: string; params: Record<string, string>; locale: string;
-      outcome?: CmsAdapterTombstone };  // omit for hard delete (404 after publish)
+	| { kind: 'page'; routeId: string; params: Record<string, string>; locale: string; tree: Tree }
+	| { kind: 'layout'; routeId: string; locale: string; tree: Tree }
+	| {
+			kind: 'page-delete';
+			routeId: string;
+			params: Record<string, string>;
+			locale: string;
+			outcome?: CmsAdapterTombstone;
+	  }; // omit for hard delete (404 after publish)
 ```
 
 Layout queries are looked up by `[locale][routeId]`; page queries by
@@ -297,24 +294,28 @@ preview. Default-locale fallback is the loader's job, not the adapter's.
 
 ```ts
 const adapter = mockAdapter({
-  layoutDocs: {
-    en: { '/': { footer: { copy: '© 2026' } } },
-    es: { '/': { footer: { copy: '© 2026' } } }
-  },
-  pageDocs: {
-    en: {
-      '/(marketing)/about': [
-        { params: {}, published: { hero: { title: 'About us' }, metadata: { title: 'About us' } } }
-      ],
-      '/(marketing)/rooms/[slug]': [
-        { params: { slug: 'suite-1' }, published: { hero: { title: 'Suite 1' } } },
-        // Permanent redirect after a URL change.
-        { params: { slug: 'legacy' }, published: {}, tombstone: { kind: 'redirect', to: '/rooms/suite-1' } },
-        // Hard 410 — URL is gone for good.
-        { params: { slug: 'old-suite' }, published: {}, tombstone: { kind: 'gone' } }
-      ]
-    }
-  }
+	layoutDocs: {
+		en: { '/': { footer: { copy: '© 2026' } } },
+		es: { '/': { footer: { copy: '© 2026' } } }
+	},
+	pageDocs: {
+		en: {
+			'/(marketing)/about': [
+				{ params: {}, published: { hero: { title: 'About us' }, metadata: { title: 'About us' } } }
+			],
+			'/(marketing)/rooms/[slug]': [
+				{ params: { slug: 'suite-1' }, published: { hero: { title: 'Suite 1' } } },
+				// Permanent redirect after a URL change.
+				{
+					params: { slug: 'legacy' },
+					published: {},
+					tombstone: { kind: 'redirect', to: '/rooms/suite-1' }
+				},
+				// Hard 410 — URL is gone for good.
+				{ params: { slug: 'old-suite' }, published: {}, tombstone: { kind: 'gone' } }
+			]
+		}
+	}
 });
 ```
 

@@ -23,11 +23,7 @@ class AdminBarThemeState {
 	systemPrefersDark = $state(false);
 
 	get resolved(): 'light' | 'dark' {
-		return this.pref === 'system'
-			? this.systemPrefersDark
-				? 'dark'
-				: 'light'
-			: this.pref;
+		return this.pref === 'system' ? (this.systemPrefersDark ? 'dark' : 'light') : this.pref;
 	}
 
 	setPref(next: AdminBarTheme) {

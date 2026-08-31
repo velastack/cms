@@ -15,7 +15,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { cms } from '@velastack/cms/vite';
 
 export default defineConfig({
-  plugins: [cms(), sveltekit()]
+	plugins: [cms(), sveltekit()]
 });
 ```
 
@@ -27,15 +27,15 @@ compiles the route file.
 
 ```ts
 type CmsPluginOptions = {
-  routesDir?: string;            // default: 'src/routes' (relative to vite root)
-  libDir?: string;               // default: 'src/lib'
-  components?: ExternalCmsComponentSpec[];
-  traverse?: (string | RegExp)[];
+	routesDir?: string; // default: 'src/routes' (relative to vite root)
+	libDir?: string; // default: 'src/lib'
+	components?: ExternalCmsComponentSpec[];
+	traverse?: (string | RegExp)[];
 };
 
 type ExternalCmsComponentSpec =
-  | { source: string; names: string[] }   // bare specifier with named CMS exports
-  | { source: string; default: true };    // bare specifier whose default export is a CMS component
+	| { source: string; names: string[] } // bare specifier with named CMS exports
+	| { source: string; default: true }; // bare specifier whose default export is a CMS component
 ```
 
 - `routesDir` / `libDir` — only override if your project diverges from the
@@ -56,17 +56,17 @@ type ExternalCmsComponentSpec =
 import { cmsManifest } from 'virtual:vela-cms/manifest';
 
 type CmsManifest = {
-  version: 1;
-  routes: Record<string, { scopes: CmsManifestScope[] }>;
+	version: 1;
+	routes: Record<string, { scopes: CmsManifestScope[] }>;
 };
 
 type CmsManifestScope = {
-  scopeId: string;                  // 'layout:/(marketing)' or 'page:/(marketing)/rooms/[slug]'
-  kind: 'layout' | 'page';
-  routeId: string;                  // route the scope is rooted at
-  ownedParams: string[];            // params introduced at this scope (deduped up-chain)
-  fields: string[];                 // CMS field names referenced anywhere in the scope
-  metadata?: string[];              // page-only — editable metadata field names
+	scopeId: string; // 'layout:/(marketing)' or 'page:/(marketing)/rooms/[slug]'
+	kind: 'layout' | 'page';
+	routeId: string; // route the scope is rooted at
+	ownedParams: string[]; // params introduced at this scope (deduped up-chain)
+	fields: string[]; // CMS field names referenced anywhere in the scope
+	metadata?: string[]; // page-only — editable metadata field names
 };
 ```
 

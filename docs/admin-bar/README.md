@@ -21,15 +21,15 @@ This directory contains everything needed to implement the admin bar redesign.
 
 ## Reference mockup index
 
-| File | What it shows |
-|---|---|
-| `01_three_states_and_menu.png` | Early concept — single hamburger menu, three bar states |
+| File                             | What it shows                                                               |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| `01_three_states_and_menu.png`   | Early concept — single hamburger menu, three bar states                     |
 | `02_bar_with_menubar_states.png` | Final bar layout with three-item menubar (Page / Site / View), three states |
-| `03_site_and_view_menus.png` | Full contents of Site and View dropdowns with shortcuts |
-| `04_all_pages_panel.png` | Pages panel with static routes and dynamic-route template groups |
-| `05_releases_panel.png` | History panel redesigned as a release timeline |
-| `06_seo_panel.png` | Per-page SEO panel with Google search preview |
-| `07_publish_modal.png` | Multi-page Review & publish modal with per-change checkboxes |
-| `08_editing_experience.png` | Inline editing with named slots, floating toolbar, dirty-state indicators |
+| `03_site_and_view_menus.png`     | Full contents of Site and View dropdowns with shortcuts                     |
+| `04_all_pages_panel.png`         | Pages panel with static routes and dynamic-route template groups            |
+| `05_releases_panel.png`          | History panel redesigned as a release timeline                              |
+| `06_seo_panel.png`               | Per-page SEO panel with Google search preview                               |
+| `07_publish_modal.png`           | Multi-page Review & publish modal with per-change checkboxes                |
+| `08_editing_experience.png`      | Inline editing with named slots, floating toolbar, dirty-state indicators   |
 
 `02_bar_with_menubar_states.png` is the canonical bar layout. `01_three_states_and_menu.png` is an earlier exploration kept for context — implement `02`.

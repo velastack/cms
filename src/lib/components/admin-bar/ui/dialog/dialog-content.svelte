@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { Dialog as DialogPrimitive } from "bits-ui";
-	import XIcon from "@lucide/svelte/icons/x";
-	import type { Snippet } from "svelte";
-	import { cn, type WithoutChildrenOrChild } from "$lib/components/admin-bar/utils.js";
-	import DialogOverlay from "./dialog-overlay.svelte";
-	import DialogPortal from "./dialog-portal.svelte";
+	import { Dialog as DialogPrimitive } from 'bits-ui';
+	import XIcon from '@lucide/svelte/icons/x';
+	import type { Snippet } from 'svelte';
+	import { cn, type WithoutChildrenOrChild } from '$lib/components/admin-bar/utils.js';
+	import DialogOverlay from './dialog-overlay.svelte';
+	import DialogPortal from './dialog-portal.svelte';
 
 	let {
 		ref = $bindable(null),
@@ -27,7 +27,7 @@
 		bind:ref
 		data-slot="dialog-content"
 		class={cn(
-			"vela:bg-bar-bg vela:text-bar-text vela:data-[state=open]:animate-in vela:data-[state=closed]:animate-out vela:data-[state=closed]:fade-out-0 vela:data-[state=open]:fade-in-0 vela:data-[state=closed]:zoom-out-95 vela:data-[state=open]:zoom-in-95 vela:fixed vela:top-1/2 vela:left-1/2 vela:z-50 vela:grid vela:w-[calc(100%-2rem)] vela:max-w-[30rem] vela:-translate-x-1/2 vela:-translate-y-1/2 vela:rounded-2xl vela:border vela:border-[var(--cms-bar-divider)] vela:shadow-[0_24px_60px_rgba(0,0,0,0.5),0_4px_12px_rgba(0,0,0,0.25)] vela:duration-200",
+			'vela:bg-bar-bg vela:text-bar-text vela:data-[state=open]:animate-in vela:data-[state=closed]:animate-out vela:data-[state=closed]:fade-out-0 vela:data-[state=open]:fade-in-0 vela:data-[state=closed]:zoom-out-95 vela:data-[state=open]:zoom-in-95 vela:fixed vela:top-1/2 vela:left-1/2 vela:z-50 vela:grid vela:w-[calc(100%-2rem)] vela:max-w-[30rem] vela:-translate-x-1/2 vela:-translate-y-1/2 vela:rounded-2xl vela:border vela:border-[var(--cms-bar-divider)] vela:shadow-[0_24px_60px_rgba(0,0,0,0.5),0_4px_12px_rgba(0,0,0,0.25)] vela:duration-200',
 			className
 		)}
 		{...restProps}

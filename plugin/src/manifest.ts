@@ -49,8 +49,7 @@ export type CmsManifest = {
  * component. Auto-registers `source` for traversal.
  */
 export type ExternalCmsComponentSpec =
-	| { source: string; names: string[] }
-	| { source: string; default: true };
+	{ source: string; names: string[] } | { source: string; default: true };
 
 /**
  * Resolve a bare specifier to an absolute file path using the host bundler's

@@ -24,7 +24,9 @@
 	{...restProps}
 >
 	{#snippet children({ selected, highlighted })}
-		<span class="vela:absolute vela:end-2 vela:flex vela:size-3.5 vela:items-center vela:justify-center">
+		<span
+			class="vela:absolute vela:end-2 vela:flex vela:size-3.5 vela:items-center vela:justify-center"
+		>
 			{#if selected}
 				<CheckIcon class="vela:size-3.5" />
 			{/if}

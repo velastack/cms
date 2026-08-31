@@ -62,12 +62,9 @@
 		useExternal = false;
 	});
 
-	const optionValueFor = (t: RedirectTarget) =>
-		`${t.routeId}::${JSON.stringify(t.params)}`;
+	const optionValueFor = (t: RedirectTarget) => `${t.routeId}::${JSON.stringify(t.params)}`;
 
-	const selectableTargets = $derived(
-		targets.filter((t) => t.url !== url)
-	);
+	const selectableTargets = $derived(targets.filter((t) => t.url !== url));
 
 	const pickedRawTarget = $derived.by((): string => {
 		if (mode !== 'redirect') return '';
@@ -267,9 +264,8 @@
 								>
 									<Select.Trigger size="sm">
 										<span data-slot="select-value" class="vela:truncate">
-											{selectableTargets.find(
-												(t) => optionValueFor(t) === pageTargetValue
-											)?.url ?? '— Select page —'}
+											{selectableTargets.find((t) => optionValueFor(t) === pageTargetValue)?.url ??
+												'— Select page —'}
 										</span>
 									</Select.Trigger>
 									<Select.Content sideOffset={6}>
@@ -283,10 +279,7 @@
 							{/if}
 
 							{#if isSelfRedirect}
-								<p
-									class="vela:text-[12px] vela:text-[var(--cms-status-error-text)]"
-									role="alert"
-								>
+								<p class="vela:text-[12px] vela:text-[var(--cms-status-error-text)]" role="alert">
 									This would redirect to itself.
 								</p>
 							{:else if resolved.hops > 0 && resolved.terminal !== ''}

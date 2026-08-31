@@ -7,16 +7,12 @@
 		base: 'vela:inline-flex vela:items-center vela:justify-center vela:gap-1 vela:rounded-md vela:px-2 vela:py-0.5 vela:text-[11px] vela:font-medium vela:tracking-tight vela:whitespace-nowrap',
 		variants: {
 			variant: {
-				default:
-					'vela:bg-[var(--cms-bar-bg-hover)] vela:text-bar-text-secondary',
-				warn:
-					'vela:bg-[var(--cms-status-warn-bg)] vela:text-[var(--cms-status-warn-text)]',
+				default: 'vela:bg-[var(--cms-bar-bg-hover)] vela:text-bar-text-secondary',
+				warn: 'vela:bg-[var(--cms-status-warn-bg)] vela:text-[var(--cms-status-warn-text)]',
 				success:
 					'vela:bg-[var(--cms-status-success-bg)] vela:text-[var(--cms-status-success-text)]',
-				edit:
-					'vela:bg-[var(--cms-status-edit-bg)] vela:text-[var(--cms-status-edit-text)]',
-				destructive:
-					'vela:bg-[var(--cms-status-error-bg)] vela:text-[var(--cms-status-error-text)]'
+				edit: 'vela:bg-[var(--cms-status-edit-bg)] vela:text-[var(--cms-status-edit-text)]',
+				destructive: 'vela:bg-[var(--cms-status-error-bg)] vela:text-[var(--cms-status-error-text)]'
 			},
 			size: {
 				default: 'vela:px-2 vela:py-0.5 vela:text-[11px]',
@@ -51,20 +47,11 @@
 </script>
 
 {#if href}
-	<a
-		bind:this={ref}
-		class={cn(badgeVariants({ variant, size }), className)}
-		{href}
-		{...restProps}
-	>
+	<a bind:this={ref} class={cn(badgeVariants({ variant, size }), className)} {href} {...restProps}>
 		{@render children?.()}
 	</a>
 {:else}
-	<span
-		bind:this={ref}
-		class={cn(badgeVariants({ variant, size }), className)}
-		{...restProps}
-	>
+	<span bind:this={ref} class={cn(badgeVariants({ variant, size }), className)} {...restProps}>
 		{@render children?.()}
 	</span>
 {/if}

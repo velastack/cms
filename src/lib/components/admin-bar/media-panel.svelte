@@ -187,18 +187,24 @@
 		{/if}
 
 		{#if loading && items.length === 0}
-			<div class="vela:flex vela:items-center vela:justify-center vela:py-12 vela:text-bar-text-tertiary">
+			<div
+				class="vela:flex vela:items-center vela:justify-center vela:py-12 vela:text-bar-text-tertiary"
+			>
 				<LoaderIcon class="vela:size-5 vela:animate-spin" />
 			</div>
 		{:else if items.length === 0}
-			<div class="vela:flex vela:flex-col vela:items-center vela:justify-center vela:py-12 vela:text-[13px] vela:text-bar-text-tertiary">
+			<div
+				class="vela:flex vela:flex-col vela:items-center vela:justify-center vela:py-12 vela:text-[13px] vela:text-bar-text-tertiary"
+			>
 				<UploadIcon class="vela:size-6 vela:mb-2 vela:opacity-50" />
 				<span>No media yet — upload an image to get started.</span>
 			</div>
 		{:else}
 			<div class="vela:grid vela:grid-cols-3 vela:sm:grid-cols-4 vela:gap-2">
 				{#each items as item (item.id)}
-					<div class="vela:relative vela:group vela:aspect-square vela:rounded-md vela:overflow-hidden vela:bg-[var(--cms-bar-bg-hover)]">
+					<div
+						class="vela:relative vela:group vela:aspect-square vela:rounded-md vela:overflow-hidden vela:bg-[var(--cms-bar-bg-hover)]"
+					>
 						<button
 							type="button"
 							class="vela:block vela:size-full vela:cursor-pointer vela:bg-transparent vela:border-0 vela:p-0"
@@ -221,7 +227,9 @@
 							<TrashIcon class="vela:size-3.5" />
 						</button>
 						{#if copiedId === item.id}
-							<div class="vela:absolute vela:inset-0 vela:flex vela:items-center vela:justify-center vela:bg-black/55 vela:text-white vela:text-[12px] vela:font-medium vela:gap-1">
+							<div
+								class="vela:absolute vela:inset-0 vela:flex vela:items-center vela:justify-center vela:bg-black/55 vela:text-white vela:text-[12px] vela:font-medium vela:gap-1"
+							>
 								<CheckIcon class="vela:size-4" />
 								Copied
 							</div>
@@ -232,7 +240,9 @@
 		{/if}
 
 		{#if uploading}
-			<div class="vela:absolute vela:inset-0 vela:flex vela:items-center vela:justify-center vela:bg-black/35 vela:pointer-events-none">
+			<div
+				class="vela:absolute vela:inset-0 vela:flex vela:items-center vela:justify-center vela:bg-black/35 vela:pointer-events-none"
+			>
 				<LoaderIcon class="vela:size-6 vela:animate-spin vela:text-white" />
 			</div>
 		{/if}

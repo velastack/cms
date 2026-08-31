@@ -316,9 +316,7 @@ describe('apiAdapter — fetchEntries', () => {
 	});
 
 	describe('build-time media URL rewrite', () => {
-		const mockBuildConfig = (
-			media: { uploadsBase: string; mediaPrefix: string } | null
-		) => {
+		const mockBuildConfig = (media: { uploadsBase: string; mediaPrefix: string } | null) => {
 			vi.doMock('virtual:vela-cms/build-config', () => ({ buildConfig: { media } }));
 		};
 
@@ -389,9 +387,7 @@ describe('apiAdapter — fetchEntries', () => {
 					routes: [
 						{
 							routeId: '/r/[slug]',
-							entries: [
-								{ params: { slug: 'a' }, metadata: { ogImage: '/uploads/og.png' } }
-							]
+							entries: [{ params: { slug: 'a' }, metadata: { ogImage: '/uploads/og.png' } }]
 						}
 					]
 				}

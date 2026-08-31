@@ -27,9 +27,7 @@ export type CmsAdapterDoc = {
  * page was replaced with a permanent redirect to `to` (HTTP 308). Layout
  * scopes never resolve to a tombstone — only page-kind scopes do.
  */
-export type CmsAdapterTombstone =
-	| { kind: 'gone' }
-	| { kind: 'redirect'; to: string };
+export type CmsAdapterTombstone = { kind: 'gone' } | { kind: 'redirect'; to: string };
 
 /**
  * One resolution from an adapter for a single scope query: either the doc's
@@ -120,5 +118,7 @@ export interface CmsAdapter {
 	 * tree. Optional — adapters that don't carry site state may omit this and
 	 * the loader treats the project as having an empty site tree.
 	 */
-	fetchSite?(context: CmsAdapterContext): Promise<Record<string, unknown>> | Record<string, unknown>;
+	fetchSite?(
+		context: CmsAdapterContext
+	): Promise<Record<string, unknown>> | Record<string, unknown>;
 }

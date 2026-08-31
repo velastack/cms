@@ -1,13 +1,13 @@
-import Root from "./dialog.svelte";
-import Trigger from "./dialog-trigger.svelte";
-import Portal from "./dialog-portal.svelte";
-import Close from "./dialog-close.svelte";
-import Overlay from "./dialog-overlay.svelte";
-import Content from "./dialog-content.svelte";
-import Header from "./dialog-header.svelte";
-import Footer from "./dialog-footer.svelte";
-import Title from "./dialog-title.svelte";
-import Description from "./dialog-description.svelte";
+import Root from './dialog.svelte';
+import Trigger from './dialog-trigger.svelte';
+import Portal from './dialog-portal.svelte';
+import Close from './dialog-close.svelte';
+import Overlay from './dialog-overlay.svelte';
+import Content from './dialog-content.svelte';
+import Header from './dialog-header.svelte';
+import Footer from './dialog-footer.svelte';
+import Title from './dialog-title.svelte';
+import Description from './dialog-description.svelte';
 
 export {
 	Root,
@@ -30,5 +30,5 @@ export {
 	Header as DialogHeader,
 	Footer as DialogFooter,
 	Title as DialogTitle,
-	Description as DialogDescription,
+	Description as DialogDescription
 };

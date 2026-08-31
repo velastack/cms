@@ -315,7 +315,7 @@ export const loadCms = (
 ): Promise<LoadCmsResult> => {
 	if (browser) {
 		throw new Error(
-			"[@velastack/cms] loadCms() is server-only — call it from `+layout.server.ts` " +
+			'[@velastack/cms] loadCms() is server-only — call it from `+layout.server.ts` ' +
 				'or `+page.server.ts`, not from a `+page.svelte` or universal `+page.ts`. ' +
 				"For browser-side preview/editing, use `cmsStore` from '@velastack/cms'."
 		);

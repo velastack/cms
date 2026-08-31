@@ -239,9 +239,7 @@ describe('mockAdapter.fetchDocs', () => {
 	it('suppresses page entries marked for deletion in the release', async () => {
 		const release: ReleaseSnapshot = {
 			id: 'u1',
-			items: [
-				{ kind: 'page-delete', routeId: '/r/[slug]', params: { slug: 'a' }, locale: 'en' }
-			]
+			items: [{ kind: 'page-delete', routeId: '/r/[slug]', params: { slug: 'a' }, locale: 'en' }]
 		};
 		const adapter = mockAdapter({
 			pageDocs: { en: { '/r/[slug]': [{ params: { slug: 'a' }, published: { hero: 'A' } }] } },
@@ -378,9 +376,7 @@ describe('mockAdapter.fetchEntries', () => {
 	it('drops entries marked for deletion in the release', async () => {
 		const release: ReleaseSnapshot = {
 			id: 'u1',
-			items: [
-				{ kind: 'page-delete', routeId: '/r/[slug]', params: { slug: 'a' }, locale: 'en' }
-			]
+			items: [{ kind: 'page-delete', routeId: '/r/[slug]', params: { slug: 'a' }, locale: 'en' }]
 		};
 		const adapter = mockAdapter({
 			pageDocs: {
@@ -413,9 +409,7 @@ describe('mockAdapter.fetchEntries', () => {
 		const adapter = mockAdapter({
 			pageDocs: {
 				en: {
-					'/r/[slug]': [
-						{ params: { slug: 'a' }, published: { metadata: { title: 'A' } } }
-					]
+					'/r/[slug]': [{ params: { slug: 'a' }, published: { metadata: { title: 'A' } } }]
 				}
 			},
 			resolvePreview: () => release
@@ -448,9 +442,7 @@ describe('mockAdapter.fetchEntries', () => {
 			resolvePreview: () => release
 		});
 		const entries = await adapter.fetchEntries('/r/[slug]', { ...ctx, previewKey: 'k' });
-		expect(entries).toEqual([
-			{ params: { slug: 'a' }, metadata: { title: 'A' }, gone: true }
-		]);
+		expect(entries).toEqual([{ params: { slug: 'a' }, metadata: { title: 'A' }, gone: true }]);
 	});
 
 	it('returns published-state tombstones with appropriate flags (no release)', async () => {

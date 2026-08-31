@@ -57,9 +57,7 @@ describe('parsePageCmsIndex', () => {
 
 describe('hasGenerateEntriesImport', () => {
 	it('matches a simple named import', () => {
-		expect(
-			hasGenerateEntriesImport(`import { generateEntries } from '$lib/cms';\n`)
-		).toBe(true);
+		expect(hasGenerateEntriesImport(`import { generateEntries } from '$lib/cms';\n`)).toBe(true);
 	});
 
 	it('matches in mixed bindings', () => {
@@ -69,23 +67,21 @@ describe('hasGenerateEntriesImport', () => {
 	});
 
 	it('matches with an alias', () => {
-		expect(
-			hasGenerateEntriesImport(`import { generateEntries as ge } from '$lib/cms';\n`)
-		).toBe(true);
+		expect(hasGenerateEntriesImport(`import { generateEntries as ge } from '$lib/cms';\n`)).toBe(
+			true
+		);
 	});
 
 	it('matches across multi-line braces', () => {
 		expect(
-			hasGenerateEntriesImport(
-				`import {\n  generateEntries,\n  load\n} from '$lib/cms';\n`
-			)
+			hasGenerateEntriesImport(`import {\n  generateEntries,\n  load\n} from '$lib/cms';\n`)
 		).toBe(true);
 	});
 
 	it('does not match a name that merely contains the substring', () => {
-		expect(
-			hasGenerateEntriesImport(`import { generateEntriesHelper } from '$lib/cms';\n`)
-		).toBe(false);
+		expect(hasGenerateEntriesImport(`import { generateEntriesHelper } from '$lib/cms';\n`)).toBe(
+			false
+		);
 	});
 
 	it('returns false when the import is absent', () => {
@@ -107,10 +103,7 @@ describe('injectGenerateEntriesRouteId', () => {
 	});
 
 	it('tolerates whitespace inside the parens', () => {
-		const out = injectGenerateEntriesRouteId(
-			`generateEntries(\n)\ngenerateEntries(  )\n`,
-			'/x'
-		);
+		const out = injectGenerateEntriesRouteId(`generateEntries(\n)\ngenerateEntries(  )\n`, '/x');
 		expect(out).toBe(`generateEntries('/x')\ngenerateEntries('/x')\n`);
 	});
 
@@ -120,10 +113,7 @@ describe('injectGenerateEntriesRouteId', () => {
 	});
 
 	it('escapes single quotes and backslashes in the routeId', () => {
-		const out = injectGenerateEntriesRouteId(
-			`generateEntries()\n`,
-			"/has'quote\\back"
-		);
+		const out = injectGenerateEntriesRouteId(`generateEntries()\n`, "/has'quote\\back");
 		expect(out).toBe(`generateEntries('/has\\'quote\\\\back')\n`);
 	});
 
@@ -176,11 +166,7 @@ describe('injectScopeInstall', () => {
 			routeId: '/(marketing)/rooms/[slug]',
 			ownedParams: ['slug']
 		};
-		const out = injectScopeInstall(
-			`<script>let x = 1;</script>`,
-			layoutInfo,
-			'/x/+layout.svelte'
-		);
+		const out = injectScopeInstall(`<script>let x = 1;</script>`, layoutInfo, '/x/+layout.svelte');
 		expect(out).toContain('"ownedParams":["slug"]');
 	});
 });

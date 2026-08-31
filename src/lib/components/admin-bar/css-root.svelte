@@ -18,10 +18,6 @@
 	let { children }: Props = $props();
 </script>
 
-<span
-	class="vela-admin-bar"
-	data-vela-theme={adminBarTheme.resolved}
-	style:display="contents"
->
+<span class="vela-admin-bar" data-vela-theme={adminBarTheme.resolved} style:display="contents">
 	{@render children()}
 </span>

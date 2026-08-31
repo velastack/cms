@@ -48,8 +48,7 @@
 	aria-label={name}
 	rows="3"
 	spellcheck="true"
-	oninput={onInput}
-></textarea>
+	oninput={onInput}></textarea>
 
 <style>
 	.cms-markdown-editable {

@@ -192,138 +192,130 @@
 </script>
 
 <CssRoot>
-<span
-	class="cms-image-edit"
-	class:dragging
-	role="region"
-	aria-label={`Image slot ${name}`}
-	ondragenter={onDragEnter}
-	ondragover={onDragOver}
-	ondragleave={onDragLeave}
-	ondrop={onDrop}
->
-	<button
-		type="button"
-		class="cms-image-edit__pick"
-		onclick={openPicker}
-		aria-label={currentUrl ? `Replace image for ${name}` : `Upload image for ${name}`}
+	<span
+		class="cms-image-edit"
+		class:dragging
+		role="region"
+		aria-label={`Image slot ${name}`}
+		ondragenter={onDragEnter}
+		ondragover={onDragOver}
+		ondragleave={onDragLeave}
+		ondrop={onDrop}
 	>
-		{#if currentUrl}
-			<img class="cms-image" src={currentUrl} alt={renderedAlt} draggable="false" />
-		{:else}
-			<span class="cms-image-edit__empty" data-cms-name={name}>{name}</span>
-		{/if}
-	</button>
-
-	<input
-		bind:this={fileInputEl}
-		type="file"
-		accept="image/*"
-		hidden
-		onchange={onPickerChange}
-	/>
-
-	<div
-		class="cms-image-edit__toolbar"
-		role="toolbar"
-		tabindex="-1"
-		aria-label="Image actions"
-		onmousedown={stopMouseDown}
-	>
-		{#if mode === 'idle'}
-			<Button size="xs" variant="ghost" onclick={openPicker}>
-				<UploadIcon class="vela:size-3.5" />
-				Upload
-			</Button>
-			<Button size="xs" variant="ghost" onclick={toggleLibrary}>
-				<ImagesIcon class="vela:size-3.5" />
-				Library
-			</Button>
-			<Button size="xs" variant="ghost" onclick={enterUrlMode}>
-				<LinkIcon class="vela:size-3.5" />
-				URL
-			</Button>
-			<Button size="xs" variant="ghost" onclick={enterAltMode}>
-				Alt
-			</Button>
+		<button
+			type="button"
+			class="cms-image-edit__pick"
+			onclick={openPicker}
+			aria-label={currentUrl ? `Replace image for ${name}` : `Upload image for ${name}`}
+		>
 			{#if currentUrl}
-				<Button size="xs" variant="ghost" onclick={remove} aria-label="Remove image">
-					<TrashIcon class="vela:size-3.5" />
+				<img class="cms-image" src={currentUrl} alt={renderedAlt} draggable="false" />
+			{:else}
+				<span class="cms-image-edit__empty" data-cms-name={name}>{name}</span>
+			{/if}
+		</button>
+
+		<input bind:this={fileInputEl} type="file" accept="image/*" hidden onchange={onPickerChange} />
+
+		<div
+			class="cms-image-edit__toolbar"
+			role="toolbar"
+			tabindex="-1"
+			aria-label="Image actions"
+			onmousedown={stopMouseDown}
+		>
+			{#if mode === 'idle'}
+				<Button size="xs" variant="ghost" onclick={openPicker}>
+					<UploadIcon class="vela:size-3.5" />
+					Upload
+				</Button>
+				<Button size="xs" variant="ghost" onclick={toggleLibrary}>
+					<ImagesIcon class="vela:size-3.5" />
+					Library
+				</Button>
+				<Button size="xs" variant="ghost" onclick={enterUrlMode}>
+					<LinkIcon class="vela:size-3.5" />
+					URL
+				</Button>
+				<Button size="xs" variant="ghost" onclick={enterAltMode}>Alt</Button>
+				{#if currentUrl}
+					<Button size="xs" variant="ghost" onclick={remove} aria-label="Remove image">
+						<TrashIcon class="vela:size-3.5" />
+					</Button>
+				{/if}
+			{:else if mode === 'url'}
+				<Input
+					bind:ref={urlInputEl}
+					bind:value={urlValue}
+					type="url"
+					placeholder="https://example.com/image.jpg"
+					onkeydown={onUrlKey}
+					class="vela:h-7 vela:w-72 vela:text-xs"
+				/>
+				<Button size="icon" variant="ghost" aria-label="Apply URL" onclick={applyUrl}>
+					<CheckIcon class="vela:size-4" />
+				</Button>
+				<Button size="icon" variant="ghost" aria-label="Cancel" onclick={cancelEdit}>
+					<XIcon class="vela:size-4" />
+				</Button>
+			{:else if mode === 'alt'}
+				<Input
+					bind:ref={altInputEl}
+					bind:value={altValue}
+					type="text"
+					placeholder="Alt text"
+					onkeydown={onAltKey}
+					class="vela:h-7 vela:w-72 vela:text-xs"
+				/>
+				<Button size="icon" variant="ghost" aria-label="Apply alt text" onclick={applyAlt}>
+					<CheckIcon class="vela:size-4" />
+				</Button>
+				<Button size="icon" variant="ghost" aria-label="Cancel" onclick={cancelEdit}>
+					<XIcon class="vela:size-4" />
 				</Button>
 			{/if}
-		{:else if mode === 'url'}
-			<Input
-				bind:ref={urlInputEl}
-				bind:value={urlValue}
-				type="url"
-				placeholder="https://example.com/image.jpg"
-				onkeydown={onUrlKey}
-				class="vela:h-7 vela:w-72 vela:text-xs"
-			/>
-			<Button size="icon" variant="ghost" aria-label="Apply URL" onclick={applyUrl}>
-				<CheckIcon class="vela:size-4" />
-			</Button>
-			<Button size="icon" variant="ghost" aria-label="Cancel" onclick={cancelEdit}>
-				<XIcon class="vela:size-4" />
-			</Button>
-		{:else if mode === 'alt'}
-			<Input
-				bind:ref={altInputEl}
-				bind:value={altValue}
-				type="text"
-				placeholder="Alt text"
-				onkeydown={onAltKey}
-				class="vela:h-7 vela:w-72 vela:text-xs"
-			/>
-			<Button size="icon" variant="ghost" aria-label="Apply alt text" onclick={applyAlt}>
-				<CheckIcon class="vela:size-4" />
-			</Button>
-			<Button size="icon" variant="ghost" aria-label="Cancel" onclick={cancelEdit}>
-				<XIcon class="vela:size-4" />
-			</Button>
+		</div>
+
+		{#if libraryOpen}
+			<div
+				class="cms-image-edit__library"
+				role="dialog"
+				tabindex="-1"
+				aria-label="Choose from media library"
+				onmousedown={stopMouseDown}
+				onkeydown={onLibraryKey}
+				use:clickOutside={() => (libraryOpen = false)}
+			>
+				<CmsMediaPicker {endpoint} onSelect={onLibrarySelect} />
+			</div>
 		{/if}
-	</div>
 
-	{#if libraryOpen}
-		<div
-			class="cms-image-edit__library"
-			role="dialog"
-			tabindex="-1"
-			aria-label="Choose from media library"
-			onmousedown={stopMouseDown}
-			onkeydown={onLibraryKey}
-			use:clickOutside={() => (libraryOpen = false)}
-		>
-			<CmsMediaPicker {endpoint} onSelect={onLibrarySelect} />
-		</div>
-	{/if}
+		{#if dragging}
+			<div class="cms-image-edit__overlay cms-image-edit__overlay--drop">
+				<UploadIcon class="vela:size-6" />
+				<span>Drop to upload</span>
+			</div>
+		{/if}
 
-	{#if dragging}
-		<div class="cms-image-edit__overlay cms-image-edit__overlay--drop">
-			<UploadIcon class="vela:size-6" />
-			<span>Drop to upload</span>
-		</div>
-	{/if}
+		{#if uploading}
+			<div class="cms-image-edit__overlay cms-image-edit__overlay--uploading">
+				<LoaderIcon class="vela:size-5 vela:animate-spin" />
+			</div>
+		{/if}
 
-	{#if uploading}
-		<div class="cms-image-edit__overlay cms-image-edit__overlay--uploading">
-			<LoaderIcon class="vela:size-5 vela:animate-spin" />
-		</div>
-	{/if}
-
-	{#if error}
-		<div class="cms-image-edit__error" role="alert">
-			<AlertIcon class="vela:size-3.5" />
-			<span>{error}</span>
-			<button
-				type="button"
-				class="cms-image-edit__error-dismiss"
-				aria-label="Dismiss error"
-				onclick={dismissError}
-			>×</button>
-		</div>
-	{/if}
-</span>
+		{#if error}
+			<div class="cms-image-edit__error" role="alert">
+				<AlertIcon class="vela:size-3.5" />
+				<span>{error}</span>
+				<button
+					type="button"
+					class="cms-image-edit__error-dismiss"
+					aria-label="Dismiss error"
+					onclick={dismissError}>×</button
+				>
+			</div>
+		{/if}
+	</span>
 </CssRoot>
 
 <style>

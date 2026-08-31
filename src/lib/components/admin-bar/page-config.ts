@@ -4,13 +4,7 @@
  * to import them anywhere.
  */
 
-export type MetadataPrimitive =
-	| 'string'
-	| 'long-string'
-	| 'number'
-	| 'boolean'
-	| 'date'
-	| 'image';
+export type MetadataPrimitive = 'string' | 'long-string' | 'number' | 'boolean' | 'date' | 'image';
 
 export type MetadataFieldSchema =
 	| MetadataPrimitive
@@ -65,9 +59,8 @@ export const normalizeField = (f: CmsPageField): NormalizedField =>
  * Resolve a metadata field schema's primitive type, regardless of whether
  * it was declared in shorthand string form or object form.
  */
-export const fieldType = (
-	schema: MetadataFieldSchema
-): MetadataPrimitive | 'enum' => (typeof schema === 'string' ? schema : schema.type);
+export const fieldType = (schema: MetadataFieldSchema): MetadataPrimitive | 'enum' =>
+	typeof schema === 'string' ? schema : schema.type;
 
 /** Default metadata schema applied when a route has no `page.cms.ts`. */
 export const DEFAULT_METADATA_SCHEMA: CmsPageMetadataSchema = {
