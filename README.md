@@ -142,7 +142,7 @@ Along with optional `<MetaTags />` handling.
 
 `<AdminBar/>` is a tiny sync wrapper. Its UI and every editable component are dynamically imported, so public visitors never download editing code.
 
-### 4. Author your routes
+### 5. Author your routes
 
 ```svelte
 <!-- src/routes/(marketing)/about/+page.svelte -->
@@ -635,7 +635,7 @@ plugin/src/      Vite plugin (route discovery, AST parse, manifest builder, tran
 src/lib/         Public library
   components/cms/      Display + editable components, scope helpers, store
   components/admin-bar/ Admin bar wrapper + async internal + SEO panel
-  server/              loadCms, mockAdapter, types
+  srv/                 loadCms, mockAdapter, types
 src/routes/      Test harness / showcase
 ```
 
