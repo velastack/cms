@@ -25,3 +25,4 @@ vite.config.ts.timestamp-*
 
 # Local agent settings
 .claude/settings.local.json
+/plugin/dist
