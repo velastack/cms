@@ -1,9 +1,9 @@
 <script lang="ts" module>
 	import type { WithElementRef } from 'bits-ui';
 	import type { HTMLAnchorAttributes, HTMLAttributes } from 'svelte/elements';
-	import { tv, type VariantProps } from 'tailwind-variants';
+	import { variants, type VariantProps } from '../../variants.js';
 
-	export const badgeVariants = tv({
+	export const badgeVariants = variants({
 		base: 'vela:inline-flex vela:items-center vela:justify-center vela:gap-1 vela:rounded-md vela:px-2 vela:py-0.5 vela:text-[11px] vela:font-medium vela:tracking-tight vela:whitespace-nowrap',
 		variants: {
 			variant: {

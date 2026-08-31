@@ -1,5 +1,5 @@
 <script lang="ts">
-	import XIcon from '@lucide/svelte/icons/x';
+	import XIcon from './icons/x.svelte';
 	import type { Snippet } from 'svelte';
 	import { Button } from './ui/button/index.js';
 	import { cn } from './utils.js';

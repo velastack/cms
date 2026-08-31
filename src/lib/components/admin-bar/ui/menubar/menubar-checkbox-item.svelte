@@ -2,8 +2,8 @@
 	import { Menubar as MenubarPrimitive } from 'bits-ui';
 	import { cn, type WithoutChildrenOrChild } from '$lib/components/admin-bar/utils.js';
 	import type { Snippet } from 'svelte';
-	import MinusIcon from '@lucide/svelte/icons/minus';
-	import CheckIcon from '@lucide/svelte/icons/check';
+	import MinusIcon from '../../icons/minus.svelte';
+	import CheckIcon from '../../icons/check.svelte';
 
 	let {
 		ref = $bindable(null),

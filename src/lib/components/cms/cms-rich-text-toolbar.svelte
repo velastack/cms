@@ -3,19 +3,19 @@
 	import { tick as svelteTick } from 'svelte';
 	import { Button } from '$lib/components/admin-bar/ui/button/index.js';
 	import { Input } from '$lib/components/admin-bar/ui/input/index.js';
-	import BoldIcon from '@lucide/svelte/icons/bold';
-	import ItalicIcon from '@lucide/svelte/icons/italic';
-	import LinkIcon from '@lucide/svelte/icons/link';
-	import UnlinkIcon from '@lucide/svelte/icons/link-2-off';
-	import H2Icon from '@lucide/svelte/icons/heading-2';
-	import H3Icon from '@lucide/svelte/icons/heading-3';
-	import ListIcon from '@lucide/svelte/icons/list';
-	import ListOrderedIcon from '@lucide/svelte/icons/list-ordered';
-	import QuoteIcon from '@lucide/svelte/icons/quote';
-	import CodeIcon from '@lucide/svelte/icons/code';
-	import UndoIcon from '@lucide/svelte/icons/undo-2';
-	import CheckIcon from '@lucide/svelte/icons/check';
-	import XIcon from '@lucide/svelte/icons/x';
+	import BoldIcon from '../admin-bar/icons/bold.svelte';
+	import ItalicIcon from '../admin-bar/icons/italic.svelte';
+	import LinkIcon from '../admin-bar/icons/link.svelte';
+	import UnlinkIcon from '../admin-bar/icons/link-2-off.svelte';
+	import H2Icon from '../admin-bar/icons/heading-2.svelte';
+	import H3Icon from '../admin-bar/icons/heading-3.svelte';
+	import ListIcon from '../admin-bar/icons/list.svelte';
+	import ListOrderedIcon from '../admin-bar/icons/list-ordered.svelte';
+	import QuoteIcon from '../admin-bar/icons/quote.svelte';
+	import CodeIcon from '../admin-bar/icons/code.svelte';
+	import UndoIcon from '../admin-bar/icons/undo-2.svelte';
+	import CheckIcon from '../admin-bar/icons/check.svelte';
+	import XIcon from '../admin-bar/icons/x.svelte';
 
 	type Props = {
 		editor: Editor;

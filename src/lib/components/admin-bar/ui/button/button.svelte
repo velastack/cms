@@ -1,9 +1,9 @@
 <script lang="ts" module>
 	import type { WithElementRef } from 'bits-ui';
 	import type { HTMLAnchorAttributes, HTMLButtonAttributes } from 'svelte/elements';
-	import { tv, type VariantProps } from 'tailwind-variants';
+	import { variants, type VariantProps } from '../../variants.js';
 
-	export const buttonVariants = tv({
+	export const buttonVariants = variants({
 		base: 'vela:inline-flex vela:items-center vela:justify-center vela:gap-2 vela:whitespace-nowrap vela:rounded-md vela:text-sm vela:font-medium vela:transition-colors vela:focus-visible:outline-none vela:focus-visible:ring-1 vela:focus-visible:ring-ring vela:disabled:pointer-events-none vela:disabled:opacity-50 vela:cursor-pointer',
 		variants: {
 			variant: {

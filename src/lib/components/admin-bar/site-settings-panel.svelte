@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import ImagesIcon from '@lucide/svelte/icons/images';
+	import ImagesIcon from './icons/images.svelte';
 	import { cmsStore, type MediaItem } from '$lib/components/cms/cms-store.svelte.js';
 	import CmsMediaPicker from '$lib/components/cms/cms-media-picker.svelte';
 	import type { CmsPayload, SiteFieldSchema, SiteSchema } from '$lib/components/cms/scope.js';

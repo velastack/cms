@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
+	import ChevronDownIcon from './icons/chevron-down.svelte';
 	import { pages } from 'virtual:vela-cms/pages';
 	import { cmsStore, type CmsScopeRef } from '../cms/cms-store.svelte.js';
 	import { getPageScope, type CmsPayload } from '../cms/scope.js';

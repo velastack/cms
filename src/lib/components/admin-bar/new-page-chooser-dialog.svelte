@@ -1,5 +1,5 @@
 <script lang="ts">
-	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+	import ChevronRightIcon from './icons/chevron-right.svelte';
 	import type { CmsCreatablePageConfigWithRouteId } from './page-config.js';
 	import { resolveRouteOnlyParams } from './resolve-route.js';
 	import { Button } from './ui/button/index.js';

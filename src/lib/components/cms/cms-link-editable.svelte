@@ -9,12 +9,12 @@
 	import { Input } from '../admin-bar/ui/input/index.js';
 	import * as Select from '../admin-bar/ui/select/index.js';
 	import CssRoot from '../admin-bar/css-root.svelte';
-	import LinkIcon from '@lucide/svelte/icons/link';
-	import FileIcon from '@lucide/svelte/icons/file';
-	import ExternalIcon from '@lucide/svelte/icons/external-link';
-	import CheckIcon from '@lucide/svelte/icons/check';
-	import XIcon from '@lucide/svelte/icons/x';
-	import Trash from '@lucide/svelte/icons/trash-2';
+	import LinkIcon from '../admin-bar/icons/link.svelte';
+	import FileIcon from '../admin-bar/icons/file.svelte';
+	import ExternalIcon from '../admin-bar/icons/external-link.svelte';
+	import CheckIcon from '../admin-bar/icons/check.svelte';
+	import XIcon from '../admin-bar/icons/x.svelte';
+	import Trash from '../admin-bar/icons/trash-2.svelte';
 
 	type PageEntry = {
 		params: Record<string, string>;

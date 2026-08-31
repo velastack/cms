@@ -1,9 +1,9 @@
 <script lang="ts">
-	import UploadIcon from '@lucide/svelte/icons/upload';
-	import TrashIcon from '@lucide/svelte/icons/trash-2';
-	import LoaderIcon from '@lucide/svelte/icons/loader-circle';
-	import AlertIcon from '@lucide/svelte/icons/triangle-alert';
-	import CheckIcon from '@lucide/svelte/icons/check';
+	import UploadIcon from './icons/upload.svelte';
+	import TrashIcon from './icons/trash-2.svelte';
+	import LoaderIcon from './icons/loader-circle.svelte';
+	import AlertIcon from './icons/triangle-alert.svelte';
+	import CheckIcon from './icons/check.svelte';
 	import { cmsStore } from '../cms/cms-store.svelte.js';
 	import type { MediaItem } from '../cms/cms-store.svelte.js';
 	import PanelFooter from './panel-footer.svelte';

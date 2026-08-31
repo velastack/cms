@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import SearchIcon from '@lucide/svelte/icons/search';
+	import SearchIcon from './icons/search.svelte';
 	import { cmsStore } from '../cms/cms-store.svelte.js';
 	import type { CmsCreatablePageConfigWithRouteId } from './page-config.js';
 	import NewPageDialog from './new-page-dialog.svelte';

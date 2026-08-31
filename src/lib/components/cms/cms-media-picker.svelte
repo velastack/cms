@@ -1,7 +1,7 @@
 <script lang="ts">
-	import UploadIcon from '@lucide/svelte/icons/upload';
-	import LoaderIcon from '@lucide/svelte/icons/loader-circle';
-	import AlertIcon from '@lucide/svelte/icons/triangle-alert';
+	import UploadIcon from '../admin-bar/icons/upload.svelte';
+	import LoaderIcon from '../admin-bar/icons/loader-circle.svelte';
+	import AlertIcon from '../admin-bar/icons/triangle-alert.svelte';
 	import { Button } from '../admin-bar/ui/button/index.js';
 	import { cmsStore, type MediaItem } from './cms-store.svelte.js';
 

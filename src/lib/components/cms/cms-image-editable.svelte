@@ -9,14 +9,14 @@
 	import CssRoot from '../admin-bar/css-root.svelte';
 	import { clickOutside } from '../admin-bar/click-outside.js';
 	import CmsMediaPicker from './cms-media-picker.svelte';
-	import UploadIcon from '@lucide/svelte/icons/upload';
-	import LinkIcon from '@lucide/svelte/icons/link';
-	import ImagesIcon from '@lucide/svelte/icons/images';
-	import TrashIcon from '@lucide/svelte/icons/trash-2';
-	import CheckIcon from '@lucide/svelte/icons/check';
-	import XIcon from '@lucide/svelte/icons/x';
-	import LoaderIcon from '@lucide/svelte/icons/loader-circle';
-	import AlertIcon from '@lucide/svelte/icons/triangle-alert';
+	import UploadIcon from '../admin-bar/icons/upload.svelte';
+	import LinkIcon from '../admin-bar/icons/link.svelte';
+	import ImagesIcon from '../admin-bar/icons/images.svelte';
+	import TrashIcon from '../admin-bar/icons/trash-2.svelte';
+	import CheckIcon from '../admin-bar/icons/check.svelte';
+	import XIcon from '../admin-bar/icons/x.svelte';
+	import LoaderIcon from '../admin-bar/icons/loader-circle.svelte';
+	import AlertIcon from '../admin-bar/icons/triangle-alert.svelte';
 
 	type Props = {
 		scope: CmsScopeRef;
