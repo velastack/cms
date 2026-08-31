@@ -270,20 +270,29 @@ Iterates an array stored at `name`. Inside the snippet, pass per-item values via
 
 Iterates over a set of pages by route ID. Useful for index pages.
 
-## Custom CMS components VelaStack
+## Custom CMS components
 
-CMS discovers your custom or third-party CMS components by convention. ### Auto-discovery (zero
-config) A component is treated as a CMS component if **any** of the following hold: 1. **It lives in
-your app's `src/lib/components/cms/`.** Drop a new `.svelte` file there and it's registered
-automatically: ```svelte
+VelaStack CMS discovers your custom or third-party CMS components by convention.
 
-<a href={typeof value === 'string' ? value : undefined}>
-<CmsText name={`${name}.label`} {fallback} />
-</a>
+### Auto-discovery (zero config)
 
-````
+A component is treated as a CMS component if **any** of the following hold:
 
-Use it from any route: `<CmsLink name="hero.cta" />`. The plugin picks up `hero.cta` as a field on the page's scope; no plugin config edit required.
+1. **It lives in your app's `src/lib/components/cms/`.** Drop a new `.svelte` file there and it's registered automatically:
+
+   ```svelte
+   <!-- src/lib/components/cms/cms-link.svelte -->
+   <script lang="ts">
+   	import { CmsText } from '@velastack/cms';
+   	let { name, fallback, value } = $props();
+   </script>
+
+   <a href={typeof value === 'string' ? value : undefined}>
+   	<CmsText name={`${name}.label`} {fallback} />
+   </a>
+   ```
+
+   Use it from any route: `<CmsLink name="hero.cta" />`. The plugin picks up `hero.cta` as a field on the page's scope; no plugin config edit required.
 
 2. **It's a named export from your local `src/lib/components/cms/index.{ts,js}` barrel.** Re-export your component there if you prefer a single import path..
 
@@ -411,18 +420,15 @@ export interface CmsAdapter {
 		context: CmsAdapterContext
 	): Promise<Record<string, CmsAdapterResolution>> | Record<string, CmsAdapterResolution>;
 
-	fetchEntries(
-		routeId: string,
-		context: CmsAdapterContext
-	): Promise<CmsEntry[]> | CmsEntry[];
+	fetchEntries(routeId: string, context: CmsAdapterContext): Promise<CmsEntry[]> | CmsEntry[];
 }
 
 type CmsAdapterContext = {
-	fetch: typeof fetch;        // SvelteKit's request-scoped fetch
+	fetch: typeof fetch; // SvelteKit's request-scoped fetch
 	previewKey?: string | null; // ?preview= — overlay an open release's pending edits
 	versionKey?: string | null; // ?version= — load a past published release snapshot
-	locale: string;             // BCP-47 bound at loadCms({ locale }) time
-	locales: string[];          // supported set; first entry is the default locale
+	locale: string; // BCP-47 bound at loadCms({ locale }) time
+	locales: string[]; // supported set; first entry is the default locale
 };
 
 type CmsScopeQuery = {
@@ -431,14 +437,12 @@ type CmsScopeQuery = {
 	routeId: string;
 	params: Record<string, string>; // owned params for this scope only
 	fields: string[];
-	locale: string;                 // request locale, repeated per query for adapter convenience
+	locale: string; // request locale, repeated per query for adapter convenience
 };
 
 type CmsAdapterResolution = CmsAdapterDoc | CmsAdapterTombstone;
 type CmsAdapterDoc = { contents: Record<string, unknown> };
-type CmsAdapterTombstone =
-	| { kind: 'gone' }
-	| { kind: 'redirect'; to: string };
+type CmsAdapterTombstone = { kind: 'gone' } | { kind: 'redirect'; to: string };
 ```
 
 Each `CmsScopeQuery` carries the composed `scopeId`, the `kind` (`'layout' | 'page'`), the route id, the resolved owned params, the field list, and the locale. Map those to backend reads however you want. The `context.fetch` argument is the SvelteKit request-scoped fetch for HTTP-backed adapters.
@@ -570,19 +574,19 @@ Locale support is first-class and lives at the release / version dimension: ever
 **On the payload:**
 
 ```ts
-cms.locale  // 'es'
-cms.locales // ['en', 'es', 'fr']
+cms.locale; // 'es'
+cms.locales; // ['en', 'es', 'fr']
 ```
 
 ## Redirects & tombstones
 
 Pages can be deleted with three different outcomes:
 
-| Outcome              | HTTP | When to use                                                  |
-| -------------------- | ---- | ------------------------------------------------------------ |
-| `notFound` (no doc)  | 404  | Default — the URL just isn't there.                          |
-| `gone`               | 410  | URL was deliberately retired; tell crawlers to forget it.    |
-| `redirectTo`         | 308  | URL moved permanently; preserve link equity to the new path. |
+| Outcome             | HTTP | When to use                                                  |
+| ------------------- | ---- | ------------------------------------------------------------ |
+| `notFound` (no doc) | 404  | Default — the URL just isn't there.                          |
+| `gone`              | 410  | URL was deliberately retired; tell crawlers to forget it.    |
+| `redirectTo`        | 308  | URL moved permanently; preserve link equity to the new path. |
 
 Tombstones live on the adapter's `PageEntry` (`tombstone: CmsAdapterTombstone`) for already-published deletions, and on a release's `page-delete` item (`outcome?: CmsAdapterTombstone`) for staged deletions in the editor's working copy. The loader returns whichever applies on `LoadCmsResult.{ gone, redirectTo }`; your `+layout.server.ts` branches on those flags before rendering.
 
@@ -638,4 +642,3 @@ src/routes/      Test harness / showcase
 ## License
 
 MIT
-````
