@@ -19,6 +19,12 @@
 @import 'tailwindcss/theme.css' layer(theme) prefix(vela);
 @import 'tailwindcss/utilities.css' layer(utilities) prefix(vela);
 
+/* Enter/exit animations for the dialog, menubar and select primitives
+   (animate-in, fade-in-0, zoom-in-95, slide-in-from-*). The `/prefix` build is
+   the one to use under prefix(vela). It must NOT carry a layer(...) modifier:
+   it defines `@utility` rules, and those cannot be nested inside a layer. */
+@import 'tw-animate-css/prefix' prefix(vela);
+
 @theme inline {
 	--color-background: var(--vela-background);
 	--color-foreground: var(--vela-foreground);

@@ -41,7 +41,24 @@ if (/@import\s+["']tailwindcss/.test(resolved)) {
 	process.exit(1);
 }
 
-const wrapped = `@scope (.vela-admin-bar) {\n${resolved}\n}\n`;
+// Cascade layer names are global — `@scope` does not contain them. Declare the
+// order explicitly and at the top level (a statement nested inside `@scope`
+// would not register) so precedence is deterministic instead of falling out of
+// whichever stylesheet the host parses first. This is Tailwind's own canonical
+// order, so a host also running Tailwind v4 agrees rather than conflicts.
+const LAYERS = ['properties', 'theme', 'base', 'components', 'utilities'];
+
+const emitted = [...resolved.matchAll(/@layer\s+([a-z-]+)\s*[{;]/g)].map((m) => m[1]);
+const unknown = emitted.filter((l) => !LAYERS.includes(l));
+if (unknown.length) {
+	console.error(
+		`[build-admin-bar-css] unexpected cascade layer(s): ${[...new Set(unknown)].join(', ')}`
+	);
+	console.error('  Update LAYERS to match, or the declared order will be wrong.');
+	process.exit(1);
+}
+
+const wrapped = `@layer ${LAYERS.join(', ')};\n@scope (.vela-admin-bar) {\n${resolved}\n}\n`;
 writeFileSync(output, wrapped);
 
 console.log(`[build-admin-bar-css] wrapped in @scope — ${wrapped.length} bytes written`);
