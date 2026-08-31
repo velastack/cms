@@ -1,6 +1,6 @@
-import type { CmsEntry, CmsScopeEntry } from '../components/cms/scope.ts';
+import type { CmsEntry, CmsScopeEntry, SiteSchema } from '../components/cms/scope.ts';
 
-export type { CmsEntry };
+export type { CmsEntry, SiteSchema };
 
 /**
  * One scope's request, expanded from the build-time manifest with the locale
@@ -111,4 +111,14 @@ export interface CmsAdapter {
 	 * that render a list with titles).
 	 */
 	fetchEntries(routeId: string, context: CmsAdapterContext): Promise<CmsEntry[]> | CmsEntry[];
+
+	/**
+	 * Resolve the project-wide site tree (branding, contact, social, …).
+	 * Always one tree per project — no locale, no params. Preview-overlay
+	 * support is identical to `fetchDocs`: when `context.previewKey` is set,
+	 * adapters merge the open release's site item on top of the published
+	 * tree. Optional — adapters that don't carry site state may omit this and
+	 * the loader treats the project as having an empty site tree.
+	 */
+	fetchSite?(context: CmsAdapterContext): Promise<Record<string, unknown>> | Record<string, unknown>;
 }

@@ -82,6 +82,7 @@
 	let chooserOpen = $state(false);
 	let shareLinkOpen = $state(false);
 	let shortcutsOpen = $state(false);
+	let siteSettingsOpen = $state(false);
 	const anyPanelOpen = $derived(
 		seoOpen ||
 			historyOpen ||
@@ -91,7 +92,8 @@
 			publishOpen ||
 			chooserOpen ||
 			shareLinkOpen ||
-			shortcutsOpen
+			shortcutsOpen ||
+			siteSettingsOpen
 	);
 	let publishing = $state(false);
 	let publishError = $state<string | null>(null);
@@ -142,6 +144,7 @@
 		chooserOpen = false;
 		shareLinkOpen = false;
 		shortcutsOpen = false;
+		siteSettingsOpen = false;
 		newDialog = null;
 		newPageError = null;
 		duplicateSource = null;
@@ -374,7 +377,8 @@
 								reset: true,
 								versionKey: intent.versionKey,
 								locale: intent.locale
-							})
+							}),
+							cmsStore.loadAndApplySiteOverlay(endpoint, null, { versionKey: intent.versionKey })
 						]);
 						break;
 					case 'load-overlay':
@@ -389,7 +393,8 @@
 								currentEntriesRouteIds(),
 								intent.previewKey,
 								{ reset: true, locale: intent.locale }
-							)
+							),
+							cmsStore.loadAndApplySiteOverlay(endpoint, intent.previewKey)
 						]);
 						break;
 					case 'clear-overlay':
@@ -506,6 +511,7 @@
 				versionKey,
 				locale: currentLocale
 			});
+			void cmsStore.loadAndApplySiteOverlay(endpoint, null, { versionKey });
 			return;
 		}
 
@@ -527,6 +533,7 @@
 		void cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), key, {
 			locale: currentLocale
 		});
+		void cmsStore.loadAndApplySiteOverlay(endpoint, key);
 	});
 
 	const onSave = async () => {
@@ -542,7 +549,8 @@
 			}),
 			cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), newKey, {
 				locale: currentLocale
-			})
+			}),
+			cmsStore.loadAndApplySiteOverlay(endpoint, newKey)
 		]);
 	};
 
@@ -617,7 +625,8 @@
 				cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), null, {
 					reset: true,
 					locale: currentLocale
-				})
+				}),
+				cmsStore.loadAndApplySiteOverlay(endpoint, null)
 			]);
 		} finally {
 			publishing = false;
@@ -635,7 +644,8 @@
 			cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), key, {
 				reset: true,
 				locale: currentLocale
-			})
+			}),
+			cmsStore.loadAndApplySiteOverlay(endpoint, key)
 		]);
 	};
 
@@ -654,7 +664,7 @@
 	// "discard what I'm currently editing", not "every locale's edits".
 	const currentPageItems = $derived(
 		(cmsStore.openRelease?.items ?? []).filter((item) => {
-			if (item.kind === 'layout') return false;
+			if (item.kind === 'layout' || item.kind === 'site') return false;
 			if (item.locale !== currentLocale) return false;
 			try {
 				return resolveRouteUrl(item.routeId, item.params) === page.url.pathname;
@@ -962,7 +972,33 @@
 			}),
 			cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), newKey, {
 				locale: currentLocale
-			})
+			}),
+			cmsStore.loadAndApplySiteOverlay(endpoint, newKey)
+		]);
+	};
+
+	const onOpenSiteSettings = () => {
+		closeAllPanels();
+		siteSettingsOpen = true;
+	};
+
+	// Mirrors `onSaveSeo`: flush the site-settings draft as part of the open
+	// release, refresh overlays so the just-saved values show via the
+	// preview-overlay path on the live page.
+	const onSaveSiteSettings = async () => {
+		const result = await cmsStore.save(endpoint);
+		if (!result.ok) return;
+		siteSettingsOpen = false;
+		const newKey = result.release?.preview_key ?? null;
+		if (newKey) await setPreviewParam(newKey, { replace: true });
+		await Promise.all([
+			cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), newKey, {
+				locale: currentLocale
+			}),
+			cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), newKey, {
+				locale: currentLocale
+			}),
+			cmsStore.loadAndApplySiteOverlay(endpoint, newKey)
 		]);
 	};
 
@@ -1001,6 +1037,10 @@
 					e.preventDefault();
 					if (pagesOpen) pagesOpen = false;
 					else onOpenPages();
+				} else if (k === 'm') {
+					e.preventDefault();
+					if (mediaOpen) mediaOpen = false;
+					else onOpenMedia();
 				} else if (k === 'h') {
 					e.preventDefault();
 					if (historyOpen) historyOpen = false;
@@ -1019,6 +1059,10 @@
 				} else if (k === '.') {
 					e.preventDefault();
 					onClose();
+				} else if (k === ',') {
+					e.preventDefault();
+					if (siteSettingsOpen) siteSettingsOpen = false;
+					else onOpenSiteSettings();
 				} else if (e.key === 'Enter') {
 					e.preventDefault();
 					onOpenInNewTab();
@@ -1276,6 +1320,7 @@
 							</Menubar.Item>
 							<Menubar.Item class={menuItemClass} onSelect={onOpenMedia}>
 								Media Library
+								<KbdShortcut keys="⌘M" class={menuShortcutClass} />
 							</Menubar.Item>
 							{#if supportedLocales.length > 1}
 								<Menubar.Item class={menuItemClass} onSelect={onOpenLocales}>
@@ -1321,6 +1366,12 @@
 							<Menubar.Item class={menuItemClass} onSelect={onOpenHistory}>
 								Recent Releases
 								<KbdShortcut keys="⌘H" class={menuShortcutClass} />
+							</Menubar.Item>
+
+							<Menubar.Label class={menuLabelClass}>Settings</Menubar.Label>
+							<Menubar.Item class={menuItemClass} onSelect={onOpenSiteSettings}>
+								Site Settings
+								<KbdShortcut keys="⌘," class={menuShortcutClass} />
 							</Menubar.Item>
 						</Menubar.Content>
 					</Menubar.Menu>
@@ -1487,7 +1538,7 @@
 							class="vela:h-5.5 vela:pl-2 vela:pr-2.5 vela:gap-1 vela:text-[11px]"
 						>
 							{counts.total}
-							{counts.total === 1 ? 'page draft' : 'pages draft'}
+							{counts.total === 1 ? 'draft' : 'drafts'}
 						</StatusPill>
 					{/if}
 				</div>
@@ -1537,6 +1588,15 @@
 		{#if seoOpen}
 			{#await import('./seo-panel.svelte') then { default: SeoPanel }}
 				<SeoPanel onClose={() => (seoOpen = false)} onSave={onSaveSeo} />
+			{/await}
+		{/if}
+
+		{#if siteSettingsOpen}
+			{#await import('./site-settings-panel.svelte') then { default: SiteSettingsPanel }}
+				<SiteSettingsPanel
+					onClose={() => (siteSettingsOpen = false)}
+					onSave={onSaveSiteSettings}
+				/>
 			{/await}
 		{/if}
 

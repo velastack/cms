@@ -24,16 +24,32 @@
 
 	const html = $derived(typeof resolved === 'string' ? resolved : (fallback ?? ''));
 	const editable = $derived(cmsStore.isEditing && value === undefined && !!ref);
+
+	let childrenEl = $state<HTMLDivElement>();
+	let initialFromChildren = $state<string | undefined>(undefined);
+
+	$effect.pre(() => {
+		if (editable && childrenEl && initialFromChildren === undefined) {
+			const inner = childrenEl.innerHTML.trim();
+			initialFromChildren = inner || undefined;
+		}
+	});
+
+	const editInitial = $derived.by(() => {
+		if (typeof resolved === 'string') return resolved;
+		if (fallback !== undefined) return fallback;
+		return initialFromChildren ?? '';
+	});
 </script>
 
 {#if editable && ref}
 	{#await import('./cms-rich-text-editable.svelte') then { default: Editable }}
-		<Editable scope={ref} {name} initial={html} />
+		<Editable scope={ref} {name} initial={editInitial} />
 	{/await}
 {:else if html}
 	<div class="cms-rich-text">{@html html}</div>
 {:else if children}
-	{@render children()}
+	<div bind:this={childrenEl} class="cms-rich-text-children">{@render children()}</div>
 {:else}
 	<div class="cms-missing" data-cms-name={name} data-cms-scope={scope?.scopeId ?? '?'}>
 		{name}
@@ -42,6 +58,9 @@
 
 <style>
 	.cms-rich-text {
+		display: contents;
+	}
+	.cms-rich-text-children {
 		display: contents;
 	}
 	.cms-missing {

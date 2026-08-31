@@ -5,7 +5,8 @@ import type {
 	CmsManifest,
 	CmsPagePointer,
 	CmsPayload,
-	CmsScopeEntry
+	CmsScopeEntry,
+	SiteSchema
 } from '../components/cms/scope.ts';
 import { mergeLocaleDocs, mergeLocaleEntries } from '../components/cms/locale-merge.ts';
 import type {
@@ -28,6 +29,12 @@ export type LoadCmsOptions = {
 	locales: string[];
 	/** Adapter that talks to the backing store. See {@link CmsAdapter}. */
 	adapter: CmsAdapter;
+	/**
+	 * Project-wide site settings schema, from `createCms({ site })`. Empty
+	 * when the customer didn't pass one. Carried on the payload so the admin
+	 * panel can render its inputs.
+	 */
+	siteSchema?: SiteSchema;
 };
 
 /**
@@ -67,11 +74,17 @@ export type ResolveCmsPayloadArgs = {
 	locales: string[];
 	adapter: CmsAdapter;
 	fetch: typeof fetch;
+	siteSchema?: SiteSchema;
 };
 
 const DEFAULT_ENDPOINT = '/api/cms';
 
-const emptyPayload = (locale: string, locales: string[], endpoint: string): CmsPayload => ({
+const emptyPayload = (
+	locale: string,
+	locales: string[],
+	endpoint: string,
+	site: CmsPayload['site']
+): CmsPayload => ({
 	locale,
 	locales,
 	docs: {},
@@ -79,7 +92,8 @@ const emptyPayload = (locale: string, locales: string[], endpoint: string): CmsP
 	metadata: {},
 	entries: {},
 	endpoint,
-	page: null
+	page: null,
+	site
 });
 
 const isTombstone = (r: CmsAdapterResolution | undefined): r is CmsAdapterTombstone =>
@@ -97,10 +111,18 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
 	const endpoint = adapter.endpoint ?? DEFAULT_ENDPOINT;
 	const defaultLocale = locales[0] ?? locale;
 	const needsFallback = locale !== defaultLocale;
+	const siteSchema: SiteSchema = args.siteSchema ?? {};
+
+	const sitePayload = async (): Promise<CmsPayload['site']> => {
+		const tree = adapter.fetchSite
+			? await Promise.resolve(adapter.fetchSite({ fetch, previewKey, versionKey, locale, locales }))
+			: {};
+		return { schema: siteSchema, tree: tree ?? {} };
+	};
 
 	if (!routeId)
 		return {
-			cms: emptyPayload(locale, locales, endpoint),
+			cms: emptyPayload(locale, locales, endpoint, await sitePayload()),
 			notFound: false,
 			gone: false,
 			redirectTo: null
@@ -109,7 +131,7 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
 	const route = manifest.routes[routeId];
 	if (!route)
 		return {
-			cms: emptyPayload(locale, locales, endpoint),
+			cms: emptyPayload(locale, locales, endpoint, await sitePayload()),
 			notFound: false,
 			gone: false,
 			redirectTo: null
@@ -144,7 +166,7 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
 
 	const entriesRouteIds = route.entriesRouteIds ?? [];
 	const noDocs: Record<string, CmsAdapterResolution> = {};
-	const [rawDocs, fallbackDocs, entriesPairs, fallbackEntriesPairs] = await Promise.all([
+	const [rawDocs, fallbackDocs, entriesPairs, fallbackEntriesPairs, siteTree] = await Promise.all([
 		Promise.resolve(adapter.fetchDocs(queries, ctx(locale))),
 		fallbackQueries
 			? Promise.resolve(adapter.fetchDocs(fallbackQueries, ctx(defaultLocale)))
@@ -162,8 +184,12 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
 						await adapter.fetchEntries(rid, ctx(defaultLocale))
 					])
 				)
-			: Promise.resolve([] as Array<[string, CmsEntry[]]>)
+			: Promise.resolve([] as Array<[string, CmsEntry[]]>),
+		adapter.fetchSite
+			? Promise.resolve(adapter.fetchSite({ fetch, previewKey, versionKey, locale, locales }))
+			: Promise.resolve({} as Record<string, unknown>)
 	]);
+	const site: CmsPayload['site'] = { schema: siteSchema, tree: siteTree ?? {} };
 
 	// Adapter `fetchEntries` returns tombstones (redirect / gone) so the
 	// prerender path can visit redirected URLs. The consumer-facing payload
@@ -191,7 +217,7 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
 		else if (!requested && isTombstone(fallback)) tombstone = fallback;
 		if (tombstone) {
 			return {
-				cms: emptyPayload(locale, locales, endpoint),
+				cms: emptyPayload(locale, locales, endpoint, site),
 				notFound: false,
 				gone: tombstone.kind === 'gone',
 				redirectTo: tombstone.kind === 'redirect' ? tombstone.to : null
@@ -237,7 +263,7 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
 		!(pageQuery.scopeId in fallbackDocs);
 
 	return {
-		cms: { locale, locales, docs, scopes, metadata, entries, endpoint, page: pagePointer },
+		cms: { locale, locales, docs, scopes, metadata, entries, endpoint, page: pagePointer, site },
 		notFound: pageScopeMissing,
 		gone: false,
 		redirectTo: null
@@ -303,6 +329,7 @@ export const loadCms = (
 		locale: options.locale,
 		locales: options.locales,
 		adapter: options.adapter,
-		fetch: event.fetch
+		fetch: event.fetch,
+		siteSchema: options.siteSchema
 	});
 };

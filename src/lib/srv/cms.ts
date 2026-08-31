@@ -1,13 +1,21 @@
 import type { ServerLoadEvent, LoadEvent } from '@sveltejs/kit';
 import type { RouteId, RouteParams } from '$app/types';
 import { loadCms, type LoadCmsResult } from './load-cms.js';
-import type { CmsAdapter, CmsEntry } from './types.js';
+import type { CmsAdapter, CmsEntry, SiteSchema } from './types.js';
 
 export type CreateCmsOptions = {
 	/** Adapter that talks to the backing store. */
 	adapter: CmsAdapter;
 	/** BCP-47 supported locales, e.g. `'en'` or `'es-MX'`. */
 	locales: string[];
+	/**
+	 * Project-wide site settings schema. Top-level keys become groups in the
+	 * Site Settings panel; each group's `fields` keys become path segments in
+	 * the stored tree (`branding.name`, `social.twitter`). Omit the option for
+	 * projects that don't expose any editable site settings — the panel won't
+	 * render any sections and the data layer keeps an empty tree.
+	 */
+	site?: SiteSchema;
 };
 
 export type Cms = {
@@ -53,10 +61,12 @@ export type Cms = {
  * ```
  */
 export const createCms = (options: CreateCmsOptions): Cms => {
-	const { adapter, locales } = options;
+	const { adapter, locales, site } = options;
 	const defaultLocale = locales[0];
+	const siteSchema: SiteSchema = site ?? {};
 	return {
-		load: (event, { locale }) => loadCms(event, { adapter, locale, locales }),
+		load: (event, { locale }) =>
+			loadCms(event, { adapter, locale, locales, siteSchema }),
 		generateEntries: (async <R extends RouteId>(routeId?: R) => {
 			if (!routeId) {
 				throw new Error(

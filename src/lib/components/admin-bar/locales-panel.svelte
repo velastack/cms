@@ -18,7 +18,9 @@
 
 	// Group an item to a stable identity across locales: a same-(kind, routeId,
 	// params) item in EN and ES describes "the same thing" in both languages.
-	const itemKey = (item: ReleaseItem): string => {
+	// Site items don't belong to any locale and never appear in this panel —
+	// callers filter them out before invoking `itemKey`.
+	const itemKey = (item: Exclude<ReleaseItem, { kind: 'site' }>): string => {
 		if (item.kind === 'layout') return `layout|${item.routeId}`;
 		const keys = Object.keys(item.params).sort();
 		const qp = keys.map((k) => `${k}=${item.params[k]}`).join('&');
@@ -30,6 +32,7 @@
 		const out = new Map<string, Set<string>>();
 		for (const locale of locales) out.set(locale, new Set<string>());
 		for (const item of cmsStore.openRelease?.items ?? []) {
+			if (item.kind === 'site') continue;
 			const set = out.get(item.locale);
 			if (!set) continue;
 			set.add(itemKey(item));

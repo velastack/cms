@@ -63,6 +63,7 @@ export type ReleaseItem =
 			addedAt: string;
 	  }
 	| { kind: 'layout'; routeId: string; locale: string; tree: Tree; addedAt: string }
+	| { kind: 'site'; tree: Tree; addedAt: string }
 	| {
 			kind: 'page-delete';
 			routeId: string;
@@ -105,7 +106,7 @@ const scopeKindFromId = (scopeId: string): 'page' | 'layout' =>
  * the wire boundary so display components and persisted field values both get
  * a fully-qualified URL.
  */
-export const MEDIA_URL_PREFIX = 'http://localhost:5174';
+export const MEDIA_URL_PREFIX = 'https://velastack.dev';
 
 const resolveMediaItem = (item: MediaItem): MediaItem =>
 	item.url.startsWith('/') ? { ...item, url: `${MEDIA_URL_PREFIX}${item.url}` } : item;
@@ -142,6 +143,15 @@ class CmsStore {
 	overlay = $state<Record<string, Tree>>({});
 	/** Per-routeId entries overlay populated by `loadAndApplyEntriesOverlay`. */
 	entriesOverlay = $state<Record<string, CmsEntry[]>>({});
+	/**
+	 * Project-global site bucket. Not localized, not route-bound. `siteOverlay`
+	 * holds the merged published+open-release tree fetched client-side from
+	 * `${endpoint}/site`; `siteDraft` holds in-flight Site Settings panel
+	 * edits awaiting save. `cmsStore.site` returns the merged read of base
+	 * (load payload) ∪ overlay ∪ draft.
+	 */
+	siteOverlay = $state<Tree | undefined>(undefined);
+	siteDraft = $state<Tree>({});
 	/**
 	 * Active editor preview locale, pushed in by the admin bar from the URL
 	 * (`?locale=`). Falls back to `page.data.cms.locale` when unset (read-only
@@ -203,14 +213,72 @@ class CmsStore {
 	setValue(scope: CmsScopeRef, path: string, value: unknown, locale?: string): void {
 		const lc = locale ?? this.effectiveLocale();
 		const key = composeKey(scope, lc);
-		const bucket =
-			this.drafts[key] ?? (this.drafts[key] = { scope, locale: lc, tree: {} });
+		const bucket = this.drafts[key] ?? (this.drafts[key] = { scope, locale: lc, tree: {} });
 		set(bucket.tree, path, value);
 	}
 
 	clearOverlay(): void {
 		this.overlay = {};
 		this.entriesOverlay = {};
+		this.siteOverlay = undefined;
+	}
+
+	/**
+	 * Reactive merged site tree: base (load payload) ∪ overlay (client-fetched
+	 * `/site` response with preview overlay) ∪ draft (Site Settings panel
+	 * edits awaiting save). Reads update live, so a value typed in the panel
+	 * appears on the page immediately.
+	 *
+	 * Drafts are always folded in here (no `isEditing` gate) — the panel
+	 * commits to the draft via `setSiteValue` only on Save, so any value
+	 * present is already an intentional staged change.
+	 */
+	get site(): Record<string, unknown> {
+		const baseSite = (page.data?.cms as CmsPayload | undefined)?.site?.tree ?? {};
+		return mergeTree(baseSite as Tree, this.siteOverlay, this.siteDraft);
+	}
+
+	getSiteValue(path: string): unknown {
+		return get(this.site, path);
+	}
+
+	setSiteValue(path: string, value: unknown): void {
+		set(this.siteDraft, path, value);
+	}
+
+	hasSiteDraft(path?: string): boolean {
+		if (!path) return treeHasAnyLeaf(this.siteDraft);
+		return has(this.siteDraft, path);
+	}
+
+	clearSiteDraft(): void {
+		this.siteDraft = {};
+	}
+
+	/**
+	 * Fetch the merged published+release site tree from `${endpoint}/site`
+	 * and apply as a client-side overlay. With `previewKey` the response
+	 * includes the user's open-release site item; without it (or with
+	 * `versionKey`), the response is published-only / past-snapshot.
+	 */
+	async loadAndApplySiteOverlay(
+		endpoint: string,
+		previewKey: string | null,
+		opts: { versionKey?: string | null } = {}
+	): Promise<void> {
+		const versionKey = opts.versionKey ?? null;
+		const qs = new URLSearchParams();
+		if (versionKey) qs.set('version', versionKey);
+		else if (previewKey) qs.set('preview', previewKey);
+		const suffix = qs.toString() ? `?${qs}` : '';
+		try {
+			const res = await fetch(`${endpoint}/site${suffix}`, { credentials: 'include' });
+			if (!res.ok) return;
+			const data = (await res.json()) as { contents: Tree };
+			this.siteOverlay = data.contents ?? {};
+		} catch {
+			/* network errors are non-fatal — display falls through to base */
+		}
 	}
 
 	/**
@@ -419,6 +487,7 @@ class CmsStore {
 		for (const bucket of Object.values(this.drafts)) {
 			if (treeHasAnyLeaf(bucket.tree)) return true;
 		}
+		if (treeHasAnyLeaf(this.siteDraft)) return true;
 		return false;
 	}
 
@@ -429,11 +498,14 @@ class CmsStore {
 	 * "one page is in progress", not "two storage rows exist". For per-locale
 	 * breakdowns (locales panel "EN: 6, ES: 4"), use `workingCopyCountsByLocale`.
 	 */
-	get workingCopyCounts(): { pages: number; layouts: number; total: number } {
+	get workingCopyCounts(): { pages: number; layouts: number; site: number; total: number } {
 		const pageKeys = new Set<string>();
 		const layoutKeys = new Set<string>();
+		let site = 0;
 		for (const item of this.openRelease?.items ?? []) {
-			if (item.kind === 'layout') {
+			if (item.kind === 'site') {
+				site = 1;
+			} else if (item.kind === 'layout') {
 				layoutKeys.add(item.routeId);
 			} else {
 				const sortedParams = Object.keys(item.params).sort();
@@ -444,7 +516,8 @@ class CmsStore {
 		return {
 			pages: pageKeys.size,
 			layouts: layoutKeys.size,
-			total: pageKeys.size + layoutKeys.size
+			site,
+			total: pageKeys.size + layoutKeys.size + site
 		};
 	}
 
@@ -460,6 +533,7 @@ class CmsStore {
 	> {
 		const out: Record<string, { pages: number; layouts: number; total: number }> = {};
 		for (const item of this.openRelease?.items ?? []) {
+			if (item.kind === 'site') continue;
 			const bucket = (out[item.locale] ??= { pages: 0, layouts: 0, total: 0 });
 			if (item.kind === 'layout') bucket.layouts += 1;
 			else bucket.pages += 1;
@@ -470,6 +544,7 @@ class CmsStore {
 
 	clearDrafts(): void {
 		this.drafts = {};
+		this.siteDraft = {};
 	}
 
 	setOpenRelease(release: OpenRelease | null): void {
@@ -578,7 +653,8 @@ class CmsStore {
 					locale: string;
 					tree: Tree;
 			  }
-			| { kind: 'layout'; routeId: string; locale: string; tree: Tree };
+			| { kind: 'layout'; routeId: string; locale: string; tree: Tree }
+			| { kind: 'site'; tree: Tree };
 
 		const items: SaveInput[] = [];
 		for (const bucket of Object.values(this.drafts)) {
@@ -600,6 +676,9 @@ class CmsStore {
 					tree: bucket.tree
 				});
 			}
+		}
+		if (treeHasAnyLeaf(this.siteDraft)) {
+			items.push({ kind: 'site', tree: this.siteDraft });
 		}
 
 		if (items.length === 0) return { ok: true, release: this.openRelease ?? undefined };
@@ -689,6 +768,14 @@ class Cms {
 	}
 	get page(): CmsPagePointer | null {
 		return this.#merged?.page ?? null;
+	}
+	/**
+	 * Project-wide site settings tree, merged through `cmsStore.site` so panel
+	 * edits show up live in preview. Use this in display components instead of
+	 * reading `data.cms.site.tree` directly — that's only the SSR seed.
+	 */
+	get site(): Record<string, unknown> {
+		return cmsStore.site;
 	}
 }
 

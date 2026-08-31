@@ -32,6 +32,7 @@
 	 */
 	const groupKey = (item: ReleaseItem): string => {
 		if (item.kind === 'layout') return `layout|${item.routeId}`;
+		if (item.kind === 'site') return 'site';
 		const sortedKeys = Object.keys(item.params).sort();
 		const qp = sortedKeys.map((k) => `${k}=${item.params[k]}`).join('&');
 		return `page|${item.routeId}|${qp}`;
@@ -52,16 +53,17 @@
 		for (const item of items) {
 			const key = groupKey(item);
 			const existing = map.get(key);
+			const itemLocale = item.kind === 'site' ? '' : item.locale;
 			if (existing) {
 				existing.items.push(item);
-				if (!existing.locales.includes(item.locale)) existing.locales.push(item.locale);
+				if (itemLocale && !existing.locales.includes(itemLocale)) existing.locales.push(itemLocale);
 				if (item.addedAt < existing.primary.addedAt) existing.primary = item;
 				if (item.addedAt > existing.latestAddedAt) existing.latestAddedAt = item.addedAt;
 			} else {
 				map.set(key, {
 					key,
 					items: [item],
-					locales: [item.locale],
+					locales: itemLocale ? [itemLocale] : [],
 					primary: item,
 					latestAddedAt: item.addedAt
 				});
@@ -158,6 +160,7 @@
 				return 'gone';
 			return 'delete';
 		}
+		if (group.primary.kind === 'site') return 'edited';
 		if (group.primary.kind === 'layout') return 'edited';
 		if (draftPageKeys.has(group.key)) return 'new';
 		const anyNonMeta = group.items.some(
@@ -171,6 +174,7 @@
 	};
 
 	const labelFor = (item: ReleaseItem): string => {
+		if (item.kind === 'site') return 'Site settings';
 		if (item.kind === 'layout') return resolveRouteOnlyParams(item.routeId);
 		try {
 			return resolveRouteUrl(item.routeId, item.params);
@@ -212,7 +216,7 @@
 				return 'Marked permanently gone';
 			return 'Marked for deletion';
 		}
-		if (group.primary.kind === 'layout') {
+		if (group.primary.kind === 'site' || group.primary.kind === 'layout') {
 			return summarizeNames(unionPaths(group, (p) => p), 'Edited');
 		}
 		if (changeTypeOfGroup(group) === 'new') return 'Created';

@@ -4,13 +4,11 @@
 
 <article>
 	<h1>
-		<CmsText name="metadata.title" />
+		<CmsText name="metadata.title">About</CmsText>
 	</h1>
 	<CmsRichText name="body">
-		<p>
-			This page is rendered through the marketing layout, so its CMS fields live under the
-			<code>page:/(marketing)/about</code> scope.
-		</p>
+		This page is rendered through the marketing layout, so its CMS fields live under the
+		<code>page:/(marketing)/about</code> scope.
 	</CmsRichText>
 </article>
 

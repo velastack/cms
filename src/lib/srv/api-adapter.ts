@@ -11,7 +11,7 @@ import type {
 export type ApiAdapterOptions = {
 	/**
 	 * Base URL of the CMS backend, e.g.
-	 * `'http://localhost:5174/v1/projects/project_id/cms'`. Trailing slash is
+	 * `'https://velastack.dev/v1/projects/velastack-cms/cms'`. Trailing slash is
 	 * stripped.
 	 */
 	endpoint: string;
@@ -131,6 +131,24 @@ export const apiAdapter = (options: ApiAdapterOptions): CmsAdapter => {
 			return out;
 		},
 
+		async fetchSite(context: CmsAdapterContext): Promise<Record<string, unknown>> {
+			const qs = new URLSearchParams();
+			if (context.versionKey) qs.set('version', context.versionKey);
+			else if (context.previewKey) qs.set('preview', context.previewKey);
+			const suffix = qs.toString() ? `?${qs}` : '';
+			const res = await context.fetch(`${endpoint}/site${suffix}`, {
+				credentials: 'include'
+			});
+			if (res.status === 404) return {};
+			if (!res.ok) throw new Error(`apiAdapter.fetchSite: ${res.status}`);
+			const body = (await res.json()) as { contents: Record<string, unknown> };
+			const mediaConfig = getBuildMediaConfig();
+			const contents = mediaConfig
+				? rewriteMediaUrls(body.contents, mediaConfig.uploadsBase, mediaConfig.mediaPrefix)
+				: body.contents;
+			return contents ?? {};
+		},
+
 		async fetchEntries(routeId: string, context: CmsAdapterContext): Promise<CmsEntry[]> {
 			// Without `previewKey`: `/pages` is read-public; the backend returns
 			// published entries only when no `cms_session` cookie is present.
@@ -172,9 +190,7 @@ export const apiAdapter = (options: ApiAdapterOptions): CmsAdapter => {
 			const entries =
 				context.versionKey || context.previewKey
 					? route.entries
-					: route.entries.filter(
-							(e) => !e.isDraft && !e.isDeletePending && !e.gone
-						);
+					: route.entries.filter((e) => !e.isDraft && !e.isDeletePending && !e.gone);
 			const mediaConfig = getBuildMediaConfig();
 			return entries.map((e) => {
 				const metadata = e.metadata ?? {};

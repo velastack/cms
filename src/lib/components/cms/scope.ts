@@ -27,6 +27,32 @@ export type CmsScopeEntry = {
 };
 
 /**
+ * Schema for the project-wide site scope. Authored on `createCms({ site })`.
+ * Top-level keys are sections rendered as groups in the Site Settings panel;
+ * each section's `fields` keys become path segments in the stored tree
+ * (`branding.name`, `social.twitter`).
+ *
+ * `type` selects the input widget. Storage is unconstrained — the schema is
+ * a UI hint, not an enforced type for the underlying tree (to keep the data
+ * model uniform with pages/layouts and avoid destructive prunes when fields
+ * are added/removed).
+ */
+export type SiteFieldType = 'text' | 'markdown' | 'number' | 'datetime' | 'url' | 'color' | 'image';
+
+export type SiteFieldSchema = {
+	type: SiteFieldType;
+	label: string;
+	placeholder?: string;
+};
+
+export type SiteSectionSchema = {
+	label: string;
+	fields: Record<string, SiteFieldSchema>;
+};
+
+export type SiteSchema = Record<string, SiteSectionSchema>;
+
+/**
  * Resolved identity of the page-kind doc for the current request. Set only
  * when a page-kind scope is present on the route; `null` otherwise.
  */
@@ -73,6 +99,13 @@ export type CmsPayload = {
 	entries: Record<string, CmsEntry[]>;
 	endpoint: string;
 	page: CmsPagePointer | null;
+	/**
+	 * Project-wide site settings: schema authored on `createCms({ site })`,
+	 * tree fetched per request from `/site` (preview-overlay-aware). Read at
+	 * runtime through the reactive `cmsStore.site` — the load payload is the
+	 * SSR seed.
+	 */
+	site: { schema: SiteSchema; tree: Record<string, unknown> };
 };
 
 export type CmsManifestScope = {

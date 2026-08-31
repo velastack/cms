@@ -120,7 +120,7 @@
 	const editedKeys = $derived.by(() => {
 		const set = new Set<string>();
 		for (const item of cmsStore.openRelease?.items ?? []) {
-			if (item.kind === 'layout') continue;
+			if (item.kind === 'layout' || item.kind === 'site') continue;
 			if (item.locale !== activeLocale) continue;
 			set.add(rowKey(item.routeId, item.params));
 		}

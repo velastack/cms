@@ -12,7 +12,7 @@ export default defineConfig({
 	plugins: [
 		tailwindcss(),
 		cms({
-			endpoint: 'http://localhost:5174/v1/projects/project_id/cms',
+			endpoint: 'https://velastack.dev/v1/projects/velastack-cms/cms',
 			locales: ['en', 'es']
 		}),
 		sveltekit()

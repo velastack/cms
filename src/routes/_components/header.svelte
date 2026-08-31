@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { CmsText } from '$lib/index.js';
+	import { cms } from '$lib/index.js';
 </script>
 
 <header class="header">
 	<a href="/" class="brand">
-		<CmsText name="header.title" fallback="Velastack" />
+		{(cms.site.branding as { name?: string } | undefined)?.name ?? 'Velastack'}
 	</a>
 	<nav>
 		<a href="/about">About</a>
