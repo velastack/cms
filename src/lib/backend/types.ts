@@ -76,9 +76,13 @@ export type CmsBackendOptions = {
 	uploadDir?: string;
 	/**
 	 * Base URL for media, written into `media_items.url` and embedded in
-	 * content. Defaults to a root-relative `/uploads`, which keeps the origin
-	 * out of stored content. Pass an absolute base when the CMS is on a
-	 * different origin than the site — or to preserve an existing wire format.
+	 * content.
+	 *
+	 * Defaults to a root-relative `/uploads`, which keeps the origin out of
+	 * stored content — an absolute default would bake the authoring origin
+	 * (`http://localhost:5173`) into every image added before deploy. Pass an
+	 * absolute base when the CMS is served from a different origin than the
+	 * site, or to preserve an existing wire format.
 	 */
 	mediaBaseUrl?: string | ((event: RequestEvent) => string);
 	/** Which tenant this request is for. Returning `null` is a 404. Defaults to

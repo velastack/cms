@@ -82,12 +82,22 @@ export const createCmsBackend = (options: CmsBackendOptions = {}): CmsBackend =>
 		return pathname.endsWith(suffix) ? pathname.slice(0, -suffix.length) : pathname;
 	};
 
-	const mediaUrlFor = (event: RequestEvent, mountPath: string) => {
+	/**
+	 * The base for URLs written into `media_items.url` and embedded in content.
+	 *
+	 * Root-relative by default, and deliberately so: content outlives the origin
+	 * it was authored on. An absolute default would bake `http://localhost:5173`
+	 * into every image a developer added before deploying, and those URLs would
+	 * still point at localhost in production. A root-relative `/uploads/<file>`
+	 * resolves correctly wherever the site is served, and the client resolves it
+	 * against the CMS endpoint when the two are on different origins.
+	 *
+	 * A cross-origin deployment — where the CMS and the site are genuinely
+	 * different hosts — passes an absolute `mediaBaseUrl` explicitly.
+	 */
+	const mediaUrlFor = (event: RequestEvent) => {
 		const base = options.mediaBaseUrl;
-		const resolved =
-			typeof base === 'function'
-				? base(event)
-				: (base ?? `${new URL(mountPath, event.url).origin}/uploads`);
+		const resolved = typeof base === 'function' ? base(event) : (base ?? '/uploads');
 		const trimmed = resolved.replace(/\/$/, '');
 		return (filename: string) => `${trimmed}/${filename}`;
 	};
@@ -191,7 +201,7 @@ export const createCmsBackend = (options: CmsBackendOptions = {}): CmsBackend =>
 			storage,
 			auth,
 			authCtx,
-			mediaUrl: mediaUrlFor(event, mountPath),
+			mediaUrl: mediaUrlFor(event),
 			mountPath,
 			frameAncestors,
 			setSessionCookie: (token, expiresAt) => {

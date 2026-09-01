@@ -98,7 +98,9 @@ describe('POST /media', () => {
 		expect(item.originalName).toBe('photo.png');
 		expect(item.mime).toBe('image/png');
 		expect(item.size).toBe(PNG_1x1.length);
-		expect(item.url).toMatch(/\/uploads\/[a-f0-9]{16}\.png$/);
+		// Root-relative, not origin-absolute: content outlives the origin it was
+		// authored on, so a URL captured in dev must still resolve in production.
+		expect(item.url).toMatch(/^\/uploads\/[a-f0-9]{16}\.png$/);
 		expect(item.uploadedBy).toBe(fx.users.alice.id);
 
 		const file = await fx.anon.get(`/uploads/${item.url.split('/').pop()}`);
@@ -114,6 +116,18 @@ describe('POST /media', () => {
 	it('derives the extension from the MIME type when the name has none', async () => {
 		const res = await upload(PNG_1x1, 'noext', 'image/png');
 		expect(res.json<{ url: string }>().url).toMatch(/\.png$/);
+	});
+
+	it('honours an absolute mediaBaseUrl for a cross-origin deployment', async () => {
+		const cross = await createTestFixture({
+			backend: { mediaBaseUrl: 'https://cms.example.com/uploads' }
+		});
+		const form = new FormData();
+		form.set('file', new File([new Uint8Array(PNG_1x1)], 'x.png', { type: 'image/png' }), 'x.png');
+		const res = await cross.alice.post('/media', { formData: form });
+		expect(res.json<{ url: string }>().url).toMatch(
+			/^https:\/\/cms\.example\.com\/uploads\/[a-f0-9]{16}\.png$/
+		);
 	});
 });
 

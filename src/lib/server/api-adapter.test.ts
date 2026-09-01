@@ -52,6 +52,24 @@ describe('apiAdapter — endpoint', () => {
 		const adapter = apiAdapter({ endpoint: 'http://localhost:5174/v1/projects/p1/cms/' });
 		expect(adapter.endpoint).toBe('http://localhost:5174/v1/projects/p1/cms');
 	});
+
+	it('accepts a root-relative endpoint for a same-origin mount', async () => {
+		// The single-tenant shape: the backend is mounted in the same app, so
+		// there is no origin to name. SvelteKit's request-scoped fetch resolves
+		// the relative URL against the incoming request. Nothing here may parse
+		// the endpoint with `new URL(endpoint)` — that throws on a relative path.
+		const adapter = apiAdapter({ endpoint: '/api/cms' });
+		expect(adapter.endpoint).toBe('/api/cms');
+
+		const { fetch, calls } = stubFetch(() => ({ status: 200, json: { contents: { a: 1 } } }));
+		await adapter.fetchDocs([layoutQuery('layout:/', '/')], {
+			fetch,
+			previewKey: null,
+			locale: 'en',
+			locales: ['en']
+		});
+		expect(calls[0].url.startsWith('/api/cms/docs?')).toBe(true);
+	});
 });
 
 describe('apiAdapter — fetchDocs', () => {
