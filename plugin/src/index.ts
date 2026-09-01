@@ -12,7 +12,9 @@ import {
 } from './manifest.js';
 import { deriveUploadsBase, downloadMedia, extractMediaUrls } from './media.js';
 import {
+	INSTALL_IMPORT_SOURCE,
 	PAGE_CMS_VIRTUAL_PREFIX,
+	SELF_INSTALL_IMPORT_SOURCE,
 	buildPagesModuleSource,
 	hasGenerateEntriesImport,
 	injectGenerateEntriesRouteId,
@@ -264,6 +266,10 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 	let libDir = '';
 	let viteRoot = '';
 	let config: ResolvedConfig;
+	// What the injected `installCmsScope` import points at. The package name
+	// for every consumer; the source path only when the Vite root is this
+	// package's own repo (the showcase routes under `src/routes`).
+	let installImportSource = INSTALL_IMPORT_SOURCE;
 
 	// The plugin ships inside the @velastack/cms package. From its own file
 	// location we can identify the package's repo (in dev) or installed (in
@@ -337,6 +343,9 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 			viteRoot = config.root;
 			routesDir = resolve(config.root, options.routesDir ?? 'src/routes');
 			libDir = resolve(config.root, options.libDir ?? 'src/lib');
+			installImportSource = matchPackageName(viteRoot, '@velastack/cms')
+				? SELF_INSTALL_IMPORT_SOURCE
+				: INSTALL_IMPORT_SOURCE;
 		},
 
 		async buildStart() {
@@ -477,7 +486,7 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 			if (id.endsWith('.svelte')) {
 				const info = result.scopeByEntryPath.get(id);
 				if (!info) return;
-				return { code: injectScopeInstall(code, info, id), map: null };
+				return { code: injectScopeInstall(code, info, id, installImportSource), map: null };
 			}
 
 			if (id.endsWith('+page.ts') || id.endsWith('+page.server.ts')) {

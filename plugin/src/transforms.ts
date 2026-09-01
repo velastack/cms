@@ -46,8 +46,20 @@ export const parsePageCmsIndex = (id: string): number | null => {
 	return Number.isInteger(n) && n >= 0 ? n : null;
 };
 
-const INSTALL_IMPORT =
-	"import { installCmsScope as __velaCmsInstallScope } from '$lib/components/cms/install-scope.svelte.js';\n";
+/** Where a transformed route file imports `installCmsScope` from. */
+export const INSTALL_IMPORT_SOURCE = '@velastack/cms';
+
+/**
+ * The package's own showcase routes are the one place the public entry is the
+ * wrong import: there `$lib` *is* this package's source, and the package name
+ * would resolve to a stale `dist/` or not at all. The plugin passes this when
+ * the Vite root is the package itself. Every consumer gets the package name —
+ * their `$lib` is their own `src/lib`, where this path does not exist.
+ */
+export const SELF_INSTALL_IMPORT_SOURCE = '$lib/components/cms/install-scope.svelte.js';
+
+const buildInstallImport = (source: string): string =>
+	`import { installCmsScope as __velaCmsInstallScope } from '${source}';\n`;
 
 const buildInstallCall = (info: ScopeInfo): string =>
 	`__velaCmsInstallScope(${JSON.stringify({
@@ -61,19 +73,25 @@ const buildInstallCall = (info: ScopeInfo): string =>
  * Insert the install import + call into the file's instance `<script>`. If the
  * file has no instance script, prepend one.
  */
-export const injectScopeInstall = (code: string, info: ScopeInfo, filename: string): string => {
+export const injectScopeInstall = (
+	code: string,
+	info: ScopeInfo,
+	filename: string,
+	importSource: string = INSTALL_IMPORT_SOURCE
+): string => {
 	const parsed = parseSvelteSource(code, filename);
+	const importLine = buildInstallImport(importSource);
 	const call = buildInstallCall(info);
 
 	if (!parsed.instanceScript) {
-		return `<script lang="ts">\n${INSTALL_IMPORT}${call}</script>\n${code}`;
+		return `<script lang="ts">\n${importLine}${call}</script>\n${code}`;
 	}
 
 	const { contentStart, contentEnd } = parsed.instanceScript;
 	const before = code.slice(0, contentStart);
 	const scriptBody = code.slice(contentStart, contentEnd);
 	const after = code.slice(contentEnd);
-	return `${before}\n${INSTALL_IMPORT}${scriptBody}\n${call}${after}`;
+	return `${before}\n${importLine}${scriptBody}\n${call}${after}`;
 };
 
 /**
