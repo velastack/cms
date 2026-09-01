@@ -1,4 +1,4 @@
-import { createCms, apiAdapter } from '$lib/srv/index.js';
+import { createCms, apiAdapter } from '$lib/server/index.js';
 import { locales } from '$locales/data.js';
 
 export const { load: loadCms, generateEntries } = createCms({

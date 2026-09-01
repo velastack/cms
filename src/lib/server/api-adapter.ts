@@ -17,7 +17,7 @@ export type ApiAdapterOptions = {
 	endpoint: string;
 };
 
-type BuildMediaConfig = { uploadsBase: string; mediaPrefix: string };
+type BuildMediaConfig = { uploadsBase: string | null; mediaPrefix: string };
 
 /**
  * The Vite plugin generates `virtual:vela-cms/build-config` with the
@@ -39,15 +39,15 @@ const RELATIVE_UPLOADS_RE = /^\/uploads\/([^/?#]+)$/;
  * cycle-safe via a WeakMap. Mirrors the helper in `plugin/src/media.ts` —
  * deliberately duplicated to keep the runtime adapter free of plugin imports.
  */
-const rewriteMediaUrls = <T>(value: T, uploadsBase: string, mediaPrefix: string): T => {
+const rewriteMediaUrls = <T>(value: T, uploadsBase: string | null, mediaPrefix: string): T => {
 	const seen = new WeakMap<object, unknown>();
-	const prefix = `${uploadsBase}/`;
+	const prefix = uploadsBase === null ? null : `${uploadsBase}/`;
 	const normalizedPrefix = mediaPrefix.replace(/\/$/, '');
 	const walk = (v: unknown): unknown => {
 		if (typeof v === 'string') {
 			const m = RELATIVE_UPLOADS_RE.exec(v);
 			if (m) return `${normalizedPrefix}/${m[1]}`;
-			if (v.startsWith(prefix)) {
+			if (prefix !== null && v.startsWith(prefix)) {
 				const rest = v.slice(prefix.length).split(/[?#]/)[0];
 				if (rest && !rest.includes('/')) return `${normalizedPrefix}/${rest}`;
 			}

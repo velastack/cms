@@ -16,10 +16,28 @@ describe('deriveUploadsBase', () => {
 			'http://localhost:5174/uploads'
 		);
 	});
+
+	it('returns null for a root-relative endpoint instead of throwing', () => {
+		// `cms({ endpoint: '/cms' })` is the same-origin single-tenant mount.
+		// A bare `new URL('/cms')` throws TypeError, which used to take the
+		// whole build down before the plugin got anywhere near the manifest.
+		expect(deriveUploadsBase('/cms')).toBeNull();
+		expect(deriveUploadsBase('/v1/projects/p1/cms')).toBeNull();
+	});
 });
 
 describe('extractMediaUrls', () => {
 	const base = 'https://cms.example.com/uploads';
+
+	it('still finds relative paths when there is no absolute base', () => {
+		const tree = {
+			a: '/uploads/abc.png',
+			b: 'https://cms.example.com/uploads/other.png'
+		};
+		// With a null base only the root-relative form is recognized — which is
+		// exactly what a same-origin mount stores.
+		expect([...extractMediaUrls(tree, null)]).toEqual(['abc.png']);
+	});
 
 	it('finds relative /uploads/* paths anywhere in the tree', () => {
 		const tree = {

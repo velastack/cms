@@ -1,4 +1,6 @@
-import { mergeTree, type Tree } from '../components/cms/path.ts';
+import { mergeTree, type Tree } from '../core/path.js';
+import { findPageEntry, type PageEntry } from '../core/page-entry.js';
+
 import type {
 	CmsAdapter,
 	CmsAdapterContext,
@@ -8,27 +10,9 @@ import type {
 	CmsScopeQuery
 } from './types.ts';
 
-/**
- * One page-kind entry: a specific (`routeId`, `params`) pair and its
- * currently-published content. `routeId` is the SvelteKit route id (e.g.
- * `/(marketing)/rooms/[slug]`); `params` is the bound values for that route's
- * owned params (e.g. `{ slug: 'suite-1' }`). For static page routes (no owned
- * params) `params` is `{}` and there's exactly one entry per route id.
- *
- * Pending edits live in releases (see `_store.ts`), not on the entry — saving
- * a draft adds an item to the editor's open release rather than mutating the
- * published content here.
- *
- * `tombstone`, when set, marks this entry as a published tombstone — the page
- * was deleted with a non-404 outcome in a prior release. `published` is still
- * required (for `findPageEntry` symmetry) but is ignored when `tombstone` is
- * set; `fetchDocs` returns the tombstone instead of the doc.
- */
-export type PageEntry = {
-	params: Record<string, string>;
-	published: Record<string, unknown>;
-	tombstone?: CmsAdapterTombstone;
-};
+// Re-exported so `@velastack/cms/server`'s public surface is unchanged by the
+// move of these definitions into `core/`.
+export { findPageEntry, type PageEntry };
 
 /**
  * One pending change in an open release, snapshot for adapter overlay. Items
@@ -84,28 +68,6 @@ export type MockAdapterOptions = {
 	 * pending edits onto published content.
 	 */
 	resolvePreview?: (previewKey: string) => ReleaseSnapshot | null | undefined;
-};
-
-/** Match a `PageEntry` whose `params` map equals the requested params. */
-export const findPageEntry = (
-	entries: PageEntry[] | undefined,
-	params: Record<string, string>
-): PageEntry | undefined => {
-	if (!entries) return undefined;
-	const keys = Object.keys(params);
-	for (const entry of entries) {
-		const entryKeys = Object.keys(entry.params);
-		if (entryKeys.length !== keys.length) continue;
-		let match = true;
-		for (const k of keys) {
-			if (entry.params[k] !== params[k]) {
-				match = false;
-				break;
-			}
-		}
-		if (match) return entry;
-	}
-	return undefined;
 };
 
 const paramsEqual = (a: Record<string, string>, b: Record<string, string>): boolean => {

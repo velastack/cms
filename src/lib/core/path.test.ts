@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diffPaths, get, has, mergeTree, parsePath, set, unset } from './path.ts';
+import { diffPaths, get, has, leafPaths, mergeTree, parsePath, set, unset } from './path.js';
 
 describe('parsePath', () => {
 	it('splits dotted paths', () => {
@@ -162,5 +162,29 @@ describe('diffPaths', () => {
 	it('treats undefined as empty tree at root', () => {
 		expect(diffPaths(undefined, { a: 1 })).toEqual(['a']);
 		expect(diffPaths({ a: 1 }, undefined)).toEqual(['a']);
+	});
+});
+
+describe('leafPaths', () => {
+	it('emits one path per scalar leaf', () => {
+		expect(leafPaths({ a: 1, b: { c: 2 } }).sort()).toEqual(['a', 'b.c']);
+	});
+	it('treats an array as a leaf rather than recursing per index', () => {
+		// This is the behaviour that separates it from diffPaths' internal walk:
+		// mergeTree replaces arrays wholesale, so publish/revert must snapshot
+		// the whole array, not its elements.
+		expect(leafPaths({ list: [1, 2, 3] })).toEqual(['list']);
+	});
+	it('emits the path of an empty object', () => {
+		expect(leafPaths({ a: {} })).toEqual(['a']);
+	});
+	it('returns [] for an empty tree at the root', () => {
+		expect(leafPaths({})).toEqual([]);
+	});
+	it('honours a prefix', () => {
+		expect(leafPaths({ b: 1 }, 'a')).toEqual(['a.b']);
+	});
+	it('emits null and undefined leaves', () => {
+		expect(leafPaths({ a: null, b: undefined }).sort()).toEqual(['a', 'b']);
 	});
 });

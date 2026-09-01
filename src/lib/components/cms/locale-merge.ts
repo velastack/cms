@@ -13,7 +13,7 @@
  */
 
 import type { CmsEntry } from './scope.js';
-import { mergeTree, type Tree } from './path.js';
+import { mergeTree, type Tree } from '../../core/path.js';
 
 /**
  * Merge requested-locale doc trees over default-locale doc trees, per scope.

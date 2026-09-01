@@ -8,7 +8,7 @@ import type {
 	CmsScopeEntry,
 	SiteSchema
 } from '../components/cms/scope.ts';
-import { mergeLocaleDocs, mergeLocaleEntries } from '../components/cms/locale-merge.ts';
+import { mergeLocaleDocs, mergeLocaleEntries } from '../components/cms/locale-merge.js';
 import type {
 	CmsAdapter,
 	CmsAdapterResolution,

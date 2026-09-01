@@ -356,6 +356,13 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 			const mediaDir = resolve(viteRoot, options.mediaDir ?? 'static/cms-media');
 			const logger = config.logger;
 
+			// A root-relative endpoint (`cms({ endpoint: '/cms' })`) is the
+			// same-origin, single-tenant setup: uploads are served by the app
+			// itself, so there is nothing to pre-download and no origin to
+			// download it from. Prerendered pages reference `/uploads/<file>`
+			// and the app serves it at runtime.
+			if (uploadsBase === null) return;
+
 			const cache = getMediaPassCache();
 			let pass = cache.get(endpoint);
 			if (!pass) {

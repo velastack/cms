@@ -27,11 +27,16 @@
  * Locales panel passes an explicit locale to inspect other locales'
  * working-copy state without switching the page.
  */
+import { browser } from '$app/environment';
 import { page } from '$app/state';
 import { mergeLocaleDocs, mergeLocaleEntries } from './locale-merge.js';
 import { composeKey } from './overlay-sync.js';
-import { get, has, mergeTree, set, type Tree } from './path.js';
+import { get, has, mergeTree, set, type Tree } from '../../core/path.js';
+import type { MediaItem, OpenRelease, PageDeleteOutcome, ReleaseItem } from '../../core/wire.js';
 import type { CmsEntry, CmsPagePointer, CmsPayload, CmsScopeEntry } from './scope.js';
+
+// Re-exported: admin-bar components import these from the store today.
+export type { MediaItem, OpenRelease, PageDeleteOutcome, ReleaseItem };
 
 export type CmsScopeRef = {
 	scopeId: string;
@@ -45,71 +50,30 @@ type DraftBucket = {
 	tree: Tree;
 };
 
-/**
- * Outcome of a page-delete release item: omit for hard-delete (404 after
- * publish), set to `gone` for permanent removal (410), or `redirect` to a
- * target URL for a permanent redirect (308). The CMS server keeps the
- * outcome on the published tombstone after the release is published.
- */
-export type PageDeleteOutcome = { kind: 'gone' } | { kind: 'redirect'; to: string };
-
-export type ReleaseItem =
-	| {
-			kind: 'page';
-			routeId: string;
-			params: Record<string, string>;
-			locale: string;
-			tree: Tree;
-			addedAt: string;
-	  }
-	| { kind: 'layout'; routeId: string; locale: string; tree: Tree; addedAt: string }
-	| { kind: 'site'; tree: Tree; addedAt: string }
-	| {
-			kind: 'page-delete';
-			routeId: string;
-			params: Record<string, string>;
-			locale: string;
-			outcome?: PageDeleteOutcome;
-			addedAt: string;
-	  };
-
-export type OpenRelease = {
-	userId: string;
-	name?: string;
-	createdAt: string;
-	preview_key: string;
-	items: ReleaseItem[];
-};
-
-/**
- * Wire shape of a media library item, mirroring the server's `MediaItem`.
- * `url` is the public path served by the static handler (e.g. `/uploads/abc.png`).
- */
-export type MediaItem = {
-	id: string;
-	filename: string;
-	originalName: string;
-	mime: string;
-	size: number;
-	url: string;
-	uploadedAt: string;
-	uploadedBy: string;
-};
-
 const scopeKindFromId = (scopeId: string): 'page' | 'layout' =>
 	scopeId.startsWith('layout:') ? 'layout' : 'page';
 
 /**
- * Origin where uploaded media files are served. The backend writes files to
- * `static/uploads/` and returns relative paths like `/uploads/<slug>.png`; the
- * frontend lives on a different origin in dev, so we prefix each URL here at
- * the wire boundary so display components and persisted field values both get
- * a fully-qualified URL.
+ * Fully qualify a media URL against the CMS endpoint.
+ *
+ * The backend may return a root-relative path (`/uploads/<slug>.png`) — that is
+ * the default for a same-origin mount, and it keeps the origin out of persisted
+ * content. When the CMS lives on a different origin than the site, resolving
+ * that path against `location.href` would point at the site, so it is resolved
+ * against the endpoint instead. Absolute URLs are returned untouched.
+ *
+ * This used to be a hardcoded `https://velastack.dev`, which was silently wrong
+ * for every other deployment.
  */
-export const MEDIA_URL_PREFIX = 'https://velastack.dev';
-
-const resolveMediaItem = (item: MediaItem): MediaItem =>
-	item.url.startsWith('/') ? { ...item, url: `${MEDIA_URL_PREFIX}${item.url}` } : item;
+const resolveMediaItem = (item: MediaItem, endpoint: string): MediaItem => {
+	if (!item.url.startsWith('/')) return item;
+	try {
+		const base = new URL(endpoint, browser ? location.href : 'http://localhost');
+		return { ...item, url: new URL(item.url, base).toString() };
+	} catch {
+		return item;
+	}
+};
 
 const treeHasAnyLeaf = (tree: Tree): boolean => {
 	for (const v of Object.values(tree)) {
@@ -610,7 +574,7 @@ class CmsStore {
 		if (typeof item?.url !== 'string') {
 			throw new Error('Upload response missing url');
 		}
-		return resolveMediaItem(item);
+		return resolveMediaItem(item, endpoint);
 	}
 
 	/** Back-compat wrapper around `uploadMedia` that returns just the URL. */
@@ -628,7 +592,7 @@ class CmsStore {
 		const res = await fetch(`${endpoint}/media?${qs}`, { credentials: 'include' });
 		if (!res.ok) throw new Error(`List failed (${res.status})`);
 		const data = (await res.json()) as { items: MediaItem[]; total: number };
-		return { ...data, items: data.items.map(resolveMediaItem) };
+		return { ...data, items: data.items.map((i) => resolveMediaItem(i, endpoint)) };
 	}
 
 	async deleteMedia(endpoint: string, id: string): Promise<void> {

@@ -1,3 +1,4 @@
+import type { PageDeleteOutcome } from '../core/page-entry.js';
 import type { CmsEntry, CmsScopeEntry, SiteSchema } from '../components/cms/scope.ts';
 
 export type { CmsEntry, SiteSchema };
@@ -27,7 +28,7 @@ export type CmsAdapterDoc = {
  * page was replaced with a permanent redirect to `to` (HTTP 308). Layout
  * scopes never resolve to a tombstone — only page-kind scopes do.
  */
-export type CmsAdapterTombstone = { kind: 'gone' } | { kind: 'redirect'; to: string };
+export type CmsAdapterTombstone = PageDeleteOutcome;
 
 /**
  * One resolution from an adapter for a single scope query: either the doc's

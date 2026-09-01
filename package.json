@@ -57,9 +57,13 @@
 			"svelte": "./dist/index.js",
 			"default": "./dist/index.js"
 		},
-		"./srv": {
-			"types": "./dist/srv/index.d.ts",
-			"default": "./dist/srv/index.js"
+		"./server": {
+			"types": "./dist/server/index.d.ts",
+			"default": "./dist/server/index.js"
+		},
+		"./backend": {
+			"types": "./dist/backend/index.d.ts",
+			"default": "./dist/backend/index.js"
 		},
 		"./vite": {
 			"types": "./plugin/dist/index.d.ts",
@@ -72,11 +76,15 @@
 	},
 	"peerDependencies": {
 		"@sveltejs/kit": "^2.0.0",
+		"better-sqlite3": "^11.0.0 || ^12.0.0",
 		"marked": "^15.0.0 || ^16.0.0 || ^17.0.0 || ^18.0.0",
 		"svelte": "^5.0.0",
 		"vite": "^8.0.0"
 	},
 	"peerDependenciesMeta": {
+		"better-sqlite3": {
+			"optional": true
+		},
 		"marked": {
 			"optional": true
 		}
@@ -90,6 +98,7 @@
 		"@tailwindcss/cli": "^4.3.3",
 		"@tailwindcss/vite": "^4.3.3",
 		"@types/node": "^26.4.0",
+		"better-sqlite3": "^12.11.1",
 		"marked": "^18.0.11",
 		"prettier": "^3.9.6",
 		"prettier-plugin-svelte": "^4.1.1",

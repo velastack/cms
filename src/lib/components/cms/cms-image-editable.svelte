@@ -2,7 +2,7 @@
 	import { tick as svelteTick } from 'svelte';
 	import { page } from '$app/state';
 	import { cmsStore, type CmsScopeRef, type MediaItem } from './cms-store.svelte.js';
-	import { get as pathGet } from './path.js';
+	import { get as pathGet } from '../../core/path.js';
 	import type { CmsImageValue } from './cms-image.svelte';
 	import { Button } from '../admin-bar/ui/button/index.js';
 	import { Input } from '../admin-bar/ui/input/index.js';

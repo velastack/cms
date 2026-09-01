@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import type { ReleaseItem } from '../cms/cms-store.svelte.js';
 	import type { CmsPayload } from '../cms/scope.js';
-	import { diffPaths, type Tree } from '../cms/path.js';
+	import { diffPaths, type Tree } from '../../core/path.js';
 	import { resolveRouteOnlyParams, resolveRouteUrl } from './resolve-route.js';
 	import { Badge, type BadgeVariant } from './ui/badge/index.js';
 	import { Button } from './ui/button/index.js';

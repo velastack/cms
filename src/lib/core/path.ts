@@ -158,3 +158,37 @@ const walkLeaves = (v: unknown, prefix: string, out: string[]): void => {
 	}
 	if (prefix) out.push(prefix);
 };
+
+/**
+ * Every leaf path in `tree`.
+ *
+ * Deliberately *not* the same walk as `diffPaths`' private `walkLeaves`:
+ * this one treats an array as a leaf (emitting the array's own path rather
+ * than recursing per index) and emits the path of an empty object. That
+ * matches `mergeTree`'s array-replace semantics, which is what the backend's
+ * publish/revert needs — `capturePriorTree` snapshots pre-edit state at
+ * exactly the granularity a patch tree will overwrite. `walkLeaves` recurses
+ * into arrays because the publish dialog wants a per-index changed-field
+ * summary. Keep both.
+ */
+export const leafPaths = (tree: unknown, prefix: string = ''): string[] => {
+	const out: string[] = [];
+	if (isPlainObject(tree)) {
+		if (Object.keys(tree).length === 0) {
+			if (prefix) out.push(prefix);
+			return out;
+		}
+		for (const [k, v] of Object.entries(tree)) {
+			const sub = prefix ? `${prefix}.${k}` : k;
+			out.push(...leafPaths(v, sub));
+		}
+		return out;
+	}
+	if (Array.isArray(tree)) {
+		// Arrays are leaves under our merge rules — diff at the array level.
+		if (prefix) out.push(prefix);
+		return out;
+	}
+	if (prefix) out.push(prefix);
+	return out;
+};

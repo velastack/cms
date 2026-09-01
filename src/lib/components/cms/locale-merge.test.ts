@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergeLocaleDocs, mergeLocaleEntries } from './locale-merge.ts';
+import { mergeLocaleDocs, mergeLocaleEntries } from './locale-merge.js';
 import type { CmsEntry } from './scope.ts';
 
 describe('mergeLocaleDocs', () => {

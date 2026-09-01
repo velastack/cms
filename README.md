@@ -635,7 +635,7 @@ plugin/src/      Vite plugin (route discovery, AST parse, manifest builder, tran
 src/lib/         Public library
   components/cms/      Display + editable components, scope helpers, store
   components/admin-bar/ Admin bar wrapper + async internal + SEO panel
-  srv/                 loadCms, mockAdapter, types
+  server/              loadCms, mockAdapter, types
 src/routes/      Test harness / showcase
 ```
 

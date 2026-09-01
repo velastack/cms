@@ -63,7 +63,7 @@ export type CmsPagePointer = {
 };
 
 /**
- * One publishable page-kind entry. Mirrored from `srv/types.ts` so client-only
+ * One publishable page-kind entry. Mirrored from `server/types.ts` so client-only
  * code (`<CmsEntries>`, the merged `cms` view) can read entries without
  * importing server modules. The server type re-exports this one.
  *

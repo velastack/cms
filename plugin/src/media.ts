@@ -7,10 +7,21 @@ import path from 'node:path';
  * directory. The project-scoped CMS endpoint (`/v1/projects/PID/cms`) governs
  * the API only, not the upload path, so `uploadsBase` is the bare origin plus
  * `/uploads`.
+ *
+ * Returns `null` for a root-relative endpoint such as `cms({ endpoint: '/cms' })`
+ * — the single-tenant, same-origin configuration. There is no origin to fetch
+ * from at build time, so media pre-download is skipped; content still resolves
+ * because uploads are referenced as root-relative `/uploads/<file>` in that
+ * setup, which every caller here recognizes without a base. Previously this did
+ * a bare `new URL(endpoint)`, which throws `TypeError: Invalid URL` on a
+ * relative endpoint and took the whole build down.
  */
-export const deriveUploadsBase = (endpoint: string): string => {
-	const url = new URL(endpoint);
-	return `${url.origin}/uploads`;
+export const deriveUploadsBase = (endpoint: string): string | null => {
+	try {
+		return `${new URL(endpoint).origin}/uploads`;
+	} catch {
+		return null;
+	}
 };
 
 const RELATIVE_UPLOADS_RE = /^\/uploads\/([^/?#]+)$/;
@@ -20,10 +31,10 @@ const RELATIVE_UPLOADS_RE = /^\/uploads\/([^/?#]+)$/;
  * referenced as a string — either as a relative `/uploads/<file>` path or an
  * absolute `<uploadsBase>/<file>` URL. Cycle-safe via a WeakSet.
  */
-export const extractMediaUrls = (value: unknown, uploadsBase: string): Set<string> => {
+export const extractMediaUrls = (value: unknown, uploadsBase: string | null): Set<string> => {
 	const out = new Set<string>();
 	const seen = new WeakSet<object>();
-	const prefix = `${uploadsBase}/`;
+	const prefix = uploadsBase === null ? null : `${uploadsBase}/`;
 	const walk = (v: unknown): void => {
 		if (typeof v === 'string') {
 			const m = RELATIVE_UPLOADS_RE.exec(v);
@@ -31,7 +42,7 @@ export const extractMediaUrls = (value: unknown, uploadsBase: string): Set<strin
 				out.add(m[1]);
 				return;
 			}
-			if (v.startsWith(prefix)) {
+			if (prefix !== null && v.startsWith(prefix)) {
 				const rest = v.slice(prefix.length).split(/[?#]/)[0];
 				if (rest && !rest.includes('/')) out.add(rest);
 			}
@@ -58,15 +69,19 @@ export const extractMediaUrls = (value: unknown, uploadsBase: string): Set<strin
  * untouched. Cycle-safe (cycles are flattened to a fresh object — payloads
  * passed through `devalue` won't have cycles, but defensive).
  */
-export const rewriteMediaUrls = <T>(value: T, uploadsBase: string, mediaPrefix: string): T => {
+export const rewriteMediaUrls = <T>(
+	value: T,
+	uploadsBase: string | null,
+	mediaPrefix: string
+): T => {
 	const seen = new WeakMap<object, unknown>();
-	const prefix = `${uploadsBase}/`;
+	const prefix = uploadsBase === null ? null : `${uploadsBase}/`;
 	const normalizedMediaPrefix = mediaPrefix.replace(/\/$/, '');
 	const walk = (v: unknown): unknown => {
 		if (typeof v === 'string') {
 			const m = RELATIVE_UPLOADS_RE.exec(v);
 			if (m) return `${normalizedMediaPrefix}/${m[1]}`;
-			if (v.startsWith(prefix)) {
+			if (prefix !== null && v.startsWith(prefix)) {
 				const rest = v.slice(prefix.length).split(/[?#]/)[0];
 				if (rest && !rest.includes('/')) return `${normalizedMediaPrefix}/${rest}`;
 			}
