@@ -2,10 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 /**
- * Backend serves uploaded files at the endpoint origin (`/uploads/<filename>`)
- * via SvelteKit's static handler — confirmed in `cms.velastack/_store.ts`. The
- * project-scoped CMS endpoint (`/v1/projects/PID/cms`) only governs the API,
- * not the upload path. So `uploadsBase` is the bare origin + `/uploads`.
+ * The backend serves uploaded files at the endpoint origin
+ * (`/uploads/<filename>`), from a route that reads them out of its data
+ * directory. The project-scoped CMS endpoint (`/v1/projects/PID/cms`) governs
+ * the API only, not the upload path, so `uploadsBase` is the bare origin plus
+ * `/uploads`.
  */
 export const deriveUploadsBase = (endpoint: string): string => {
 	const url = new URL(endpoint);
