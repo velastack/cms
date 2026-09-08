@@ -72,7 +72,7 @@ describe('deriveOverlayIntents — draft mode (no version)', () => {
 		expect(intents).toEqual<OverlayIntent[]>([{ kind: 'set-preview-param', value: 'k' }]);
 	});
 
-	it('no open release + stale ?preview= + same-locale view: strip + clear overlay', () => {
+	it('no open release + stale ?preview= + same-locale view: strip + load published overlay', () => {
 		const intents = deriveOverlayIntents(
 			baseInput({
 				openReleaseFetched: true,
@@ -84,11 +84,11 @@ describe('deriveOverlayIntents — draft mode (no version)', () => {
 		);
 		expect(intents).toEqual<OverlayIntent[]>([
 			{ kind: 'set-preview-param', value: null },
-			{ kind: 'clear-overlay' }
+			{ kind: 'load-overlay', previewKey: null, locale: 'en' }
 		]);
 	});
 
-	it('no open release + no preview param + same-locale view: just clear overlay', () => {
+	it('no open release + no preview param + same-locale view: load published overlay (static-export sites bake stale docs)', () => {
 		const intents = deriveOverlayIntents(
 			baseInput({
 				openReleaseFetched: true,
@@ -98,7 +98,9 @@ describe('deriveOverlayIntents — draft mode (no version)', () => {
 				pageLocale: 'en'
 			})
 		);
-		expect(intents).toEqual<OverlayIntent[]>([{ kind: 'clear-overlay' }]);
+		expect(intents).toEqual<OverlayIntent[]>([
+			{ kind: 'load-overlay', previewKey: null, locale: 'en' }
+		]);
 	});
 });
 
@@ -196,7 +198,7 @@ describe('deriveOverlayIntents — version mode', () => {
 			})
 		);
 		expect(intents).not.toContainEqual({ kind: 'set-preview-param', value: null });
-		expect(intents).not.toContainEqual({ kind: 'clear-overlay' });
+		expect(intents).not.toContainEqual({ kind: 'load-overlay', previewKey: null, locale: 'en' });
 	});
 
 	it('combines fetch-open-release with version intents when unfetched', () => {

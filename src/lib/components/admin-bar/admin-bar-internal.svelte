@@ -393,10 +393,6 @@
 							cmsStore.loadAndApplySiteOverlay(endpoint, intent.previewKey)
 						]);
 						break;
-					case 'clear-overlay':
-						versionRelease = null;
-						cmsStore.clearOverlay();
-						break;
 				}
 			}
 		})();

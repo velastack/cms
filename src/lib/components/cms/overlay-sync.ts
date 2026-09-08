@@ -14,12 +14,12 @@ export type OverlayIntent =
 	| { kind: 'fetch-version-release'; versionKey: string }
 	| { kind: 'set-preview-param'; value: string | null }
 	| { kind: 'load-version-overlay'; versionKey: string; locale: string }
-	/** `previewKey: null` fetches published-only — used when previewing a
-	 *  non-default locale without an open draft, so the overlay carries the
-	 *  locale's published tree (with default-locale fallback merged by
-	 *  `loadAndApplyOverlay`'s dual-fetch). */
-	| { kind: 'load-overlay'; previewKey: string | null; locale: string }
-	| { kind: 'clear-overlay' };
+	/** `previewKey: null` fetches published-only. Used whenever there is no
+	 *  open draft: the overlay then carries the locale's *current* published
+	 *  tree (with default-locale fallback merged by `loadAndApplyOverlay`'s
+	 *  dual-fetch), masking `page.data.cms.docs` — which on a static-export
+	 *  site is frozen at build time and goes stale with every publish. */
+	| { kind: 'load-overlay'; previewKey: string | null; locale: string };
 
 export interface OverlaySyncInput {
 	/** `?version=…` URL param: when set, we're in past-release snapshot mode. */
@@ -28,10 +28,10 @@ export interface OverlaySyncInput {
 	locale: string;
 	/**
 	 * `page.data.cms.locale` — the locale the server rendered for this request.
-	 * When `locale === pageLocale`, the page's `cms.docs` already provides the
-	 * base content (no overlay needed for "show the published tree"). When
-	 * they differ, we must load the overlay so non-default-locale views see
-	 * content (with default-locale fallback) rather than empty fields.
+	 * Kept on the input for parity with the store's `mergedTree`, which only
+	 * folds `cms.docs` into the base when `locale === pageLocale`. The sync
+	 * decision no longer branches on it: the published overlay is loaded
+	 * either way (see rule 7).
 	 */
 	pageLocale: string;
 	/** Current open-release preview_key from `cmsStore.openRelease`, or null. */
@@ -57,16 +57,16 @@ export interface OverlaySyncInput {
  *    first; the param change re-runs the effect into rule 5.
  * 5. With an open release whose key matches: load the draft overlay.
  * 6. With no open release but a stale `?preview=`: strip the param. Then
- *    fall through to rule 7's locale logic in the *same* intent batch so the
- *    field render isn't briefly empty between strip and the next effect run.
- * 7. With no open release and no draft overlay needed:
- *    - `locale === pageLocale`: clear the overlay — the page's `cms.docs` is
- *      authoritative and matching, so the field reads from base directly.
- *    - `locale !== pageLocale`: load published-only overlay. Without this,
- *      `mergedTree(non-pageLocale)` would have empty base AND empty overlay,
- *      and fields would fall through to their component fallback even though
- *      a default-locale value exists. The dual-fetch in `loadAndApplyOverlay`
- *      composes the `requested → default → undefined` chain.
+ *    fall through to rule 7 in the *same* intent batch so the field render
+ *    isn't briefly empty between strip and the next effect run.
+ * 7. With no open release: load the published-only overlay for `locale`.
+ *    The page's `cms.docs` is NOT authoritative for an editor — on a
+ *    static-export site it was captured at build time, so after any later
+ *    publish it lags the backend until the next deploy. The overlay fetched
+ *    from `/docs` is always current, and for `locale !== pageLocale` it is
+ *    the only source of content at all (`mergedTree` folds in no base for
+ *    other locales). The dual-fetch in `loadAndApplyOverlay` composes the
+ *    `requested → default → undefined` chain.
  */
 export function deriveOverlayIntents(input: OverlaySyncInput): OverlayIntent[] {
 	const intents: OverlayIntent[] = [];
@@ -103,11 +103,7 @@ export function deriveOverlayIntents(input: OverlaySyncInput): OverlayIntent[] {
 		intents.push({ kind: 'set-preview-param', value: null });
 	}
 
-	if (input.locale !== input.pageLocale) {
-		intents.push({ kind: 'load-overlay', previewKey: null, locale: input.locale });
-	} else {
-		intents.push({ kind: 'clear-overlay' });
-	}
+	intents.push({ kind: 'load-overlay', previewKey: null, locale: input.locale });
 	return intents;
 }
 
