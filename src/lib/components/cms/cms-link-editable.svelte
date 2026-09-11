@@ -226,7 +226,8 @@
 		data-popover-open={pageSelectOpen ? '' : undefined}
 	>
 		{#if children}
-			<span class="cms-link-edit__custom">
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<span class="cms-link-edit__custom" onclickcapture={blockNav}>
 				{@render children(renderProps)}
 			</span>
 		{:else}
@@ -389,6 +390,15 @@
 		z-index: 50;
 		white-space: nowrap;
 		font-family: ui-sans-serif, system-ui, sans-serif;
+	}
+	/* Bridge the gap between the link and the toolbar so hover isn't lost crossing it. */
+	.cms-link-edit__toolbar::after {
+		content: '';
+		position: absolute;
+		top: 100%;
+		left: 0;
+		right: 0;
+		height: 0.5rem;
 	}
 	.cms-link-edit:hover .cms-link-edit__toolbar,
 	.cms-link-edit:focus-within .cms-link-edit__toolbar,
