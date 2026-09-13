@@ -43,6 +43,12 @@
 </script>
 
 {#if editable && ref}
+	<!-- Mounted straight into edit mode (navigation while editing): the
+	     children branch below never rendered, so render it hidden once to
+	     capture the default markup. Removed as soon as it's captured. -->
+	{#if children && initialFromChildren === undefined}
+		<div bind:this={childrenEl} class="cms-rich-text-capture">{@render children()}</div>
+	{/if}
 	{#await import('./cms-rich-text-editable.svelte') then { default: Editable }}
 		<Editable scope={ref} {name} initial={editInitial} />
 	{/await}
@@ -62,6 +68,9 @@
 	}
 	.cms-rich-text-children {
 		display: contents;
+	}
+	.cms-rich-text-capture {
+		display: none;
 	}
 	.cms-missing {
 		padding: 0.25rem 0.5rem;
