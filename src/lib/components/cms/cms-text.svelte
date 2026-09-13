@@ -73,6 +73,12 @@
 </script>
 
 {#if editable && ref}
+	<!-- Mounted straight into edit mode (navigation while editing): the
+	     children branch below never rendered, so render it hidden once to
+	     capture the default text. Removed as soon as it's captured. -->
+	{#if children && initialFromChildren === undefined}
+		<span bind:this={childrenEl} class="cms-text-capture">{@render children()}</span>
+	{/if}
 	<span
 		bind:this={el}
 		class="cms-text-editable"
@@ -117,6 +123,9 @@
 
 	.cms-text-children {
 		display: contents;
+	}
+	.cms-text-capture {
+		display: none;
 	}
 
 	.cms-missing {
