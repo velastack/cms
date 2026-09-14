@@ -68,6 +68,13 @@ export type MockAdapterOptions = {
 	 * pending edits onto published content.
 	 */
 	resolvePreview?: (previewKey: string) => ReleaseSnapshot | null | undefined;
+	/**
+	 * Surfaced as `CmsPayload.endpoint` so the admin bar signs in against a
+	 * hosted CMS even when content is served from memory — a static site built
+	 * offline (`VELA_CMS_OFFLINE=1`) with fallbacks, whose editors still need
+	 * somewhere to sign in. Unset, the loader falls back to `/api/cms`.
+	 */
+	endpoint?: string;
 };
 
 const paramsEqual = (a: Record<string, string>, b: Record<string, string>): boolean => {
@@ -142,6 +149,7 @@ export const mockAdapter = (options: MockAdapterOptions = {}): CmsAdapter => {
 	const resolvePreview = options.resolvePreview;
 
 	return {
+		...(options.endpoint ? { endpoint: options.endpoint } : {}),
 		fetchDocs(queries: CmsScopeQuery[], context: CmsAdapterContext) {
 			const previewKey = context.previewKey;
 			const release = previewKey && resolvePreview ? resolvePreview(previewKey) : null;

@@ -517,3 +517,14 @@ describe('mockAdapter.fetchEntries', () => {
 		expect(entries).toHaveLength(1);
 	});
 });
+
+describe('mockAdapter — endpoint', () => {
+	it('carries no endpoint by default so the loader falls back to /api/cms', () => {
+		expect(mockAdapter().endpoint).toBeUndefined();
+	});
+
+	it('surfaces a configured endpoint for offline builds of hosted-CMS sites', () => {
+		const adapter = mockAdapter({ endpoint: 'https://cms.example/v1/projects/p1/cms' });
+		expect(adapter.endpoint).toBe('https://cms.example/v1/projects/p1/cms');
+	});
+});
