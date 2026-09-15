@@ -25,9 +25,11 @@ export type TestFixture = {
 	backend: CmsBackend;
 	/** Unauthenticated client for the default project. */
 	anon: CmsTestClient;
-	/** Signed in as alice, who can reach `p1` and `p_alice`. */
+	/** Signed in as alice, who can reach `p1` and `p_alice`. Holds a root-scoped
+	 * cookie, so `at()` carries it to any mount and cross-project tests
+	 * exercise `authorize`. */
 	alice: CmsTestClient;
-	/** Signed in as bob, who can reach `p1` and `p_bob`. */
+	/** Signed in as bob, who can reach `p1` and `p_bob`. Root-scoped like alice. */
 	bob: CmsTestClient;
 	users: { alice: CmsEditor; bob: CmsEditor };
 	/** A client for another project, optionally carrying a session. */

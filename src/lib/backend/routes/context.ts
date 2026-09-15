@@ -17,8 +17,13 @@ export type RouteCtx = {
 	event: RequestEvent;
 	/** The tenant this request is for. `'default'` in a single-tenant mount. */
 	projectId: string;
-	/** The signed-in editor, or `null`. Routes declared `required` never see null. */
+	/** The editor whose session is authorized for this project, or `null` — on
+	 * every route class. Routes declared `required` never see null. */
 	user: CmsEditor | null;
+	/** The editor the session resolved to, whether or not they hold a grant
+	 * here. Only the login page has a use for it: to say why the form is being
+	 * shown instead of the signed-in screen. */
+	sessionUser: CmsEditor | null;
 	/** Captured `:name` segments from the route pattern. */
 	params: Record<string, string>;
 	store: CmsStore;

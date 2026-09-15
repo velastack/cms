@@ -143,10 +143,33 @@ describe('cross-project authorization', () => {
 		expect((await bob.get('/user')).status).toBe(200);
 	});
 
-	it('still allows login and logout on a project the session cannot reach', async () => {
+	it('serves the login form, not the signed-in screen, on a project the session cannot reach', async () => {
 		const onBob = alice.at(bobOnly.basePath, bobOnly.params);
-		expect((await onBob.get('/iframe/login')).status).toBe(200);
+		const res = await onBob.get('/iframe/login');
+		expect(res.status).toBe(200);
+		expect(res.text).toContain('name="password"');
+		expect(res.text).toContain('alice@example.com');
+		expect(res.text).not.toContain('velastack-cms-login-success');
 		expect((await onBob.post('/logout')).status).toBe(204);
+	});
+
+	it('serves published content to a session with no grant here', async () => {
+		const onBob = alice.at(bobOnly.basePath, bobOnly.params);
+		const site = await onBob.get('/site');
+		expect(site.status).toBe(200);
+		expect(site.json<{ contents: unknown }>().contents).toEqual({});
+		const pages = await onBob.get('/pages?locale=en');
+		expect(pages.status).toBe(200);
+		expect(pages.headers.get('cache-control')).toContain('public');
+	});
+
+	it('treats a revoked grant as anonymous', async () => {
+		expect(backend.editors.revoke(aliceId, 'p1')).toBe(true);
+		expect((await alice.get('/user')).status).toBe(403);
+		expect((await alice.get('/site')).status).toBe(200);
+		const login = await alice.get('/iframe/login');
+		expect(login.text).toContain('alice@example.com');
+		expect(login.text).not.toContain('velastack-cms-login-success');
 	});
 });
 

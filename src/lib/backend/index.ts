@@ -29,6 +29,13 @@
  * so a cross-origin `POST /media` needs the site's origin in
  * `kit.csrf.trustedOrigins` — that check is production-only, so it will not
  * show up in `vela dev`.
+ *
+ * The session cookie is scoped to the mount path (`/cms`, or
+ * `/v1/projects/<id>/cms`), so several projects on one origin hold independent
+ * sessions and one browser can edit them all; `cookie.path` overrides it. The
+ * cookie only ever travels to the mount: the site's server-side reads
+ * (`loadCms`, prerender) carry preview and version keys instead, in a
+ * same-origin single-tenant mount as much as a cross-origin one.
  */
 export { createCmsBackend, type CmsBackend } from './factory.js';
 export { CmsDeployError } from './routes/deploy.js';
@@ -40,7 +47,13 @@ export {
 	type CmsSessionToken
 } from './auth/editors.js';
 export { hashPassword, verifyPassword, type ScryptParams } from './auth/scrypt.js';
-export { createCmsTestClient, type CmsTestClient, type TestResponse } from './testing/harness.js';
+export {
+	createCmsTestClient,
+	type CmsCookieJar,
+	type CmsTestClient,
+	type JarEntry,
+	type TestResponse
+} from './testing/harness.js';
 export {
 	createTestFixture,
 	TEST_SCRYPT,

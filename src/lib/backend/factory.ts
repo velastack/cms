@@ -107,13 +107,14 @@ export const createCmsBackend = (options: CmsBackendOptions = {}): CmsBackend =>
 	 * Cookie attributes. `sameSite: 'none'` is required for the cross-origin
 	 * iframe login and wrong for a same-origin mount on plain http, so the
 	 * default follows whether CORS is configured rather than being hardcoded
-	 * one way.
+	 * one way. `path` is decided per request in `handle`: the mount path unless
+	 * the host set one, so projects sharing an origin hold independent sessions.
 	 */
-	const cookieOptionsFor = (event: RequestEvent) => {
+	const cookieOptionsFor = (event: RequestEvent, path: string) => {
 		const crossOrigin = cors !== false;
 		const isHttps = event.url.protocol === 'https:';
 		return {
-			path: options.cookie?.path ?? '/',
+			path,
 			httpOnly: true,
 			sameSite: options.cookie?.sameSite ?? (crossOrigin ? ('none' as const) : ('lax' as const)),
 			secure: options.cookie?.secure ?? (crossOrigin ? true : isHttps),
@@ -172,29 +173,42 @@ export const createCmsBackend = (options: CmsBackendOptions = {}): CmsBackend =>
 		const projectId = resolveProject(event);
 		if (projectId === null) return applyCors(event, notFound());
 
+		// Pure string work, so it can precede auth. A root mount yields ''.
+		const mountPath = mountPathFor(event, restPath);
+		const cookiePath = options.cookie?.path ?? (mountPath || '/');
+		// Versions before 0.3.1 set the cookie at '/'. While the default is in
+		// use, login and logout expire that one too — otherwise a stale root
+		// cookie keeps answering for this mount alongside the scoped one.
+		const legacyPath = options.cookie?.path === undefined && cookiePath !== '/' ? '/' : null;
+
 		const authCtx: CmsAuthContext = { db, projectId, cookieName };
 
-		// Resolve, then authorize, then dispatch. Both checks happen before any
-		// handler body runs, which is what keeps a cross-project write from
-		// touching the database at all.
-		let user: CmsEditor | null = null;
+		// Resolve, then authorize, on every route class, before any handler body
+		// runs. A session with no grant on this project is anonymous on this
+		// project: `required` is a 403, `public` serves published content, and
+		// only the login page is told the session exists so it can explain the
+		// form. That is what keeps a cross-project write from touching the
+		// database at all, and what lets one browser edit several sites.
+		let sessionUser: CmsEditor | null = null;
 		try {
-			user = await auth.resolve(event, authCtx);
+			sessionUser = await auth.resolve(event, authCtx);
 		} catch {
-			user = null;
+			sessionUser = null;
 		}
-		if (user && route.auth !== 'exempt' && !(await auth.authorize(user, projectId, authCtx))) {
-			return applyCors(event, new Response(null, { status: 403 }));
-		}
+		const user =
+			sessionUser && (await auth.authorize(sessionUser, projectId, authCtx)) ? sessionUser : null;
 		if (route.auth === 'required' && !user) {
 			return applyCors(event, new Response(null, { status: 403 }));
 		}
 
-		const mountPath = mountPathFor(event, restPath);
+		const expire = (path: string) =>
+			event.cookies.set(cookieName, '', { ...cookieOptionsFor(event, path), maxAge: 0 });
+
 		const ctx: RouteCtx = {
 			event,
 			projectId,
 			user,
+			sessionUser,
 			params,
 			store,
 			cache,
@@ -207,14 +221,15 @@ export const createCmsBackend = (options: CmsBackendOptions = {}): CmsBackend =>
 			mountPath,
 			frameAncestors,
 			setSessionCookie: (token, expiresAt) => {
-				const opts = cookieOptionsFor(event);
 				event.cookies.set(cookieName, token, {
-					...opts,
+					...cookieOptionsFor(event, cookiePath),
 					maxAge: Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000))
 				});
+				if (legacyPath) expire(legacyPath);
 			},
 			clearSessionCookie: () => {
-				event.cookies.set(cookieName, '', { ...cookieOptionsFor(event), maxAge: 0 });
+				expire(cookiePath);
+				if (legacyPath) expire(legacyPath);
 			}
 		};
 

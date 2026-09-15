@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createCmsBackend, type CmsBackend } from '../factory.js';
 import { localEditors } from '../auth/local-editors.js';
 import { createCmsTestClient, type CmsTestClient } from '../testing/harness.js';
+import type { CmsAuthAdapter } from '../types.js';
 
 /**
  * The login flow is the one thing whose *shape* changed: it used to be two
@@ -20,6 +21,9 @@ const form = (email: string, password: string) => {
 	fd.set('password', password);
 	return fd;
 };
+
+/** A `set-cookie` header's attributes, so assertions never depend on order. */
+const attrs = (cookie: string) => cookie.split(';').map((s) => s.trim());
 
 beforeEach(async () => {
 	backend = createCmsBackend({
@@ -58,13 +62,20 @@ describe('GET /iframe/login', () => {
 });
 
 describe('POST /iframe/login', () => {
-	it('sets a session cookie and shows the success screen', async () => {
+	it('sets a session cookie scoped to the mount and shows the success screen', async () => {
 		const res = await client.post('/iframe/login', {
 			formData: form('a@example.com', 'password')
 		});
 		expect(res.status).toBe(200);
-		expect(res.headers.get('set-cookie')).toMatch(/cms_session=/);
 		expect(res.text).toContain('velastack-cms-login-success');
+		const cookies = res.headers.getSetCookie();
+		expect(cookies).toHaveLength(2);
+		expect(cookies[0]).toMatch(/^cms_session=[^;]+;/);
+		expect(attrs(cookies[0])).toContain('Path=/cms');
+		// The root-scoped cookie versions before 0.3.1 set is expired alongside.
+		expect(cookies[1]).toMatch(/^cms_session=;/);
+		expect(attrs(cookies[1])).toContain('Path=/');
+		expect(attrs(cookies[1])).toContain('Max-Age=0');
 	});
 
 	it('produces a session the rest of the API accepts', async () => {
@@ -110,9 +121,73 @@ describe('POST /iframe/login', () => {
 	});
 });
 
+describe('POST /iframe/login for an account with no grant here', () => {
+	// Records the grants `login` minted, so a test can check the router threw
+	// away the one it refused to issue.
+	const minted: string[] = [];
+	const recording = (overrides: Partial<CmsAuthAdapter> = {}): CmsAuthAdapter => {
+		const inner = localEditors({ scrypt: FAST });
+		return {
+			...inner,
+			login: async (email, password, ctx) => {
+				const grant = await inner.login!(email, password, ctx);
+				if (grant) minted.push(grant.token);
+				return grant;
+			},
+			...overrides
+		};
+	};
+	const withAdapter = async (auth: CmsAuthAdapter) => {
+		const b = createCmsBackend({ dbPath: ':memory:', auth, resolveProject: () => 'p1' });
+		await b.editors.create({ email: 'stranger@example.com', password: 'password', projects: [] });
+		return { backend: b, client: createCmsTestClient(b, { basePath: '/cms' }) };
+	};
+
+	beforeEach(() => {
+		minted.length = 0;
+	});
+
+	it('refuses with the reason, sets no cookie, and throws the session away', async () => {
+		const { backend: b, client: c } = await withAdapter(recording());
+		const res = await c.post('/iframe/login', {
+			formData: form('stranger@example.com', 'password')
+		});
+		expect(res.status).toBe(403);
+		expect(res.text).toContain('stranger@example.com can&#39;t edit this site');
+		expect(res.text).not.toContain('velastack-cms-login-success');
+		expect(res.headers.get('set-cookie')).toBeNull();
+		expect(minted).toHaveLength(1);
+		expect(b.editors.resolveSession(minted[0])).toBeNull();
+		expect((await c.get('/user')).status).toBe(403);
+	});
+
+	it('still refuses when the adapter has no discard hook', async () => {
+		const { backend: b, client: c } = await withAdapter(recording({ discard: undefined }));
+		const res = await c.post('/iframe/login', {
+			formData: form('stranger@example.com', 'password')
+		});
+		expect(res.status).toBe(403);
+		expect(res.headers.get('set-cookie')).toBeNull();
+		// The token never left the process; only the server-side row lingers.
+		expect(b.editors.resolveSession(minted[0])).not.toBeNull();
+	});
+});
+
 describe('GET /iframe/login/success', () => {
 	it('redirects to the form when there is no session', async () => {
 		const res = await client.get('/iframe/login/success');
+		expect(res.status).toBe(303);
+		expect(res.headers.get('location')).toBe('/cms/iframe/login');
+	});
+
+	it('redirects to the form when the session has no grant here', async () => {
+		const stranger = await backend.editors.create({
+			email: 'stranger@example.com',
+			password: 'password',
+			projects: []
+		});
+		const foreign = client.as(`cms_session=${backend.editors.createSession(stranger.id).token}`);
+		const res = await foreign.get('/iframe/login/success');
 		expect(res.status).toBe(303);
 		expect(res.headers.get('location')).toBe('/cms/iframe/login');
 	});
@@ -132,7 +207,14 @@ describe('POST /logout', () => {
 
 		const res = await client.post('/logout');
 		expect(res.status).toBe(204);
-		expect(res.headers.get('set-cookie')).toMatch(/cms_session=;?\s*.*Max-Age=0/);
+		const cleared = res.headers.getSetCookie();
+		expect(cleared).toHaveLength(2);
+		for (const c of cleared) expect(attrs(c)).toContain('Max-Age=0');
+		expect(cleared.map((c) => attrs(c).find((a) => a.startsWith('Path=')))).toEqual([
+			'Path=/cms',
+			'Path=/'
+		]);
+		expect(client.cookies.get('cms_session')).toBeUndefined();
 
 		// The token is dead even if a copy of it is replayed.
 		const replay = createCmsTestClient(backend, { basePath: '/cms' }).as(`cms_session=${token}`);
@@ -141,6 +223,28 @@ describe('POST /logout', () => {
 
 	it('is idempotent when not signed in', async () => {
 		expect((await client.post('/logout')).status).toBe(204);
+	});
+});
+
+describe('with an explicit cookie path', () => {
+	it('uses it as given and expires nothing else', async () => {
+		const rooted = createCmsBackend({
+			dbPath: ':memory:',
+			auth: localEditors({ scrypt: FAST }),
+			resolveProject: () => 'p1',
+			cookie: { path: '/' }
+		});
+		await rooted.editors.create({ email: 'a@example.com', password: 'password', projects: ['p1'] });
+		const c = createCmsTestClient(rooted, { basePath: '/cms' });
+
+		const login = await c.post('/iframe/login', { formData: form('a@example.com', 'password') });
+		expect(login.headers.getSetCookie()).toHaveLength(1);
+		expect(attrs(login.headers.getSetCookie()[0])).toContain('Path=/');
+		expect((await c.get('/user')).status).toBe(200);
+
+		const out = await c.post('/logout');
+		expect(out.headers.getSetCookie()).toHaveLength(1);
+		expect(attrs(out.headers.getSetCookie()[0])).toContain('Max-Age=0');
 	});
 });
 

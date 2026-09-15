@@ -39,14 +39,22 @@ export type CmsAuthAdapter = {
 	/** Resolve the request's editor, or `null` for anonymous. Must not throw on
 	 * a malformed or stale cookie: anonymous is a valid outcome, not an error. */
 	resolve(event: RequestEvent, ctx: CmsAuthContext): Promise<CmsEditor | null>;
-	/** May this editor act on this project? A `false` here is a 403 before any
-	 * handler runs. */
+	/** May this editor act on this project? A `false` makes the session
+	 * anonymous on this project: `required` routes 403, `public` routes serve
+	 * published content, and the login page shows its form. */
 	authorize(user: CmsEditor, projectId: string, ctx: CmsAuthContext): Promise<boolean>;
 	/** Backs the built-in login page. Omit it and `/iframe/login` 404s, leaving
-	 * login entirely to the host. */
+	 * login entirely to the host. The router runs `authorize` on the grant
+	 * before issuing it, so an implementation need not check the project. */
 	login?(email: string, password: string, ctx: CmsAuthContext): Promise<CmsSessionGrant | null>;
-	/** Invalidate server-side session state on logout. The cookie is cleared
-	 * regardless. */
+	/** Throw away a grant `login` minted but the router refused to issue,
+	 * because the account has no grant on this project. Optional: without it
+	 * the session stays valid server-side, but its token never left the
+	 * process. */
+	discard?(grant: CmsSessionGrant, ctx: CmsAuthContext): Promise<void>;
+	/** Invalidate server-side session state on logout — every session the
+	 * request presented, not only the one `cookies.get` returns. The cookie is
+	 * cleared regardless. */
 	logout?(event: RequestEvent, ctx: CmsAuthContext): Promise<void>;
 };
 
@@ -77,6 +85,14 @@ export type CmsDeployAdapter = {
 
 export type CmsCookieOptions = {
 	name?: string;
+	/**
+	 * Defaults to the mount path (`/cms`, `/v1/projects/<id>/cms`), so projects
+	 * sharing an origin hold independent sessions: signing in on one site never
+	 * touches another's. While unset, login and logout also expire a
+	 * root-scoped cookie left by versions before 0.3.1. Nothing outside the
+	 * mount needs it: the site's own server reads through preview and version
+	 * keys, never the cookie. Set `'/'` to put it back at the origin root.
+	 */
 	path?: string;
 	sameSite?: 'lax' | 'strict' | 'none';
 	secure?: boolean;

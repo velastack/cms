@@ -10,6 +10,15 @@
  * The flow: the admin bar opens `<endpoint>/iframe/login` in an iframe, the
  * form posts back to the same URL, and on success the page tells the parent
  * window so the bar can re-fetch `/user` without a reload.
+ *
+ * Two identities matter here. `ctx.user` is an editor authorized for this
+ * project; `ctx.sessionUser` is whoever the cookie resolved to, grant or not.
+ * The signed-in screen may only render for `ctx.user`: the bar answers it by
+ * fetching `/user`, which is a 403 for anyone else, and a bar told "signed in"
+ * and then refused would reopen this page forever. A session that cannot edit
+ * this site gets the form instead, with a line saying why, so the editor can
+ * sign in as someone who can — without disturbing that other site's session,
+ * since the cookie is scoped to this mount.
  */
 import type { RouteCtx } from './context.js';
 
@@ -73,6 +82,13 @@ button:hover { background: #262626; }
 	background: #fef2f2;
 	color: #b91c1c;
 }
+.hint {
+	margin: 0 0 1rem;
+	padding: 0.5rem 0.75rem;
+	border-radius: 0.5rem;
+	background: #f5f5f5;
+	color: #525252;
+}
 @media (prefers-color-scheme: dark) {
 	body { background: #0a0a0a; color: #fafafa; }
 	.card { background: #0a0a0a; border-color: #262626; }
@@ -82,6 +98,7 @@ button:hover { background: #262626; }
 	button:hover { background: #e5e5e5; }
 	p.sub { color: #a3a3a3; }
 	.error { background: #2a1215; color: #fca5a5; }
+	.hint { background: #171717; color: #a3a3a3; }
 }
 `;
 
@@ -102,11 +119,12 @@ ${body}
 </body>
 </html>`;
 
-const loginForm = (error?: string): string =>
+const loginForm = (error?: string, hint?: string): string =>
 	page(
 		'Sign in to edit',
 		`<h1>Sign in to edit</h1>
 <p class="sub">Use your email and password</p>
+${hint ? `<p class="hint">${escapeHtml(hint)}</p>` : ''}
 ${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ''}
 <form method="POST">
 	<div class="field">
@@ -145,13 +163,20 @@ const html = (body: string, ctx: RouteCtx, status = 200): Response =>
 		}
 	});
 
+/** Why a signed-in browser is looking at a form: its session cannot edit
+ * this site. Nothing when there is no session at all. */
+const foreignSessionHint = (ctx: RouteCtx): string | undefined =>
+	ctx.sessionUser
+		? `Signed in as ${ctx.sessionUser.email}, but that account can't edit this site. Sign in with one that can.`
+		: undefined;
+
 export const getLogin = (ctx: RouteCtx): Response => {
 	if (!ctx.auth.login) return new Response(null, { status: 404 });
-	// Already signed in and authorized for this project — skip straight to the
-	// success screen. A session bound to a project the caller can't reach leaves
-	// `user` null, so they land on the form and can sign in as someone else.
+	// Authorized for this project already — straight to the signed-in screen.
 	if (ctx.user) return html(successPage(), ctx);
-	return html(loginForm(), ctx);
+	// Anonymous, or a session with no grant here: the form, never the
+	// signed-in screen (see the file header).
+	return html(loginForm(undefined, foreignSessionHint(ctx)), ctx);
 };
 
 export const postLogin = async (ctx: RouteCtx): Promise<Response> => {
@@ -174,12 +199,24 @@ export const postLogin = async (ctx: RouteCtx): Promise<Response> => {
 	// One message either way — which half was wrong is not the caller's business.
 	if (!grant) return html(loginForm('Invalid email or password.'), ctx, 400);
 
+	// Right password, wrong site. The session must not reach the browser: the
+	// bar would be told "signed in" and then refused by `/user`.
+	if (!(await ctx.auth.authorize(grant.user, ctx.projectId, ctx.authCtx))) {
+		await ctx.auth.discard?.(grant, ctx.authCtx);
+		return html(
+			loginForm(`${grant.user.email} can't edit this site. Sign in with an account that can.`),
+			ctx,
+			403
+		);
+	}
+
 	ctx.setSessionCookie(grant.token, grant.expiresAt);
 	return html(successPage(), ctx);
 };
 
 /** Kept so the admin bar's historical `/iframe/login/success` URL still
- * resolves; the POST above renders the same screen inline. */
+ * resolves; the POST above renders the same screen inline. `ctx.user` is only
+ * set for a session authorized here, so a foreign one is sent to the form. */
 export const getLoginSuccess = (ctx: RouteCtx): Response => {
 	if (!ctx.user) {
 		return new Response(null, {

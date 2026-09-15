@@ -151,7 +151,8 @@ export const apiAdapter = (options: ApiAdapterOptions): CmsAdapter => {
 
 		async fetchEntries(routeId: string, context: CmsAdapterContext): Promise<CmsEntry[]> {
 			// Without `previewKey`: `/pages` is read-public; the backend returns
-			// published entries only when no `cms_session` cookie is present.
+			// published entries only when the request carries no session
+			// authorized for this project.
 			// For prerender we don't pass a cookie — we get published-only by
 			// construction. We still filter `isDraft` / `isDeletePending` /
 			// `gone` as a defensive belt-and-suspenders. Tombstoned entries

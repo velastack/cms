@@ -2,8 +2,10 @@
  * `GET/POST/DELETE /pages` and `POST /pages/rename`.
  *
  * `GET` is the one read whose *body* varies with the caller: an editor sees
- * their own drafts and pending deletes, so authenticated reads bypass the cache
- * entirely while anonymous ones go through it.
+ * their own drafts and pending deletes, and so does anyone presenting that
+ * editor's open-release preview key — which is how the site's own server asks
+ * on the editor's behalf, since it never carries the editor's cookie. Both
+ * bypass the cache entirely; anonymous reads go through it.
  */
 import type { PageDeleteOutcome } from '../../core/page-entry.js';
 import type { PageMapEntry } from '../../core/wire.js';
@@ -78,6 +80,7 @@ const buildRoutes = (ctx: RouteCtx, userId: string, locale: string) => {
 export const getPages = (ctx: RouteCtx): Response => {
 	const { event, projectId, store, respond } = ctx;
 	const locale = event.url.searchParams.get('locale') ?? DEFAULT_LOCALE;
+	const previewKey = event.url.searchParams.get('preview');
 	const versionKey = event.url.searchParams.get('version');
 
 	if (versionKey) {
@@ -114,6 +117,16 @@ export const getPages = (ctx: RouteCtx): Response => {
 				return { routeId, ownedParams: ownedParamsFromRouteId(routeId), entries };
 			});
 		return respond.serveImmutableJson(event, { routes });
+	}
+
+	// Preview path: the key names an open release, overlaid exactly as its
+	// owner sees it, cache bypassed. `loadCms` asks this way on the editor's
+	// behalf because the server-side fetch carries no cookie — in a
+	// single-tenant mount as much as a cross-origin one, now that the cookie
+	// lives under the mount path. An unknown key falls through, as for /docs.
+	if (previewKey) {
+		const release = store.findOpenReleaseByPreviewKey(projectId, previewKey);
+		if (release) return Response.json({ routes: buildRoutes(ctx, release.userId, locale) });
 	}
 
 	const userId = ctx.user?.id ?? '';

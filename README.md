@@ -161,7 +161,7 @@ That's it — the plugin handles scope and the loader handles data fetching.
 
 ## Production builds: prerender + media download
 
-`loadCms` is **server-only** — call it from `+layout.server.ts` (or `+page.server.ts`), never from a `+page.svelte` or universal `+page.ts`. Calling it in the browser throws. Editing/preview happens through `cmsStore` from `@velastack/cms`, which is gated by your `cms_session` cookie and opaque preview/version keys.
+`loadCms` is **server-only** — call it from `+layout.server.ts` (or `+page.server.ts`), never from a `+page.svelte` or universal `+page.ts`. Calling it in the browser throws. Editing/preview happens through `cmsStore` from `@velastack/cms`, which is gated by your `cms_session` cookie (scoped to the CMS mount path, so sites sharing an origin hold independent sessions) and opaque preview/version keys.
 
 The recommended production shape is **prerender by default**:
 

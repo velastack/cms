@@ -1,11 +1,11 @@
 /**
  * The route table.
  *
- * `auth` semantics:
- * - `public`   anonymous callers are served published content
- * - `required` no editor is a 403
- * - `exempt`   skips the cross-project check, so an editor holding a session for
- *              one project can still reach another's login form and log out
+ * `auth` semantics (a session with no grant here counts as anonymous):
+ * - `public`   anyone is served published content
+ * - `required` no editor authorized for this project is a 403
+ * - `exempt`   served regardless, so an editor holding a session for one
+ *              project can still reach another's login form and log out
  */
 import type { Route } from '../router.js';
 import { getDocs } from './docs.js';

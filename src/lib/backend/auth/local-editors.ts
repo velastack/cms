@@ -10,6 +10,27 @@ import type { CmsAuthAdapter, CmsAuthContext, CmsEditor, CmsSessionGrant } from 
 import type { ScryptParams } from './scrypt.js';
 import { createEditorStore, type CmsEditorStore } from './editors.js';
 
+/**
+ * Every value sent under `name` in a `Cookie` header, in the order the browser
+ * listed them. SvelteKit's `cookies.get` collapses duplicates to the first,
+ * which is right for resolving a session and wrong for ending them all.
+ */
+const cookieValues = (header: string | null, name: string): string[] => {
+	if (!header) return [];
+	const out: string[] = [];
+	for (const part of header.split(';')) {
+		const eq = part.indexOf('=');
+		if (eq === -1 || part.slice(0, eq).trim() !== name) continue;
+		const raw = part.slice(eq + 1).trim();
+		try {
+			out.push(decodeURIComponent(raw));
+		} catch {
+			out.push(raw);
+		}
+	}
+	return out;
+};
+
 export type LocalEditorsOptions = {
 	/** Session lifetime. Defaults to 30 days, matching the cookie's `maxAge`. */
 	sessionTtlMs?: number;
@@ -57,8 +78,16 @@ export const localEditors = (options: LocalEditorsOptions = {}): CmsAuthAdapter 
 		},
 
 		async logout(event, ctx): Promise<void> {
-			const token = event.cookies.get(ctx.cookieName);
-			if (token) storeFor(ctx).destroySession(token);
+			// A browser can hold a root-scoped cookie from before 0.3.1 next to
+			// the mount-scoped one; logging out ends both sessions.
+			const store = storeFor(ctx);
+			for (const token of cookieValues(event.request.headers.get('cookie'), ctx.cookieName)) {
+				store.destroySession(token);
+			}
+		},
+
+		async discard(grant, ctx): Promise<void> {
+			storeFor(ctx).destroySession(grant.token);
 		}
 	};
 };

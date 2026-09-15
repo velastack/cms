@@ -10,11 +10,16 @@ import type { RequestEvent } from '@sveltejs/kit';
 import type { RouteCtx, RouteHandler } from './routes/context.js';
 
 /**
- * `public`   — anonymous callers are served (published content only).
- * `required` — no editor is a 403.
- * `exempt`   — skips the cross-project check, so an editor holding a session
- *              for one project can still reach another's login form and log
- *              out. Reproduces `isAuthEndpoint` from the hook this replaces.
+ * A session with no grant on this project is anonymous on this project, on
+ * every class:
+ *
+ * `public`   — served to anyone; anonymous callers and foreign sessions get
+ *              published content only.
+ * `required` — no editor authorized for this project is a 403.
+ * `exempt`   — served regardless, so an editor holding a session for one
+ *              project can reach another's login form and log out. The
+ *              handler also sees `sessionUser`, so the login page can say why
+ *              it is showing a form. Login and logout only.
  */
 export type RouteAuth = 'public' | 'required' | 'exempt';
 

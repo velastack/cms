@@ -42,6 +42,17 @@ describe('GET /pages — cache headers', () => {
 		expect(res.headers.get('etag')).toBeNull();
 	});
 
+	it('bypasses cache on ?preview= reads', async () => {
+		await fx.alice.post('/pages', {
+			body: { routeId: '/r/[slug]', locale: 'en', params: { slug: 'draft-only' } }
+		});
+		const key = fx.backend.store.getOpenRelease('p1', fx.users.alice.id)!.preview_key;
+		const res = await get(`/pages?locale=en&preview=${key}`);
+		expect(res.status).toBe(200);
+		expect(res.headers.get('cache-control')).toBeNull();
+		expect(res.headers.get('etag')).toBeNull();
+	});
+
 	it('does not surface a draft-only route to anonymous cached reads', async () => {
 		await fx.alice.post('/pages', {
 			body: {

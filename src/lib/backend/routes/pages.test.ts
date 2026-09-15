@@ -98,6 +98,35 @@ describe('GET /pages', () => {
 		expect(fresh.isDraft).toBe(true);
 	});
 
+	it('overlays the open release named by ?preview= for a caller with no session', async () => {
+		await reset({ pageDocs: { '/r/[slug]': [{ params: { slug: 'a' }, published: {} }] } });
+		await fx.alice.post('/pages', {
+			body: { routeId: '/r/[slug]', locale: 'en', params: { slug: 'fresh' } }
+		});
+		const key = fx.backend.store.getOpenRelease('p1', fx.users.alice.id)!.preview_key;
+
+		const res = await get(`/pages?locale=en&preview=${key}`);
+		expect(res.status).toBe(200);
+		const route = res
+			.json<any>()
+			.routes.find((r: { routeId: string }) => r.routeId === '/r/[slug]');
+		const slugs = route.entries.map((e: { params: { slug: string } }) => e.params.slug);
+		expect(slugs).toEqual(['a', 'fresh']);
+		expect(
+			route.entries.find((e: { params: { slug: string } }) => e.params.slug === 'fresh').isDraft
+		).toBe(true);
+	});
+
+	it('serves published entries when ?preview= names no open release', async () => {
+		await reset({ pageDocs: { '/r/[slug]': [{ params: { slug: 'a' }, published: {} }] } });
+		const res = await get('/pages?locale=en&preview=nope');
+		expect(res.status).toBe(200);
+		const slugs = res
+			.json<any>()
+			.routes[0].entries.map((e: { params: { slug: string } }) => e.params.slug);
+		expect(slugs).toEqual(['a']);
+	});
+
 	it('returns routes sorted alphabetically by routeId', async () => {
 		await reset({
 			pageDocs: {
