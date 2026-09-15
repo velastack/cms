@@ -128,7 +128,7 @@ Scoped to the current URL.
 
 ### 5.2 Site menu
 
-Site-wide actions, grouped into five sections.
+Site-wide actions, grouped into six sections.
 
 **Navigate**
 
@@ -145,6 +145,10 @@ Site-wide actions, grouped into five sections.
 - Share preview link
 - Regenerate preview key
 - Discard all changes… — destructive (red text), opens confirmation
+
+**Live site** — present only when the backend has a deploy adapter (`createCmsBackend({ deploy })`); a same-origin mount, where the site reads the CMS live, never shows it
+
+- Deploy site… — opens the deploy dialog: explains that it rebuilds the site with the latest published content and puts it live at the site's URL, shows the latest run ("Deployed 3 minutes ago", "Deploy failed …: reason", "Never deployed", "Deploying…"), warns when the working copy still has unpublished changes, footer Cancel + Deploy. The item reads "Deploying…" and is disabled while a run is in flight; the bar polls `GET /deploy` every 5s until it finishes.
 
 **History**
 

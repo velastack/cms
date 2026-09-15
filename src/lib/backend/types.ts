@@ -1,5 +1,9 @@
 import type { RequestEvent } from '@sveltejs/kit';
+import type { CmsDeployState } from '../core/wire.js';
+import type { CmsStore } from './store/queries.js';
 import type { SqliteDb } from './store/sqlite.js';
+
+export type { CmsDeployRun, CmsDeployState } from '../core/wire.js';
 
 /** An authenticated content editor. */
 export type CmsEditor = {
@@ -44,6 +48,31 @@ export type CmsAuthAdapter = {
 	/** Invalidate server-side session state on logout. The cookie is cleared
 	 * regardless. */
 	logout?(event: RequestEvent, ctx: CmsAuthContext): Promise<void>;
+};
+
+/** Handed to every deploy adapter method. `store` is the CMS store, so the
+ * host can read which release is current (`store.getReleaseHistory`). */
+export type CmsDeployContext = {
+	event: RequestEvent;
+	projectId: string;
+	user: CmsEditor;
+	store: CmsStore;
+};
+
+/**
+ * The seam between the CMS and whatever rebuilds the site.
+ *
+ * A static site bakes published content in at build time, so a publish only
+ * reaches visitors once the site is built again. The host owns that pipeline;
+ * the CMS only exposes it: `status()` backs the admin bar's menu and dialog,
+ * `trigger()` starts a run. Throw `CmsDeployError(409, …)` while a run is in
+ * flight and `CmsDeployError(503, …)` when the project has nothing to deploy to.
+ */
+export type CmsDeployAdapter = {
+	/** Can this project be deployed from the bar, and what happened last. */
+	status(ctx: CmsDeployContext): Promise<CmsDeployState>;
+	/** Start a deploy; resolves with the new state. */
+	trigger(ctx: CmsDeployContext): Promise<CmsDeployState>;
 };
 
 export type CmsCookieOptions = {
@@ -92,6 +121,10 @@ export type CmsBackendOptions = {
 	restParam?: string;
 	/** Identity and authorization. Defaults to `localEditors()`. */
 	auth?: CmsAuthAdapter;
+	/** Rebuilds and deploys the site from the admin bar. Omit it — the default —
+	 * and the bar never shows the action, which is right for a same-origin
+	 * mount where the site reads the CMS live. */
+	deploy?: CmsDeployAdapter;
 	cookie?: CmsCookieOptions;
 	/**
 	 * Cross-origin access. `false` (the default) emits no CORS headers, which is

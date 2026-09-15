@@ -62,6 +62,7 @@ export const createCmsBackend = (options: CmsBackendOptions = {}): CmsBackend =>
 	const storage = createStorage(uploadDir);
 	const editors = createEditorStore(db);
 	const auth = options.auth ?? localEditors();
+	const deploy = options.deploy;
 
 	const restParam = options.restParam ?? 'path';
 	const cookieName = options.cookie?.name ?? 'cms_session';
@@ -200,6 +201,7 @@ export const createCmsBackend = (options: CmsBackendOptions = {}): CmsBackend =>
 			respond,
 			storage,
 			auth,
+			deploy,
 			authCtx,
 			mediaUrl: mediaUrlFor(event),
 			mountPath,

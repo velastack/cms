@@ -13,10 +13,13 @@
 	import type { CmsPayload, CmsScopeEntry } from '$lib/components/cms/scope.js';
 	import CssRoot from './css-root.svelte';
 	import { adminBarTheme, type AdminBarTheme } from './theme.svelte.js';
+	import type { CmsDeployState } from '../../core/wire.js';
 	import DeletePageDialog, {
 		type DeletePageMode,
 		type RedirectTarget
 	} from './delete-page-dialog.svelte';
+	import DeployDialog from './deploy-dialog.svelte';
+	import { isDeploying } from './deploy-state.js';
 	import HistoryPanel from './history-panel.svelte';
 	import KeyboardShortcutsDialog from './keyboard-shortcuts-dialog.svelte';
 	import MediaPanel from './media-panel.svelte';
@@ -83,6 +86,7 @@
 	let shareLinkOpen = $state(false);
 	let shortcutsOpen = $state(false);
 	let siteSettingsOpen = $state(false);
+	let deployOpen = $state(false);
 	const anyPanelOpen = $derived(
 		seoOpen ||
 			historyOpen ||
@@ -93,7 +97,8 @@
 			chooserOpen ||
 			shareLinkOpen ||
 			shortcutsOpen ||
-			siteSettingsOpen
+			siteSettingsOpen ||
+			deployOpen
 	);
 	let publishing = $state(false);
 	let publishError = $state<string | null>(null);
@@ -145,6 +150,7 @@
 		shareLinkOpen = false;
 		shortcutsOpen = false;
 		siteSettingsOpen = false;
+		deployOpen = false;
 		newDialog = null;
 		newPageError = null;
 		duplicateSource = null;
@@ -622,6 +628,71 @@
 			]);
 		} finally {
 			publishing = false;
+		}
+	};
+
+	// Live-site deploy. A static site only shows visitors what was published
+	// when it was last built; the host's deploy adapter rebuilds it. The
+	// backend answers `available: false` unless the host configured one, so a
+	// same-origin mount never shows the item; an older backend 404s and the
+	// state simply stays null.
+	const DEPLOY_POLL_MS = 5000;
+	const DEPLOY_POLL_LIMIT = 120; // ~10 minutes, then leave it to the next mount
+	let deployState = $state<CmsDeployState | null>(null);
+	let deploying = $state(false);
+	let deployError = $state<string | null>(null);
+	const deployAvailable = $derived(deployState?.available === true);
+	const deployInFlight = $derived(isDeploying(deployState));
+
+	const fetchDeployState = async () => {
+		try {
+			const res = await fetch(`${endpoint}/deploy`, { credentials: 'include' });
+			if (!res.ok) return;
+			deployState = (await res.json()) as CmsDeployState;
+		} catch {
+			// Network failure: keep whatever we last knew.
+		}
+	};
+
+	$effect(() => {
+		void fetchDeployState();
+	});
+
+	// Poll while a run is in flight, dialog open or not; the interval is
+	// cleared when the run finishes or the bar unmounts.
+	$effect(() => {
+		if (!deployInFlight) return;
+		let ticks = 0;
+		const id = setInterval(() => {
+			if (++ticks > DEPLOY_POLL_LIMIT) {
+				clearInterval(id);
+				return;
+			}
+			void fetchDeployState();
+		}, DEPLOY_POLL_MS);
+		return () => clearInterval(id);
+	});
+
+	const onOpenDeploy = () => {
+		if (!deployAvailable || deployInFlight) return;
+		closeAllPanels();
+		deployError = null;
+		deployOpen = true;
+	};
+
+	const onConfirmDeploy = async () => {
+		deploying = true;
+		deployError = null;
+		try {
+			const res = await fetch(`${endpoint}/deploy`, { method: 'POST', credentials: 'include' });
+			if (!res.ok) {
+				deployError = (await res.text()) || 'Could not start the deploy.';
+				return;
+			}
+			deployState = (await res.json()) as CmsDeployState;
+			deployOpen = false;
+		} finally {
+			deploying = false;
 		}
 	};
 
@@ -1350,6 +1421,17 @@
 								Discard All Changes…
 							</Menubar.Item>
 
+							{#if deployAvailable}
+								<Menubar.Label class={menuLabelClass}>Live site</Menubar.Label>
+								<Menubar.Item
+									class={menuItemClass}
+									onSelect={onOpenDeploy}
+									disabled={deployInFlight}
+								>
+									{deployInFlight ? 'Deploying…' : 'Deploy Site…'}
+								</Menubar.Item>
+							{/if}
+
 							<Menubar.Label class={menuLabelClass}>History</Menubar.Label>
 							<Menubar.Item class={menuItemClass} onSelect={onOpenHistory}>
 								Recent Releases
@@ -1687,6 +1769,18 @@
 			{previewUrl}
 			onRegenerate={onRegeneratePreviewKey}
 		/>
+
+		{#if deployState?.available}
+			<DeployDialog
+				open={deployOpen}
+				onOpenChange={(next) => (deployOpen = next)}
+				deploy={deployState}
+				unpublishedCount={counts.total}
+				{deploying}
+				error={deployError}
+				onConfirm={onConfirmDeploy}
+			/>
+		{/if}
 
 		<KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={(next) => (shortcutsOpen = next)} />
 	</div>

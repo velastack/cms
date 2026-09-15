@@ -3,6 +3,7 @@
 	import type { ReleaseItem } from '../cms/cms-store.svelte.js';
 	import type { CmsPayload } from '../cms/scope.js';
 	import { diffPaths, type Tree } from '../../core/path.js';
+	import { formatRelative } from './format-relative.js';
 	import { resolveRouteOnlyParams, resolveRouteUrl } from './resolve-route.js';
 	import { Badge, type BadgeVariant } from './ui/badge/index.js';
 	import { Button } from './ui/button/index.js';
@@ -227,36 +228,6 @@
 			paths.filter((p) => p.startsWith(META_PREFIX)).map((p) => p.slice(META_PREFIX.length))
 		);
 		return summarizeNames(meta, 'Updated');
-	};
-
-	const formatRelative = (iso: string): string => {
-		const t = new Date(iso).getTime();
-		if (Number.isNaN(t)) return '';
-		const now = Date.now();
-		const seconds = Math.max(0, Math.floor((now - t) / 1000));
-		if (seconds < 45) return 'just now';
-		const minutes = Math.floor(seconds / 60);
-		if (minutes < 60) return minutes <= 1 ? '1 minute ago' : `${minutes} minutes ago`;
-		const d = new Date(t);
-		const today = new Date(now);
-		const sameDay =
-			d.getFullYear() === today.getFullYear() &&
-			d.getMonth() === today.getMonth() &&
-			d.getDate() === today.getDate();
-		if (sameDay) {
-			const h = d.getHours();
-			if (h < 12) return 'this morning';
-			if (h < 17) return 'this afternoon';
-			return 'this evening';
-		}
-		const yesterday = new Date(today);
-		yesterday.setDate(yesterday.getDate() - 1);
-		const isYesterday =
-			d.getFullYear() === yesterday.getFullYear() &&
-			d.getMonth() === yesterday.getMonth() &&
-			d.getDate() === yesterday.getDate();
-		if (isYesterday) return 'yesterday';
-		return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	};
 
 	/** Submit-disabled gate: nothing to publish when there are no items at all.

@@ -31,6 +31,7 @@
  * show up in `vela dev`.
  */
 export { createCmsBackend, type CmsBackend } from './factory.js';
+export { CmsDeployError } from './routes/deploy.js';
 export { localEditors, type LocalEditorsOptions } from './auth/local-editors.js';
 export {
 	createEditorStore,
@@ -53,9 +54,14 @@ export type {
 	CmsBackendOptions,
 	CmsCookieOptions,
 	CmsCorsOptions,
+	CmsDeployAdapter,
+	CmsDeployContext,
+	CmsDeployRun,
+	CmsDeployState,
 	CmsEditor,
 	CmsSessionGrant
 } from './types.js';
+export type { CmsStore } from './store/queries.js';
 export type { SqliteDb, SqliteStatement } from './store/sqlite.js';
 export type { Migration } from './store/migrations/index.js';
 export { MIGRATIONS } from './store/migrations/index.js';

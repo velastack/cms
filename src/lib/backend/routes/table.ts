@@ -25,6 +25,7 @@ import {
 	postReleaseRevert
 } from './release.js';
 import { deleteMediaItem, getMedia, getUpload, postMedia } from './media.js';
+import { getDeploy, postDeploy } from './deploy.js';
 import { postTestReset } from './test-reset.js';
 
 export const ROUTES: Route[] = [
@@ -87,6 +88,9 @@ export const ROUTES: Route[] = [
 		auth: 'required',
 		handler: postReleaseHistoryPreviewKey
 	},
+
+	{ method: 'GET', segments: ['deploy'], auth: 'required', handler: getDeploy },
+	{ method: 'POST', segments: ['deploy'], auth: 'required', handler: postDeploy },
 
 	{ method: 'GET', segments: ['media'], auth: 'required', handler: getMedia },
 	{ method: 'POST', segments: ['media'], auth: 'required', handler: postMedia },

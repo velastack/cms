@@ -136,6 +136,27 @@ export type ListMediaOptions = { offset?: number; limit?: number };
 export type ListMediaResult = { items: MediaItem[]; total: number };
 
 // ---------------------------------------------------------------------------
+// Deploy
+// ---------------------------------------------------------------------------
+
+/** One build-and-deploy of the site, as the host's deploy adapter reports it. */
+export type CmsDeployRun = {
+	id: string;
+	status: 'pending' | 'building' | 'deployed' | 'failed';
+	createdAt: string;
+	finishedAt?: string;
+	error?: string;
+};
+
+/** `GET /deploy` and `POST /deploy`. `available` is `false` when the backend
+ * has no deploy adapter, which is how a same-origin mount hides the action. */
+export type CmsDeployState = {
+	available: boolean;
+	site?: { url: string };
+	latest?: CmsDeployRun | null;
+};
+
+// ---------------------------------------------------------------------------
 // Response envelopes
 // ---------------------------------------------------------------------------
 
