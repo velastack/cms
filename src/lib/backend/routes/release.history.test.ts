@@ -49,4 +49,18 @@ describe('GET /release/history', () => {
 			).toBe(true);
 		}
 	});
+
+	it('names the publisher by email, not only by id', async () => {
+		await fx.bob.post('/release/items', {
+			body: { items: [{ kind: 'layout', routeId: '/', locale: 'en', tree: { x: '1' } }] }
+		});
+		await fx.bob.post('/release/publish');
+
+		const res = await fx.alice.get('/release/history');
+		expect(res.json<any>().history[0].publishedBy).toEqual({
+			id: fx.users.bob.id,
+			email: 'bob@example.com',
+			name: 'Bob'
+		});
+	});
 });

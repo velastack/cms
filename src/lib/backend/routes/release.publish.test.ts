@@ -39,8 +39,11 @@ describe('POST /release/publish', () => {
 		const res = await fx.alice.post('/release/publish');
 		expect(res.status).toBe(200);
 		expect(res.json<any>().release.items).toHaveLength(1);
-		// Editor ids are opaque now that accounts are real rows, not a two-name mock.
-		expect(res.json<any>().release.publishedBy).toBe(fx.users.alice.id);
+		expect(res.json<any>().release.publishedBy).toEqual({
+			id: fx.users.alice.id,
+			email: 'alice@example.com',
+			name: 'Alice'
+		});
 
 		const layout = await fx.alice.get('/docs?kind=layout&routeId=/');
 		expect(layout.json<any>().contents).toEqual({ footer: { copy: 'NEW' } });

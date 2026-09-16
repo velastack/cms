@@ -1,6 +1,7 @@
 import { sql as init } from './0001-init.js';
 import { sql as site } from './0002-site.js';
 import { sql as editors } from './0003-editors.js';
+import { sql as releasePublisher } from './0004-release-publisher.js';
 
 export type Migration = { name: string; sql: string };
 
@@ -17,5 +18,6 @@ export type Migration = { name: string; sql: string };
 export const MIGRATIONS: Migration[] = [
 	{ name: '0001_init.sql', sql: init },
 	{ name: '0002_site.sql', sql: site },
-	{ name: '0003_editors.sql', sql: editors }
+	{ name: '0003_editors.sql', sql: editors },
+	{ name: '0004_release_publisher.sql', sql: releasePublisher }
 ];

@@ -90,6 +90,7 @@ export type {
 	PagesRoute,
 	PublishedRelease,
 	ReleaseItem,
+	ReleasePublisher,
 	SiteResponse
 } from '../core/wire.js';
 export type { PageDeleteOutcome, PageEntry } from '../core/page-entry.js';

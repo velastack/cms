@@ -104,7 +104,7 @@ export const postReleasePublish = async (ctx: RouteCtx): Promise<Response> => {
 		}
 	}
 
-	const published = ctx.store.publishRelease(ctx.projectId, user.id, name);
+	const published = ctx.store.publishRelease(ctx.projectId, user, name);
 	if (!published) return new Response('no open release to publish', { status: 404 });
 	return Response.json({ release: published });
 };
@@ -134,7 +134,7 @@ export const postReleaseRevert = (ctx: RouteCtx): Response => {
 	const user = requireUser(ctx);
 	const id = ctx.params.id;
 	if (!id) return badRequest('id required');
-	const reverted = ctx.store.revertRelease(ctx.projectId, id, user.id);
+	const reverted = ctx.store.revertRelease(ctx.projectId, id, user);
 	if (!reverted) return new Response('release not found', { status: 404 });
 	return Response.json({ release: reverted });
 };

@@ -52,10 +52,21 @@ export type PublishedReleaseItem = ReleaseItemCore & {
 	priorTombstone?: PageDeleteOutcome;
 };
 
+/**
+ * The editor who published a release, captured at publish time. `email` and
+ * `name` are null only on rows published before they were recorded, where the
+ * account no longer resolves.
+ */
+export type ReleasePublisher = {
+	id: string;
+	email: string | null;
+	name: string | null;
+};
+
 export type PublishedRelease = {
 	id: string;
 	name?: string;
-	publishedBy: string;
+	publishedBy: ReleasePublisher;
 	publishedAt: string;
 	preview_key: string;
 	items: PublishedReleaseItem[];

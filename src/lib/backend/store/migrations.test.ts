@@ -28,7 +28,8 @@ describe('migration names', () => {
 		expect(MIGRATIONS.map((m) => m.name)).toEqual([
 			'0001_init.sql',
 			'0002_site.sql',
-			'0003_editors.sql'
+			'0003_editors.sql',
+			'0004_release_publisher.sql'
 		]);
 	});
 });
@@ -37,7 +38,12 @@ describe('runMigrations', () => {
 	it('builds the full schema from empty', () => {
 		const db = open();
 		runMigrations(db, MIGRATIONS);
-		expect(applied(db)).toEqual(['0001_init.sql', '0002_site.sql', '0003_editors.sql']);
+		expect(applied(db)).toEqual([
+			'0001_init.sql',
+			'0002_site.sql',
+			'0003_editors.sql',
+			'0004_release_publisher.sql'
+		]);
 		expect(tables(db)).toEqual([
 			'_migrations',
 			'cms_editors',
@@ -60,7 +66,7 @@ describe('runMigrations', () => {
 		const db = open();
 		runMigrations(db, MIGRATIONS);
 		runMigrations(db, MIGRATIONS);
-		expect(applied(db)).toHaveLength(3);
+		expect(applied(db)).toHaveLength(4);
 	});
 
 	it('upgrades a database already at 0002 without touching its data', () => {
@@ -75,13 +81,45 @@ describe('runMigrations', () => {
 
 		runMigrations(db, MIGRATIONS);
 
-		expect(applied(db)).toEqual(['0001_init.sql', '0002_site.sql', '0003_editors.sql']);
+		expect(applied(db)).toEqual([
+			'0001_init.sql',
+			'0002_site.sql',
+			'0003_editors.sql',
+			'0004_release_publisher.sql'
+		]);
 		const row = db
 			.prepare<[string], { tree: string }>(
 				'SELECT tree FROM published_layouts WHERE project_id = ?'
 			)
 			.get('p1');
 		expect(row?.tree).toBe('{"header":{"title":"kept"}}');
+	});
+
+	it('fills the publisher of existing releases from the editor directory', () => {
+		const db = open();
+		runMigrations(db, MIGRATIONS.slice(0, 3));
+		db.prepare<[string, string, string, string, string, string]>(
+			`INSERT INTO cms_editors (id, email, email_lower, name, password_hash, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?)`
+		).run('u1', 'Ann@example.com', 'ann@example.com', 'Ann', 'x', '2026-01-01T00:00:00.000Z');
+		const insert = db.prepare<[string, string, number, string, string]>(
+			`INSERT INTO releases (id, project_id, seq, name, published_by, published_at, preview_key)
+			 VALUES (?, ?, ?, NULL, ?, '2026-01-01T00:00:00.000Z', ?)`
+		);
+		insert.run('r1', 'p1', 1, 'u1', 'k1');
+		insert.run('r2', 'p1', 2, 'gone', 'k2');
+
+		runMigrations(db, MIGRATIONS);
+
+		const rows = db
+			.prepare<[], { id: string; email: string | null; name: string | null }>(
+				'SELECT id, published_by_email AS email, published_by_name AS name FROM releases ORDER BY seq'
+			)
+			.all();
+		expect(rows).toEqual([
+			{ id: 'r1', email: 'Ann@example.com', name: 'Ann' },
+			{ id: 'r2', email: null, name: null }
+		]);
 	});
 
 	it('records nothing new when the database is already current', () => {

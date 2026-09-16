@@ -26,7 +26,7 @@
 	type PublishedRelease = {
 		id: string;
 		name?: string;
-		publishedBy: string;
+		publishedBy: { id: string; email: string | null; name: string | null };
 		publishedAt: string;
 		preview_key: string;
 		revertedAt?: string;
@@ -206,10 +206,9 @@
 									{/if}
 								</div>
 								<div class="vela:text-[11px] vela:text-bar-text-tertiary vela:mt-0.5">
-									{formatDate(release.publishedAt)} · published by {release.publishedBy}{isLive
-										? ' · '
-										: ''}{#if isLive}<span class="vela:text-[var(--cms-status-clean-dot)]"
-											>live now</span
+									{formatDate(release.publishedAt)} · published by {release.publishedBy.email ??
+										release.publishedBy.id}{isLive ? ' · ' : ''}{#if isLive}<span
+											class="vela:text-[var(--cms-status-clean-dot)]">live now</span
 										>{/if}
 								</div>
 								{#if paths.length > 0}

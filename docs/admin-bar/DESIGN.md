@@ -239,7 +239,7 @@ Replaces the existing History panel.
 - Older releases: gray dot (`#444`)
 - Each entry shows:
   - **Title**: release name (e.g. "Spring relaunch") in 13px medium weight; **falls back to commit hash** in monospace 12px regular when no name was given
-  - **Meta line**: timestamp · publisher · status (e.g. "Today, 3:35 PM · published by JD · live now")
+  - **Meta line**: timestamp · publisher · status (e.g. "Today, 3:35 PM · published by jd@example.com · live now")
   - **Change chips**: monospace pills showing which paths were in the release (e.g. `/`, `/rooms/suite-2`). Cap at ~3, then `+N more`.
   - **Actions**: `View` (opens diff/preview of what shipped) + `Revert` (hidden on the current live release)
 

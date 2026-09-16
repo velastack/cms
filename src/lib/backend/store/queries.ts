@@ -18,6 +18,7 @@ import type {
 	StagePageDeleteResult
 } from '../../core/wire.js';
 import type { SqliteDb } from './sqlite.js';
+import type { CmsEditor } from '../types.js';
 
 /** The locale a request falls back to when it names none. */
 export const DEFAULT_LOCALE = 'en';
@@ -866,8 +867,8 @@ export const createStore = (db: SqliteDb) => {
 		);
 
 	const insertReleaseStmt = () =>
-		db.prepare<[string, string, number, string | null, string, string, string]>(
-			'INSERT INTO releases (id, project_id, seq, name, published_by, published_at, preview_key) VALUES (?, ?, ?, ?, ?, ?, ?)'
+		db.prepare<[string, string, number, string | null, string, string, string, string, string]>(
+			'INSERT INTO releases (id, project_id, seq, name, published_by, published_by_email, published_by_name, published_at, preview_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
 		);
 
 	const insertReleaseItemStmt = () =>
@@ -905,9 +906,10 @@ export const createStore = (db: SqliteDb) => {
 	 */
 	const publishRelease = (
 		projectId: string,
-		userId: string,
+		user: CmsEditor,
 		name?: string
 	): PublishedRelease | null => {
+		const userId = user.id;
 		const tx = db.transaction((): PublishedRelease | null => {
 			ensureProjectState(projectId);
 			const releaseRow = getOpenReleaseStmt().get(projectId, userId);
@@ -933,7 +935,9 @@ export const createStore = (db: SqliteDb) => {
 				projectId,
 				seq,
 				finalName,
-				userId,
+				user.id,
+				user.email,
+				user.name,
 				publishedAt,
 				previewKey
 			);
@@ -1113,7 +1117,7 @@ export const createStore = (db: SqliteDb) => {
 
 			const result: PublishedRelease = {
 				id: releaseId,
-				publishedBy: userId,
+				publishedBy: { id: user.id, email: user.email, name: user.name },
 				publishedAt,
 				preview_key: previewKey,
 				items: publishedItems
@@ -1132,6 +1136,8 @@ export const createStore = (db: SqliteDb) => {
 		id: string;
 		name: string | null;
 		published_by: string;
+		published_by_email: string | null;
+		published_by_name: string | null;
 		published_at: string;
 		preview_key: string;
 		reverted_at: string | null;
@@ -1150,17 +1156,17 @@ export const createStore = (db: SqliteDb) => {
 
 	const listReleaseHistoryStmt = () =>
 		db.prepare<[string], ReleaseRow>(
-			'SELECT id, name, published_by, published_at, preview_key, reverted_at FROM releases WHERE project_id = ? ORDER BY seq ASC'
+			'SELECT id, name, published_by, published_by_email, published_by_name, published_at, preview_key, reverted_at FROM releases WHERE project_id = ? ORDER BY seq ASC'
 		);
 
 	const findReleaseByPreviewKeyStmt = () =>
 		db.prepare<[string, string], ReleaseRow & { seq: number }>(
-			'SELECT id, name, published_by, published_at, preview_key, reverted_at, seq FROM releases WHERE project_id = ? AND preview_key = ?'
+			'SELECT id, name, published_by, published_by_email, published_by_name, published_at, preview_key, reverted_at, seq FROM releases WHERE project_id = ? AND preview_key = ?'
 		);
 
 	const getReleaseByIdStmt = () =>
 		db.prepare<[string, string], ReleaseRow & { seq: number }>(
-			'SELECT id, name, published_by, published_at, preview_key, reverted_at, seq FROM releases WHERE project_id = ? AND id = ?'
+			'SELECT id, name, published_by, published_by_email, published_by_name, published_at, preview_key, reverted_at, seq FROM releases WHERE project_id = ? AND id = ?'
 		);
 
 	const listReleaseItemsByReleaseIdStmt = () =>
@@ -1227,7 +1233,11 @@ export const createStore = (db: SqliteDb) => {
 		const items = listReleaseItemsByReleaseIdStmt().all(row.id).map(rowToPublishedItem);
 		const r: PublishedRelease = {
 			id: row.id,
-			publishedBy: row.published_by,
+			publishedBy: {
+				id: row.published_by,
+				email: row.published_by_email,
+				name: row.published_by_name
+			},
 			publishedAt: row.published_at,
 			preview_key: row.preview_key,
 			items
@@ -1359,7 +1369,7 @@ export const createStore = (db: SqliteDb) => {
 	const revertRelease = (
 		projectId: string,
 		releaseId: string,
-		userId: string
+		user: CmsEditor
 	): PublishedRelease | null => {
 		const tx = db.transaction((): PublishedRelease | null => {
 			ensureProjectState(projectId);
@@ -1383,7 +1393,9 @@ export const createStore = (db: SqliteDb) => {
 				projectId,
 				seq,
 				inverseName,
-				userId,
+				user.id,
+				user.email,
+				user.name,
 				publishedAt,
 				previewKey
 			);
@@ -1641,7 +1653,7 @@ export const createStore = (db: SqliteDb) => {
 			return {
 				id: inverseId,
 				name: inverseName,
-				publishedBy: userId,
+				publishedBy: { id: user.id, email: user.email, name: user.name },
 				publishedAt,
 				preview_key: previewKey,
 				items: inverseItems
