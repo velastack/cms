@@ -15,7 +15,7 @@
 
 	const live = $derived(cmsStore.getValue(scope, name));
 	const display = $derived.by(() => {
-		const v = typeof live === 'number' ? live : initial;
+		const v = typeof live === 'number' ? live : live === null ? undefined : initial;
 		return typeof v === 'number' && Number.isFinite(v) ? String(v) : '';
 	});
 
@@ -34,7 +34,9 @@
 
 	const onInput = (e: Event) => {
 		const raw = (e.currentTarget as HTMLInputElement).value;
-		if (raw === '') return;
+		// An emptied input clears the field explicitly (`null`), so the
+		// published value no longer shows through.
+		if (raw === '') return cmsStore.setValue(scope, name, null);
 		const n = Number(raw);
 		if (!Number.isFinite(n)) return;
 		cmsStore.setValue(scope, name, integer ? Math.trunc(n) : n);

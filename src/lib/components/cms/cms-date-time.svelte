@@ -5,6 +5,7 @@
 
 	export type CmsDateTimeProps = {
 		name: string;
+		scope?: string;
 		/**
 		 * `'datetime'` (default) → `<input type="datetime-local">`, stores
 		 * `YYYY-MM-DDTHH:MM`. `'date'` → `<input type="date">`, stores
@@ -13,44 +14,43 @@
 		 */
 		mode?: CmsDateTimeMode;
 		fallback?: string;
-		/** Per-item override used by `CmsRepeater`. */
+		/** Per-item override used by structured components. */
 		value?: unknown;
 		children?: Snippet<[string]>;
 	};
 </script>
 
 <script lang="ts">
-	import { getCmsScope } from './scope.js';
-	import { cmsStore, type CmsScopeRef } from './cms-store.svelte.js';
+	import { useCmsField } from './use-cms-field.svelte.js';
 
-	let { name, mode = 'datetime', fallback, value, children }: CmsDateTimeProps = $props();
+	let { name, scope, mode = 'datetime', fallback, value, children }: CmsDateTimeProps = $props();
 
-	const scope = getCmsScope();
-	const ref = $derived<CmsScopeRef | null>(
-		scope ? { scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params } : null
+	const field = useCmsField(
+		() => ({ name, scope, value }),
+		(raw): string | undefined => {
+			if (raw === undefined) return fallback;
+			return typeof raw === 'string' ? raw : '';
+		}
 	);
 
-	const resolved = $derived.by(() => {
-		if (value !== undefined) return value;
-		return ref ? cmsStore.getValue(ref, name) : undefined;
-	});
-
-	const current = $derived(typeof resolved === 'string' ? resolved : fallback);
-	const editable = $derived(cmsStore.isEditing && value === undefined && !!ref);
+	const current = $derived(field.current);
 </script>
 
-{#if editable && ref}
+{#if field.editable && field.ref}
 	{#await import('./cms-date-time-editable.svelte') then { default: Editable }}
-		<Editable scope={ref} {name} {mode} initial={current} />
+		<Editable scope={field.ref} {name} {mode} initial={current} />
 	{/await}
 {:else if current && children}
 	{@render children(current)}
 {:else if current}
 	{current}
+{:else if field.raw === null}
+	<!-- cleared by the editor -->
 {:else if children}
 	{@render children('')}
 {:else}
-	<span class="cms-missing" data-cms-name={name} data-cms-scope={scope?.scopeId ?? '?'}>{name}</span
+	<span class="cms-missing" data-cms-name={name} data-cms-scope={field.ref?.scopeId ?? '?'}
+		>{name}</span
 	>
 {/if}
 

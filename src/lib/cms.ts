@@ -4,27 +4,24 @@ import { locales } from '$locales/data.js';
 export const { load: loadCms, generateEntries } = createCms({
 	adapter: apiAdapter({ endpoint: 'https://velastack.dev/v1/projects/velastack-cms/cms' }),
 	locales,
+	// Site options: values that never render on the page. Branding, contact
+	// and social links live in the root layout scope and are edited in place.
 	site: {
-		branding: {
-			label: 'Branding',
+		seo: {
+			label: 'Search & sharing',
 			fields: {
-				name: { type: 'text', label: 'Business name' },
-				tagline: { type: 'text', label: 'Tagline' },
-				logo: { type: 'image', label: 'Logo' }
+				schemaType: {
+					type: 'enum',
+					label: 'Business type (schema.org)',
+					values: ['LocalBusiness', 'Restaurant', 'Hotel', 'Store', 'ProfessionalService']
+				},
+				shareImage: { type: 'image', label: 'Default share image' }
 			}
 		},
-		contact: {
-			label: 'Contact',
+		locales: {
+			label: 'Languages',
 			fields: {
-				email: { type: 'text', label: 'Email', placeholder: 'hello@example.com' },
-				phone: { type: 'text', label: 'Phone' }
-			}
-		},
-		social: {
-			label: 'Social',
-			fields: {
-				twitter: { type: 'url', label: 'Twitter / X' },
-				instagram: { type: 'url', label: 'Instagram' }
+				es: { type: 'boolean', label: 'Spanish (es) enabled' }
 			}
 		}
 	}

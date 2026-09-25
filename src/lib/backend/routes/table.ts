@@ -26,6 +26,7 @@ import {
 } from './release.js';
 import { deleteMediaItem, getMedia, getUpload, postMedia } from './media.js';
 import { getDeploy, postDeploy } from './deploy.js';
+import { getExport, postSeed } from './seed.js';
 import { postTestReset } from './test-reset.js';
 
 export const ROUTES: Route[] = [
@@ -91,6 +92,9 @@ export const ROUTES: Route[] = [
 
 	{ method: 'GET', segments: ['deploy'], auth: 'required', handler: getDeploy },
 	{ method: 'POST', segments: ['deploy'], auth: 'required', handler: postDeploy },
+
+	{ method: 'POST', segments: ['seed'], auth: 'required', handler: postSeed },
+	{ method: 'GET', segments: ['export'], auth: 'required', handler: getExport },
 
 	{ method: 'GET', segments: ['media'], auth: 'required', handler: getMedia },
 	{ method: 'POST', segments: ['media'], auth: 'required', handler: postMedia },

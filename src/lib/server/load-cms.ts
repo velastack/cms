@@ -149,6 +149,7 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
 				routeId: scope.routeId,
 				params: scopeParams,
 				fields: scope.fields,
+				...(scope.usages ? { usages: scope.usages } : {}),
 				locale: forLocale
 			};
 		});

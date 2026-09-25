@@ -31,6 +31,11 @@ type CmsPluginOptions = {
 	libDir?: string; // default: 'src/lib'
 	components?: ExternalCmsComponentSpec[];
 	traverse?: (string | RegExp)[];
+	endpoint?: string; // media download at build time
+	locales?: string[]; // default: ['en']; locales[0] is the default locale
+	mediaDir?: string;
+	mediaPrefix?: string;
+	content?: string | false; // default: 'content' — see "Content manifest"
 };
 
 type ExternalCmsComponentSpec =
@@ -48,6 +53,14 @@ type ExternalCmsComponentSpec =
   `source === pattern || source.startsWith(pattern + '/')`. Auto-populated with
   every `components[].source`.
 
+- `content` — directory of per-locale content manifests. See below.
+
+## Content manifest
+
+When `<content>/<defaultLocale>.json` exists, the plugin reads it — an object keyed by scope id (`layout:/`, `page:/(public)/about`, `site`) — and injects each usage's value as a `fallback={…}` prop (`initial` for `CmsBoolean`) into every walked `.svelte` file, route entrypoints and shared components alike. A `scope="root"` usage reads `layout:/`; any other usage reads the scopes that reach its file, leaf first. Components in source stay name-only; the value the visitor sees before the CMS answers comes from the manifest. The file is watched, so edits apply in dev.
+
+The same operation is available to other tooling from `@velastack/cms/build` (`scanUsages`, `injectFallbacks` / `inlineFallbacks`, `buildManifest`, `fallbackResolverFor`), so `pack` and `verify` in a templates repo share this parser instead of carrying their own.
+
 ## Virtual modules
 
 ### `virtual:vela-cms/manifest`
@@ -57,6 +70,7 @@ import { cmsManifest } from 'virtual:vela-cms/manifest';
 
 type CmsManifest = {
 	version: 1;
+	// each scope lists `fields` (names) and `usages` ({ name, component, preset? })
 	routes: Record<string, { scopes: CmsManifestScope[] }>;
 };
 
@@ -107,6 +121,8 @@ For each route entrypoint (`+page.svelte` or `+layout.svelte`), the plugin
 parses with `svelte/compiler` and follows static imports of `.svelte` files.
 Imports get classified as CMS components by:
 
+0. **`@velastack/cms` by name** — every named import from the package
+   specifier, with no resolver needed.
 1. **In-tree barrel** — anything from `<libDir>/components/cms/index.{ts,js}`.
    Named imports are CMS components; default isn't.
 2. **In-tree files** — `.svelte` files directly under `<libDir>/components/cms/`.
@@ -116,8 +132,12 @@ Imports get classified as CMS components by:
 4. **External `components` spec** — user-declared packs.
 
 Component usages with a `name=<static>` prop are recorded as field
-references; `value=<…>` opts the call out (it's a runtime override, not a
-field). Dynamic `name={expr}` props are ignored.
+references with their component type; `value=<…>` opts the call out (it's a
+runtime override, not a field). A `scope="root"` (or `scope="layout:/x"`)
+attribute records the usage under that layout scope instead of the file's
+own. Dynamic `name={expr}` props and `scope=` attributes naming a scope
+outside the route's chain are reported as warnings on the build result and
+logged by the plugin.
 
 ## HMR
 

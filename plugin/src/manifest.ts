@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, resolve, sep } from 'node:path';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { parseAstAsync } from 'vite';
 import { parseSvelteFile, type ParsedSvelte } from './parse-svelte.js';
 import {
@@ -8,6 +8,20 @@ import {
 	extractRouteParams,
 	type RouteNode
 } from './route-tree.js';
+
+/**
+ * One CMS component usage as recorded in the manifest: which value it reads
+ * and which component type reads it, so a content manifest can be checked
+ * against the template without parsing Svelte again.
+ */
+export type CmsManifestUsage = {
+	/** The `name=` literal. */
+	name: string;
+	/** Canonical exported component name (`CmsText`, `CmsHours`, …). */
+	component: string;
+	/** Static `preset=` literal, for list presets. */
+	preset?: string;
+};
 
 export type CmsManifestScope = {
 	scopeId: string;
@@ -19,18 +33,38 @@ export type CmsManifestScope = {
 	 * `metadata` branch shows up here too (e.g. `'metadata.title'`).
 	 */
 	fields: string[];
+	/** The usages behind `fields`, with their component types. */
+	usages: CmsManifestUsage[];
 };
+
+/** The root layout scope, addressed by `scope="root"`. */
+export const ROOT_SCOPE_ID = 'layout:/';
 
 /**
  * Default page-metadata paths surfaced to the editor when a route has no
- * explicit schema. Always live under the `metadata` branch.
+ * explicit schema. Always live under the `metadata` branch. Mirrors
+ * `DEFAULT_METADATA_SCHEMA` in `admin-bar/page-config.ts`.
  */
 const DEFAULT_PAGE_METADATA_PATHS: string[] = [
 	'metadata.title',
 	'metadata.description',
+	'metadata.ogTitle',
+	'metadata.ogDescription',
+	'metadata.ogImage',
+	'metadata.twitterCard',
 	'metadata.canonical',
-	'metadata.robots'
+	'metadata.noindex'
 ];
+
+/** Bare specifiers that are this package: named imports are CMS components. */
+export const isPackageSource = (source: string): boolean =>
+	source === '@velastack/cms' || source.startsWith('@velastack/cms/');
+
+/** Resolve a `scope=` attribute to a scope id. */
+export const resolveScopeAttr = (scope: string): string => {
+	if (scope === 'root') return ROOT_SCOPE_ID;
+	return scope.includes(':') ? scope : `layout:${scope}`;
+};
 
 export type CmsManifestRoute = {
 	scopes: CmsManifestScope[];
@@ -95,6 +129,16 @@ export type BuildManifestResult = {
 	 * knows which routes are creatable without re-walking `src/routes/`.
 	 */
 	pageCmsModules: Array<{ routeId: string; path: string; creatable: boolean }>;
+	/**
+	 * Which scopes reach each visited `.svelte` file, leaf scope first. A
+	 * shared component used from two layouts lists both. Fallback injection
+	 * uses it to find the content tree a usage's value lives in.
+	 */
+	scopesByFile: Map<string, string[]>;
+	/** Human-readable problems found during the walk: dynamic `name`s the
+	 * manifest cannot record, `scope=` attributes naming a scope outside the
+	 * route's chain. The plugin logs them; verify tooling can fail on them. */
+	warnings: string[];
 };
 
 const tryStatFile = (path: string): boolean => {
@@ -206,6 +250,29 @@ const resolveLocal = (source: string, fromFile: string, libDir: string): string 
 	return null;
 };
 
+type CollectedUsage = {
+	name: string;
+	component: string;
+	/** Resolved target scope id from a `scope=` attribute, or `null`. */
+	scope: string | null;
+	preset: string | null;
+};
+
+type CollectedEntry = {
+	usages: CollectedUsage[];
+	entriesRouteIds: string[];
+	warnings: string[];
+	/** Every `.svelte` file reached from this entry, entry first. */
+	files: string[];
+};
+
+/** Canonical component name of a default-imported `.svelte` file: its
+ * basename (`CmsHours.svelte` → `CmsHours`), else the local binding. */
+const componentNameOf = (resolved: string | null, local: string): string => {
+	if (resolved && resolved.endsWith('.svelte')) return basename(resolved, '.svelte');
+	return local;
+};
+
 const isCmsBarrelPath = (libDir: string, path: string): boolean => {
 	const barrel = join(libDir, 'components', 'cms');
 	return path === join(barrel, 'index.ts') || path === join(barrel, 'index.js') || path === barrel;
@@ -274,7 +341,7 @@ const collectFieldsForEntry = async (
 		cache: Map<string, ParsedSvelte>;
 		allVisited: Set<string>;
 	}
-): Promise<{ fields: string[]; entriesRouteIds: string[] }> => {
+): Promise<CollectedEntry> => {
 	const {
 		libDir,
 		velacmsRoots,
@@ -287,22 +354,24 @@ const collectFieldsForEntry = async (
 	} = options;
 
 	const visited = new Set<string>();
-	const fields: string[] = [];
+	const usages: CollectedUsage[] = [];
 	const entriesRouteIds: string[] = [];
+	const warnings: string[] = [];
 
 	const classify = (
 		spec: ExternalCmsComponentSpec,
 		bindings: ParsedSvelte['imports'][number]['bindings'],
-		cmsLocals: Set<string>
+		cmsLocals: Map<string, string>,
+		resolved: string | null
 	): void => {
 		if ('default' in spec && spec.default) {
 			for (const b of bindings) {
-				if (b.imported === 'default') cmsLocals.add(b.local);
+				if (b.imported === 'default') cmsLocals.set(b.local, componentNameOf(resolved, b.local));
 			}
 		} else if ('names' in spec) {
 			const set = new Set(spec.names);
 			for (const b of bindings) {
-				if (b.imported !== 'default' && set.has(b.imported)) cmsLocals.add(b.local);
+				if (b.imported !== 'default' && set.has(b.imported)) cmsLocals.set(b.local, b.imported);
 			}
 		}
 	};
@@ -327,21 +396,31 @@ const collectFieldsForEntry = async (
 			);
 		}
 
-		const cmsLocals = new Set<string>();
+		// Local binding → canonical component name.
+		const cmsLocals = new Map<string, string>();
 		for (let i = 0; i < parsed.imports.length; i++) {
 			const imp = parsed.imports[i];
 			const resolved = resolvedByImport.get(i) ?? null;
 
+			// Rule 0: the package by name, whether or not the bundler resolved it.
+			// Every named export is a component; the walk needs no resolver.
+			if (isPackageSource(imp.source)) {
+				for (const b of imp.bindings) {
+					if (b.imported !== 'default') cmsLocals.set(b.local, b.imported);
+				}
+				continue;
+			}
+
 			// Rule 1 + 2: in-tree barrel & files under <libDir>/components/cms/.
 			if (resolved && isCmsBarrelPath(libDir, resolved)) {
 				for (const b of imp.bindings) {
-					if (b.imported !== 'default') cmsLocals.add(b.local);
+					if (b.imported !== 'default') cmsLocals.set(b.local, b.imported);
 				}
 				continue;
 			}
 			if (resolved && isCmsComponentFile(libDir, resolved)) {
 				for (const b of imp.bindings) {
-					if (b.imported === 'default') cmsLocals.add(b.local);
+					if (b.imported === 'default') cmsLocals.set(b.local, componentNameOf(resolved, b.local));
 				}
 				continue;
 			}
@@ -350,9 +429,11 @@ const collectFieldsForEntry = async (
 			if (resolved && velacmsRoots.length > 0 && isInVelacmsPackage(resolved, velacmsRoots)) {
 				for (const b of imp.bindings) {
 					if (b.imported === 'default') {
-						if (resolved.endsWith('.svelte')) cmsLocals.add(b.local);
+						if (resolved.endsWith('.svelte')) {
+							cmsLocals.set(b.local, componentNameOf(resolved, b.local));
+						}
 					} else {
-						cmsLocals.add(b.local);
+						cmsLocals.set(b.local, b.imported);
 					}
 				}
 				continue;
@@ -361,14 +442,27 @@ const collectFieldsForEntry = async (
 			// Rule 4: user-supplied spec — match by resolved path first, then raw source.
 			let spec = resolved ? specByResolvedPath.get(resolved) : undefined;
 			if (!spec) spec = specBySource.get(imp.source);
-			if (spec) classify(spec, imp.bindings, cmsLocals);
+			if (spec) classify(spec, imp.bindings, cmsLocals, resolved);
 		}
 
 		for (const usage of parsed.componentUsages) {
-			if (!cmsLocals.has(usage.componentName)) continue;
+			const component = cmsLocals.get(usage.componentName);
+			if (!component) continue;
 			if (usage.routeIdAttr) entriesRouteIds.push(usage.routeIdAttr);
-			if (usage.hasValueAttr || !usage.fieldName) continue;
-			fields.push(usage.fieldName);
+			if (usage.hasValueAttr) continue;
+			if (usage.dynamicName) {
+				warnings.push(
+					`${filePath}:${usage.line} <${usage.componentName}> has a dynamic name and is not recorded in the manifest`
+				);
+				continue;
+			}
+			if (!usage.fieldName) continue;
+			usages.push({
+				name: usage.fieldName,
+				component,
+				scope: usage.scopeAttr ? resolveScopeAttr(usage.scopeAttr) : null,
+				preset: usage.presetAttr
+			});
 		}
 
 		for (let i = 0; i < parsed.imports.length; i++) {
@@ -379,45 +473,99 @@ const collectFieldsForEntry = async (
 
 	await walk(entry);
 	return {
-		fields: [...new Set(fields)],
-		entriesRouteIds: [...new Set(entriesRouteIds)]
+		usages,
+		entriesRouteIds: [...new Set(entriesRouteIds)],
+		warnings,
+		files: [...visited]
 	};
+};
+
+/** Dedupe usages by (name, component, preset), keeping first-seen order. */
+const dedupeUsages = (usages: CollectedUsage[]): CmsManifestUsage[] => {
+	const seen = new Set<string>();
+	const out: CmsManifestUsage[] = [];
+	for (const u of usages) {
+		const key = `${u.name}|${u.component}|${u.preset ?? ''}`;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		out.push(
+			u.preset
+				? { name: u.name, component: u.component, preset: u.preset }
+				: { name: u.name, component: u.component }
+		);
+	}
+	return out;
 };
 
 const buildScopeChain = async (
 	leaf: RouteNode,
 	byRouteId: Map<string, RouteNode>,
 	collectOptions: Parameters<typeof collectFieldsForEntry>[1]
-): Promise<{ scopes: CmsManifestScope[]; entriesRouteIds: string[] }> => {
+): Promise<{
+	scopes: CmsManifestScope[];
+	entriesRouteIds: string[];
+	warnings: string[];
+	filesByScope: Map<string, string[]>;
+}> => {
 	const scopes: CmsManifestScope[] = [];
 	const entriesRouteIds: string[] = [];
+	const warnings: string[] = [];
+	const filesByScope = new Map<string, string[]>();
+	// Usages routed by a `scope=` attribute, applied once every scope exists.
+	const routed: Array<{ usage: CollectedUsage; from: string }> = [];
+	const ownUsages = new Map<string, CollectedUsage[]>();
+
+	const addScope = async (
+		scopeId: string,
+		kind: 'layout' | 'page',
+		routeId: string,
+		entry: string
+	) => {
+		const collected = await collectFieldsForEntry(entry, collectOptions);
+		entriesRouteIds.push(...collected.entriesRouteIds);
+		warnings.push(...collected.warnings);
+		filesByScope.set(scopeId, collected.files);
+		const own: CollectedUsage[] = [];
+		for (const u of collected.usages) {
+			if (u.scope && u.scope !== scopeId) routed.push({ usage: u, from: scopeId });
+			else own.push(u);
+		}
+		ownUsages.set(scopeId, own);
+		scopes.push({
+			scopeId,
+			kind,
+			routeId,
+			ownedParams: extractRouteParams(routeId),
+			fields: [],
+			usages: []
+		});
+	};
 
 	for (const dir of ancestorRouteIds(leaf.routeId)) {
 		const dirNode = byRouteId.get(dir);
 		if (!dirNode?.layoutPath) continue;
-		const collected = await collectFieldsForEntry(dirNode.layoutPath, collectOptions);
-		entriesRouteIds.push(...collected.entriesRouteIds);
-		scopes.push({
-			scopeId: 'layout:' + dir,
-			kind: 'layout',
-			routeId: dir,
-			ownedParams: extractRouteParams(dir),
-			fields: collected.fields
-		});
+		await addScope('layout:' + dir, 'layout', dir, dirNode.layoutPath);
+	}
+	await addScope('page:' + leaf.routeId, 'page', leaf.routeId, leaf.pagePath as string);
+
+	for (const { usage, from } of routed) {
+		const target = ownUsages.get(usage.scope as string);
+		if (target) target.push(usage);
+		else {
+			warnings.push(
+				`${leaf.routeId}: <${usage.component} name="${usage.name}" scope="${usage.scope}"> in ${from} addresses a scope outside this route's layout chain`
+			);
+		}
 	}
 
-	const pageCollected = await collectFieldsForEntry(leaf.pagePath as string, collectOptions);
-	entriesRouteIds.push(...pageCollected.entriesRouteIds);
-	const fieldsWithDefaults = Array.from(
-		new Set([...pageCollected.fields, ...DEFAULT_PAGE_METADATA_PATHS])
-	);
-	scopes.push({
-		scopeId: 'page:' + leaf.routeId,
-		kind: 'page',
-		routeId: leaf.routeId,
-		ownedParams: extractRouteParams(leaf.routeId),
-		fields: fieldsWithDefaults
-	});
+	for (const scope of scopes) {
+		scope.usages = dedupeUsages(ownUsages.get(scope.scopeId) ?? []);
+		const fields = scope.usages.map((u) => u.name);
+		scope.fields =
+			scope.kind === 'page'
+				? Array.from(new Set([...fields, ...DEFAULT_PAGE_METADATA_PATHS]))
+				: Array.from(new Set(fields));
+	}
 
 	const seen = new Set<string>();
 	for (const scope of scopes) {
@@ -426,7 +574,7 @@ const buildScopeChain = async (
 		for (const p of owned) seen.add(p);
 	}
 
-	return { scopes, entriesRouteIds: [...new Set(entriesRouteIds)] };
+	return { scopes, entriesRouteIds: [...new Set(entriesRouteIds)], warnings, filesByScope };
 };
 
 export const buildManifest = async (
@@ -477,10 +625,22 @@ export const buildManifest = async (
 
 	const routes: CmsManifest['routes'] = {};
 	const pageCmsModules: BuildManifestResult['pageCmsModules'] = [];
+	const scopesByFile = new Map<string, string[]>();
+	const warnings = new Set<string>();
 	for (const node of nodes) {
 		if (!node.pagePath) continue;
-		const { scopes, entriesRouteIds } = await buildScopeChain(node, byRouteId, collectOptions);
+		const chain = await buildScopeChain(node, byRouteId, collectOptions);
+		const { scopes, entriesRouteIds } = chain;
 		routes[node.routeId] = { scopes, entriesRouteIds };
+		for (const w of chain.warnings) warnings.add(w);
+		// Leaf first: a page's own value beats a layout's for a shared component.
+		for (const scope of [...scopes].reverse()) {
+			for (const file of chain.filesByScope.get(scope.scopeId) ?? []) {
+				const list = scopesByFile.get(file) ?? [];
+				if (!list.includes(scope.scopeId)) list.push(scope.scopeId);
+				scopesByFile.set(file, list);
+			}
+		}
 
 		// Index every entry path encountered while walking this leaf's chain so
 		// the transform hook can look up scope info by file path. Layouts may be
@@ -511,6 +671,8 @@ export const buildManifest = async (
 		visitedFiles: [...visitedFiles],
 		scopeByEntryPath,
 		routeIdByScriptPath,
-		pageCmsModules
+		pageCmsModules,
+		scopesByFile,
+		warnings: [...warnings]
 	};
 };

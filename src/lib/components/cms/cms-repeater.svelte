@@ -1,43 +1,40 @@
 <script lang="ts" generics="T extends Record<string, unknown> = Record<string, unknown>">
 	import type { Snippet } from 'svelte';
-	import { getCmsScope } from './scope.js';
-	import { cmsStore, type CmsScopeRef } from './cms-store.svelte.js';
+	import { useCmsField } from './use-cms-field.svelte.js';
 
 	type Props = {
 		name: string;
+		scope?: string;
 		fallback?: T[];
 		value?: unknown;
 		children: Snippet<[T, number]>;
 	};
 
-	let { name, fallback, value, children }: Props = $props();
+	let { name, scope, fallback, value, children }: Props = $props();
 
-	const scope = getCmsScope();
-	const ref = $derived<CmsScopeRef | null>(
-		scope ? { scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params } : null
+	const field = useCmsField(
+		() => ({ name, scope, value }),
+		(raw): T[] => {
+			if (raw === undefined) return Array.isArray(fallback) ? fallback : [];
+			return Array.isArray(raw) ? (raw as T[]) : [];
+		}
 	);
 
-	const resolved = $derived.by(() => {
-		if (value !== undefined) return value;
-		return ref ? cmsStore.getValue(ref, name) : undefined;
-	});
-
-	const items = $derived(
-		Array.isArray(resolved) ? (resolved as T[]) : Array.isArray(fallback) ? fallback : []
-	);
-	const editable = $derived(cmsStore.isEditing && value === undefined && !!ref);
+	const items = $derived(field.current);
 </script>
 
-{#if editable && ref}
+{#if field.editable && field.ref}
 	{#await import('./cms-repeater-editable.svelte') then { default: Editable }}
-		<Editable scope={ref} {name} {items} {children} />
+		<Editable scope={field.ref} {name} {items} {children} />
 	{/await}
 {:else if items.length}
 	{#each items as item, i}
 		{@render children(item, i)}
 	{/each}
+{:else if field.raw === null}
+	<!-- cleared by the editor -->
 {:else}
-	<span class="cms-missing" data-cms-name={name} data-cms-scope={scope?.scopeId ?? '?'}>
+	<span class="cms-missing" data-cms-name={name} data-cms-scope={field.ref?.scopeId ?? '?'}>
 		{name}
 	</span>
 {/if}

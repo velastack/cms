@@ -81,6 +81,7 @@ export { MIGRATIONS } from './store/migrations/index.js';
 
 // The wire contract, so a host can type its own integrations against it.
 export type {
+	CmsSeed,
 	DocsResponse,
 	MediaItem,
 	OpenRelease,
@@ -91,6 +92,9 @@ export type {
 	PublishedRelease,
 	ReleaseItem,
 	ReleasePublisher,
+	SeedRequest,
+	SeedResponse,
+	SeedSummary,
 	SiteResponse
 } from '../core/wire.js';
 export type { PageDeleteOutcome, PageEntry } from '../core/page-entry.js';

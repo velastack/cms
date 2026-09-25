@@ -1,6 +1,6 @@
 {
 	"name": "@velastack/cms",
-	"version": "0.4.0",
+	"version": "0.5.0-alpha.1",
 	"description": "A scope-aware CMS for SvelteKit, for static or dynamic sites.",
 	"keywords": [
 		"svelte",
@@ -57,6 +57,11 @@
 			"svelte": "./dist/index.js",
 			"default": "./dist/index.js"
 		},
+		"./editor": {
+			"types": "./dist/editor.d.ts",
+			"svelte": "./dist/editor.js",
+			"default": "./dist/editor.js"
+		},
 		"./server": {
 			"types": "./dist/server/index.d.ts",
 			"default": "./dist/server/index.js"
@@ -72,6 +77,10 @@
 		"./adapter": {
 			"types": "./plugin/dist/adapter.d.ts",
 			"default": "./plugin/dist/adapter.js"
+		},
+		"./build": {
+			"types": "./plugin/dist/build.d.ts",
+			"default": "./plugin/dist/build.js"
 		}
 	},
 	"peerDependencies": {

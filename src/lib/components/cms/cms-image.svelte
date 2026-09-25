@@ -1,62 +1,69 @@
 <script lang="ts" module>
+	/**
+	 * Stored shape of an image slot. Seeds and fallbacks may pass a bare URL
+	 * string; it is normalized to `{ url }`. A cleared slot stores `url: null`.
+	 */
 	export type CmsImageValue = {
-		url?: string;
-		alt?: string;
+		url?: string | null;
+		alt?: string | null;
 		width?: number;
 		height?: number;
+	};
+
+	export const normalizeImage = (raw: unknown): CmsImageValue => {
+		if (raw == null) return {};
+		if (typeof raw === 'string') return { url: raw };
+		if (typeof raw === 'object' && !Array.isArray(raw)) {
+			const r = raw as Record<string, unknown>;
+			const out: CmsImageValue = {};
+			if (typeof r.url === 'string') out.url = r.url;
+			if (typeof r.alt === 'string') out.alt = r.alt;
+			if (typeof r.width === 'number') out.width = r.width;
+			if (typeof r.height === 'number') out.height = r.height;
+			return out;
+		}
+		return {};
 	};
 </script>
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { getCmsScope } from './scope.js';
-	import { cmsStore, type CmsScopeRef } from './cms-store.svelte.js';
+	import { useCmsField } from './use-cms-field.svelte.js';
 
 	type Props = {
 		name: string;
-		/** Fallback alt text used when the branch has no `alt` leaf. */
+		scope?: string;
+		/** Fallback alt text used when the stored value has no `alt`. */
 		alt?: string;
-		fallback?: string;
+		/** A URL, or a full `{ url, alt }` value. */
+		fallback?: string | CmsImageValue;
 		value?: unknown;
 		children?: Snippet;
 	};
 
-	let { name, alt = '', fallback, value, children }: Props = $props();
+	let { name, scope, alt = '', fallback, value, children }: Props = $props();
 
-	const scope = getCmsScope();
-	const ref = $derived<CmsScopeRef | null>(
-		scope ? { scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params } : null
+	const field = useCmsField(
+		() => ({ name, scope, value }),
+		(raw): CmsImageValue => (raw === undefined ? normalizeImage(fallback) : normalizeImage(raw))
 	);
 
-	const resolved = $derived.by(() => {
-		if (value !== undefined) return value;
-		return ref ? cmsStore.getValue(ref, name) : undefined;
-	});
-
-	// `<CmsImage>` owns a `{ url, alt, width?, height? }` branch. Accept a bare
-	// string as the URL leaf for legacy/value-prop callers.
-	const branch = $derived.by((): CmsImageValue | null => {
-		if (resolved == null) return null;
-		if (typeof resolved === 'string') return { url: resolved };
-		if (typeof resolved === 'object' && !Array.isArray(resolved)) return resolved as CmsImageValue;
-		return null;
-	});
-
-	const src = $derived(branch?.url ?? fallback ?? '');
-	const altText = $derived(branch?.alt ?? alt ?? '');
-	const editable = $derived(cmsStore.isEditing && value === undefined && !!ref);
+	const src = $derived(field.current.url ?? '');
+	const altText = $derived(field.current.alt ?? alt);
 </script>
 
-{#if editable && ref}
+{#if field.editable && field.ref}
 	{#await import('./cms-image-editable.svelte') then { default: Editable }}
-		<Editable scope={ref} {name} initial={branch ?? {}} fallbackAlt={alt} />
+		<Editable scope={field.ref} {name} initial={field.current} fallbackAlt={alt} />
 	{/await}
 {:else if src}
 	<img class="cms-image" {src} alt={altText} />
+{:else if field.raw === null}
+	<!-- cleared by the editor -->
 {:else if children}
 	{@render children()}
 {:else}
-	<span class="cms-missing" data-cms-name={name} data-cms-scope={scope?.scopeId ?? '?'}>
+	<span class="cms-missing" data-cms-name={name} data-cms-scope={field.ref?.scopeId ?? '?'}>
 		{name}
 	</span>
 {/if}

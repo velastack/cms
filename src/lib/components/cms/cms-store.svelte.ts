@@ -126,6 +126,7 @@ class CmsStore {
 	private _activeLocale = $state<string | null>(null);
 	private overlayFetchToken = 0;
 	private entriesFetchToken = 0;
+	private localeOverlayTokens: Record<string, number> = {};
 
 	toggleEdit(): void {
 		this.isEditing = !this.isEditing;
@@ -137,6 +138,43 @@ class CmsStore {
 
 	private effectiveLocale(): string {
 		return this._activeLocale ?? pageLocale();
+	}
+
+	/** The locale edits currently target: the editor's `?locale=` override, else the page's. */
+	get activeLocale(): string {
+		return this.effectiveLocale();
+	}
+
+	/** The project's default locale, `cms.locales[0]`. */
+	get defaultLocale(): string {
+		return pageDefaultLocale();
+	}
+
+	/** Every supported locale from the payload. */
+	get locales(): string[] {
+		return (page.data?.cms as CmsPayload | undefined)?.locales ?? [];
+	}
+
+	/**
+	 * Make sure the overlay for `locale` is loaded for the current route's
+	 * scopes, so a structured editor's translation tab and the Locales panel
+	 * can read another locale's strings without switching the page. Uses the
+	 * open release's preview key when there is one.
+	 */
+	async loadLocaleOverlay(locale: string): Promise<void> {
+		const cms = page.data?.cms as CmsPayload | undefined;
+		if (!cms) return;
+		const scopes = Object.values(cms.scopes);
+		const loaded = scopes.every(
+			(s) =>
+				composeKey({ scopeId: s.scopeId, routeId: s.routeId, params: s.params }, locale) in
+				this.overlay
+		);
+		if (loaded) return;
+		await this.loadAndApplyOverlay(cms.endpoint, scopes, this.openRelease?.preview_key ?? null, {
+			locale,
+			defaultLocale: cms.locales[0]
+		});
 	}
 
 	/** Base doc (server-rendered) for a scope. Already locale-resolved by `resolveCmsPayload`. */
@@ -281,7 +319,11 @@ class CmsStore {
 			defaultLocale?: string;
 		}
 	): Promise<void> {
-		const token = ++this.overlayFetchToken;
+		// One in-flight fetch per locale: a translation tab loading `es` must
+		// not cancel the page's own `en` overlay load, and vice versa.
+		const token = (this.localeOverlayTokens[opts.locale] =
+			(this.localeOverlayTokens[opts.locale] ?? 0) + 1);
+		this.overlayFetchToken = token;
 		const versionKey = opts.versionKey ?? null;
 		const locale = opts.locale;
 		const defaultLocale = opts.defaultLocale ?? pageDefaultLocale() ?? locale;
@@ -319,7 +361,7 @@ class CmsStore {
 				? Promise.all(scopes.map((s) => fetchScope(s, defaultLocale)))
 				: Promise.resolve(null as Array<{ scope: CmsScopeEntry; contents: Tree } | null> | null)
 		]);
-		if (token !== this.overlayFetchToken) return;
+		if (token !== this.localeOverlayTokens[locale]) return;
 
 		const merged = mergeLocaleDocs(
 			collect(requestedPairs),

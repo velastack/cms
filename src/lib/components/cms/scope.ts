@@ -14,6 +14,17 @@ export type CmsScope = {
 	params: Record<string, string>;
 };
 
+/**
+ * One CMS component usage as recorded by the Vite plugin: which value it
+ * reads and which component type reads it.
+ */
+export type CmsManifestUsage = {
+	name: string;
+	/** Canonical exported component name (`CmsText`, `CmsHours`, …). */
+	component: string;
+	preset?: string;
+};
+
 export type CmsScopeEntry = {
 	scopeId: string;
 	kind: 'layout' | 'page';
@@ -24,25 +35,34 @@ export type CmsScopeEntry = {
 	 * `metadata` branch shows up here too (e.g. `'metadata.title'`).
 	 */
 	fields: string[];
+	/** The usages behind `fields`, with component types. Absent on hand-built manifests. */
+	usages?: CmsManifestUsage[];
 };
 
 /**
- * Schema for the project-wide site scope. Authored on `createCms({ site })`.
- * Top-level keys are sections rendered as groups in the Site Settings panel;
- * each section's `fields` keys become path segments in the stored tree
- * (`branding.name`, `social.twitter`).
+ * Schema for the project-wide site scope: the **Site Options** panel.
+ * Authored on `createCms({ site })`. Top-level keys are sections rendered as
+ * groups; each section's `fields` keys become path segments in the stored
+ * tree (`seo.schemaType`, `seo.shareImage`).
+ *
+ * Site options are for values that never render on the page — the schema.org
+ * type, the default share image, enabled locales. Anything a visitor sees
+ * belongs in the root layout scope, edited where it renders.
  *
  * `type` selects the input widget. Storage is unconstrained — the schema is
  * a UI hint, not an enforced type for the underlying tree (to keep the data
  * model uniform with pages/layouts and avoid destructive prunes when fields
  * are added/removed).
  */
-export type SiteFieldType = 'text' | 'markdown' | 'number' | 'datetime' | 'url' | 'color' | 'image';
+export type SiteFieldType =
+	'text' | 'markdown' | 'number' | 'datetime' | 'url' | 'color' | 'image' | 'enum' | 'boolean';
 
 export type SiteFieldSchema = {
 	type: SiteFieldType;
 	label: string;
 	placeholder?: string;
+	/** Options for `enum` fields. */
+	values?: readonly string[];
 };
 
 export type SiteSectionSchema = {
@@ -118,6 +138,8 @@ export type CmsManifestScope = {
 	 * `metadata` branch shows up here too (e.g. `'metadata.title'`).
 	 */
 	fields: string[];
+	/** The usages behind `fields`, with component types. Absent on hand-built manifests. */
+	usages?: CmsManifestUsage[];
 };
 
 export type CmsManifestRoute = {

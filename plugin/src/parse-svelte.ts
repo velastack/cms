@@ -11,10 +11,25 @@ export type ComponentUsage = {
 	componentName: string;
 	/** Static value of the `name=` prop, or `null` if absent / non-static. */
 	fieldName: string | null;
+	/** `name=` was present but not a static string (template literal, variable…). */
+	dynamicName: boolean;
 	/** Whether a `value=` prop was present (marks per-item overrides). */
 	hasValueAttr: boolean;
+	/** Whether a `fallback=` or `initial=` prop was present. */
+	hasFallbackAttr: boolean;
 	/** Static value of the `routeId=` prop, or `null` if absent / non-static. */
 	routeIdAttr: string | null;
+	/** Static value of the `scope=` prop (`'root'` or a scope id), or `null`. */
+	scopeAttr: string | null;
+	/** Static value of the `preset=` prop, or `null`. */
+	presetAttr: string | null;
+	/** Source offsets of the component node. */
+	start: number;
+	end: number;
+	/** Offset just past the `name=` attribute, where a prop can be inserted. */
+	nameAttrEnd: number | null;
+	/** 1-based line of the component node. */
+	line: number;
 };
 
 export type InstanceScriptRange = {
@@ -85,6 +100,14 @@ const visit = (node: unknown, fn: (n: { type: string } & Record<string, unknown>
 	}
 };
 
+const lineOf = (code: string, offset: number): number => {
+	let line = 1;
+	for (let i = 0; i < offset && i < code.length; i++) if (code.charCodeAt(i) === 10) line++;
+	return line;
+};
+
+type AttrNode = { type?: string; name?: string; value?: unknown; start?: number; end?: number };
+
 export const parseSvelteSource = (code: string, filename?: string): ParsedSvelte => {
 	const ast = parse(code, { filename, modern: true }) as unknown as {
 		instance?: { content: { start: number; end: number; body: unknown[] } };
@@ -119,24 +142,27 @@ export const parseSvelteSource = (code: string, filename?: string): ParsedSvelte
 		if (node.type !== 'Component') return;
 		const componentName = node.name as string | undefined;
 		if (!componentName) return;
-		const attrs = (node.attributes as unknown[]) ?? [];
-		const nameAttr = attrs.find((a) => {
-			const attr = a as { type?: string; name?: string };
-			return attr.type === 'Attribute' && attr.name === 'name';
-		}) as { value?: unknown } | undefined;
-		const hasValueAttr = attrs.some((a) => {
-			const attr = a as { type?: string; name?: string };
-			return attr.type === 'Attribute' && attr.name === 'value';
-		});
-		const routeIdAttr = attrs.find((a) => {
-			const attr = a as { type?: string; name?: string };
-			return attr.type === 'Attribute' && attr.name === 'routeId';
-		}) as { value?: unknown } | undefined;
+		const attrs = ((node.attributes as AttrNode[]) ?? []).filter((a) => a.type === 'Attribute');
+		const find = (name: string) => attrs.find((a) => a.name === name);
+		const nameAttr = find('name');
+		const routeIdAttr = find('routeId');
+		const scopeAttr = find('scope');
+		const presetAttr = find('preset');
+		const fieldName = nameAttr ? staticAttributeValue(nameAttr.value) : null;
+		const start = (node.start as number | undefined) ?? 0;
 		componentUsages.push({
 			componentName,
-			fieldName: nameAttr ? staticAttributeValue(nameAttr.value) : null,
-			hasValueAttr,
-			routeIdAttr: routeIdAttr ? staticAttributeValue(routeIdAttr.value) : null
+			fieldName,
+			dynamicName: !!nameAttr && fieldName === null,
+			hasValueAttr: !!find('value'),
+			hasFallbackAttr: !!find('fallback') || !!find('initial'),
+			routeIdAttr: routeIdAttr ? staticAttributeValue(routeIdAttr.value) : null,
+			scopeAttr: scopeAttr ? staticAttributeValue(scopeAttr.value) : null,
+			presetAttr: presetAttr ? staticAttributeValue(presetAttr.value) : null,
+			start,
+			end: (node.end as number | undefined) ?? start,
+			nameAttrEnd: nameAttr?.end ?? null,
+			line: lineOf(code, start)
 		});
 	});
 

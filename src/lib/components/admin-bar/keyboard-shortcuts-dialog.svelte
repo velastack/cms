@@ -36,7 +36,7 @@
 			heading: 'Site',
 			entries: [
 				{ keys: '⌘N', label: 'New page' },
-				{ keys: '⌘,', label: 'Site settings' }
+				{ keys: '⌘,', label: 'Site options' }
 			]
 		},
 		{

@@ -3,6 +3,7 @@ import { findPageEntry, type PageEntry, type PageDeleteOutcome } from '../../cor
 import { get, leafPaths, mergeTree, set, type Tree } from '../../core/path.js';
 import type {
 	AddReleaseItemInput,
+	CmsSeed,
 	CreatePageResult,
 	DiscardItemTarget,
 	ListMediaOptions,
@@ -15,6 +16,7 @@ import type {
 	PublishedReleaseItem,
 	ReleaseItem,
 	RenamePageResult,
+	SeedResponse,
 	StagePageDeleteResult
 } from '../../core/wire.js';
 import type { SqliteDb } from './sqlite.js';
@@ -1943,6 +1945,119 @@ export const createStore = (db: SqliteDb) => {
 		tx();
 	};
 
+	// ---------------------------------------------------------------------------
+	// Seed / export
+	// ---------------------------------------------------------------------------
+
+	const countPublishedStmt = () =>
+		db.prepare<[string, string, string], { n: number }>(
+			`SELECT (SELECT COUNT(*) FROM published_pages WHERE project_id = ?)
+			      + (SELECT COUNT(*) FROM published_layouts WHERE project_id = ?)
+			      + (SELECT COUNT(*) FROM published_site WHERE project_id = ?) AS n`
+		);
+
+	/** Whether the project holds any published page, layout or site row. */
+	const hasPublishedContent = (projectId: string): boolean =>
+		(countPublishedStmt().get(projectId, projectId, projectId)?.n ?? 0) > 0;
+
+	/**
+	 * Seed a project's published content from a {@link CmsSeed} — a template's
+	 * `content/` at project creation, or an export of another project. Writes
+	 * the published rows directly, outside the release flow: there is no editor
+	 * and nothing to revert to. Refuses when the project already has published
+	 * rows unless `force`, so a second run cannot silently overwrite edits.
+	 * Rows a forced seed does not name are left alone. Bumps `cms_version` so
+	 * cached public reads are invalidated.
+	 */
+	const seed = (
+		projectId: string,
+		input: CmsSeed,
+		opts: { force?: boolean } = {}
+	): SeedResponse => {
+		const tx = db.transaction((): SeedResponse => {
+			if (!opts.force && hasPublishedContent(projectId)) {
+				return { ok: false, reason: 'already-seeded' };
+			}
+			ensureProjectState(projectId);
+			const seedReleaseId = `seed-${projectId}`;
+			const at = nowIso();
+			const locales = new Set<string>();
+			let layouts = 0;
+			let pages = 0;
+			for (const [locale, byRoute] of Object.entries(input.layouts ?? {})) {
+				for (const [routeId, tree] of Object.entries(byRoute)) {
+					locales.add(locale);
+					layouts += 1;
+					upsertPublishedLayoutStmt().run(
+						projectId,
+						locale,
+						routeId,
+						JSON.stringify(tree),
+						at,
+						seedReleaseId
+					);
+				}
+			}
+			for (const [locale, byRoute] of Object.entries(input.pages ?? {})) {
+				for (const [routeId, value] of Object.entries(byRoute)) {
+					const entries: PageEntry[] = Array.isArray(value)
+						? value
+						: [{ params: {}, published: value }];
+					for (const entry of entries) {
+						locales.add(locale);
+						pages += 1;
+						upsertPublishedPageStmt().run(
+							projectId,
+							locale,
+							routeId,
+							paramsHash(entry.params),
+							JSON.stringify(entry.params),
+							JSON.stringify(entry.published),
+							entry.tombstone ? JSON.stringify(entry.tombstone) : null,
+							at,
+							seedReleaseId
+						);
+					}
+				}
+			}
+			const site = !!input.site;
+			if (input.site) {
+				upsertPublishedSiteStmt().run(projectId, JSON.stringify(input.site), at, seedReleaseId);
+			}
+			bumpProjectVersionStmt().run(projectId);
+			return { ok: true, seeded: { locales: [...locales].sort(), layouts, pages, site } };
+		});
+		return tx();
+	};
+
+	/**
+	 * Every published row, in the shape {@link seed} accepts. Tombstoned pages
+	 * are omitted: a seed describes content, not deletions.
+	 */
+	const exportPublished = (projectId: string): CmsSeed => {
+		const out: CmsSeed = { layouts: {}, pages: {} };
+		for (const { locale } of allLocalesForProjectStmt().all(projectId, projectId)) {
+			const layouts: Record<string, Tree> = {};
+			for (const r of allLayoutsByLocaleStmt().all(projectId, locale)) {
+				layouts[r.route_id] = parseTree(r.tree) ?? {};
+			}
+			if (Object.keys(layouts).length > 0) out.layouts![locale] = layouts;
+
+			const pages: Record<string, PageEntry[]> = {};
+			for (const r of allPagesByLocaleStmt().all(projectId, locale)) {
+				if (parseOutcome(r.tombstone)) continue;
+				(pages[r.route_id] ??= []).push({
+					params: parseParams(r.params),
+					published: parseTree(r.tree) ?? {}
+				});
+			}
+			if (Object.keys(pages).length > 0) out.pages![locale] = pages;
+		}
+		const site = getPublishedSiteTree(projectId);
+		if (Object.keys(site).length > 0) out.site = site;
+		return out;
+	};
+
 	return {
 		__resetProjectForTests,
 		addReleaseItems,
@@ -1952,6 +2067,7 @@ export const createStore = (db: SqliteDb) => {
 		createPage,
 		deleteMediaItem,
 		discardOpenRelease,
+		exportPublished,
 		discardReleaseItem,
 		findMediaItem,
 		findOpenReleaseByPreviewKey,
@@ -1963,6 +2079,7 @@ export const createStore = (db: SqliteDb) => {
 		getPublishedPageEntry,
 		getPublishedSiteTree,
 		getReleaseHistory,
+		hasPublishedContent,
 		listAllPages,
 		listMediaItems,
 		listPageParamValues,
@@ -1972,6 +2089,7 @@ export const createStore = (db: SqliteDb) => {
 		regeneratePublishedPreviewKey,
 		renamePage,
 		revertRelease,
+		seed,
 		seedPublishedDocs,
 		stagePageDelete
 	};

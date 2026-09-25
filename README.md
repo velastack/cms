@@ -201,13 +201,18 @@ If `endpoint` is omitted (e.g. when using `mockAdapter` for tests/demos), the pl
 
 ## CMS components
 
-All four included CMS components share the same prop shape:
+Every CMS component shares the same prop shape:
 
-| Prop       | Type               | Notes                                                                    |
-| ---------- | ------------------ | ------------------------------------------------------------------------ |
-| `name`     | `string`           | Field path inside this scope. Must be a static string at v1.             |
-| `fallback` | varies             | Rendered when no value is stored. `string` for text, HTML for rich text. |
-| `value`    | `unknown` (opt-in) | Per-item override used inside `<CmsRepeater/>`; bypasses scope lookup.   |
+| Prop       | Type               | Notes                                                                                                                                           |
+| ---------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`     | `string`           | Field path inside this scope. Must be a static string at v1.                                                                                    |
+| `scope`    | `'root' \| string` | Read and write a value that lives in the root layout scope (`'root'`, i.e. `layout:/`) or another param-less layout scope (`layout:/(public)`). |
+| `fallback` | varies             | Rendered when **nothing** is stored. `string` for text, HTML for rich text, `{ url, alt }` or a URL for images.                                 |
+| `value`    | `unknown` (opt-in) | Per-item override; bypasses scope lookup and disables editing.                                                                                  |
+
+Two stored states are distinct: `undefined` (nothing stored) renders the fallback, `null` (the editor cleared the field) renders empty. Editables write `null` on clear, never drop the key, so a cleared field can't fall back to the template's demo copy after publish.
+
+`scope="root"` is how site-wide content — hours, contact, navigation, branding — is edited where it renders: put the component in the root `+layout.svelte` and reference the same `name` from any page with `scope="root"`. The payload already carries every enclosing layout tree, so no extra fetch happens.
 
 ### `<CmsText />`
 
@@ -248,7 +253,55 @@ Renders an `<img>`. Edit mode shows the current image plus a URL input.
 </CmsRepeater>
 ```
 
-Iterates an array stored at `name`. Inside the snippet, pass per-item values via `value=` to bypass scope lookup. Edit mode renders the same snippet for each item plus add/remove controls and per-key inputs.
+Iterates an array stored at `name`. Inside the snippet, pass per-item values via `value=` to bypass scope lookup. Edit mode renders the same snippet for each item plus add/remove controls and per-key inputs. `CmsRepeater` is the placeholder for the structured list components; new templates should build on `defineStructured` below.
+
+## Structured components
+
+Hours, team, testimonials and the like are one value with a fixed shape, edited in a slot-anchored popover and rendered by the template through a snippet. The package ships the pieces a structured component is made of; the components themselves come with the editor-components release.
+
+```ts
+// hours.ts — the value's rules
+import { defineStructured, registerStructured, asItems, asString } from '@velastack/cms';
+
+export const hours = registerStructured(
+	defineStructured<Hours>({
+		component: 'CmsHours', // canonical export name, recorded in the manifest
+		version: 1, // written as `v` on every value
+		translatable: ['note'], // root fields that translate
+		items: { key: 'days', translatable: ['label'] }, // the list and its translatable fields
+		normalize: (raw) => ({ v: 1, note: asString(raw?.note), days: asItems(raw?.days, …) }),
+		empty: () => ({ v: 1, note: '', days: [] })
+	})
+);
+```
+
+```svelte
+<!-- cms-hours.svelte — the display component -->
+<script lang="ts">
+	import { useCmsField } from '@velastack/cms';
+	let { name, scope, fallback, children } = $props();
+	const field = useCmsField(
+		() => ({ name, scope }),
+		(raw) => hours.read(raw, fallback)
+	);
+</script>
+
+{#if field.editable}
+	{#await import('./cms-hours-editable.svelte') then { default: Editable }}
+		<Editable {field} {children} />
+	{/await}
+{:else}
+	{@render children(field.current)}
+{/if}
+```
+
+The editable sibling wraps `StructuredEditorPopover` from `@velastack/cms/editor` (also `FieldInput`, `ReorderButtons`, the Popover / Tabs / Switch / Checkbox / Sheet primitives and `CmsMediaPicker`), passes a `preview` snippet and an `editor` snippet over a local draft, and the popover commits on **Done**. Edit mode is page-wide; the bar's Save flushes the draft.
+
+Rules every structured value follows (`core/structured.ts`):
+
+- **Whole-object writes, explicit `null` clears.** Components never patch a leaf; they write the full `{ v, … }` object. Cleared fields are `null`.
+- **List items carry a stable `id`** (`newItemId()`); reorder and delete work because arrays replace wholesale on merge.
+- **Localisation is a string overlay.** The default locale stores the full value at `<name>`; every other locale stores only strings at `<name>.$t.<id>.<field>` (`_` is the id for root fields). `read()` folds the overlay in, structure never forks between languages, and the popover's locale tabs write only the overlay. The Locales panel counts translatable strings per locale for every structured usage on the current route.
 
 ### `<CmsEntries />`
 
@@ -296,7 +349,7 @@ A component is treated as a CMS component if **any** of the following hold:
 
 2. **It's a named export from your local `src/lib/components/cms/index.{ts,js}` barrel.** Re-export your component there if you prefer a single import path..
 
-3. **It's imported from the `@velastack/cms` package itself.** The four built-ins (`CmsText`, `CmsRichText`, `CmsImage`, `CmsRepeater`) work this way: any import resolving inside the installed `@velastack/cms` package is auto-classified.
+3. **It's imported from the `@velastack/cms` package itself.** Every named import from `@velastack/cms` is a CMS component, whether or not the bundler resolved the package.
 
 ### Third-party packs (opt-in)
 
@@ -332,13 +385,12 @@ String patterns match `source === pattern || source.startsWith(pattern + '/')`. 
 
 A CMS component should:
 
-- Accept `{ name: string; fallback?: string; value?: unknown }` props (and any extras you need).
-- Call `getCmsScope()` from `cms` to find its scope.
-- Read drafts via `cmsStore.hasDraft(scopeKey, name)` / `cmsStore.getValue(scopeKey, name)` when `cmsStore.isEditing` is true; fall back to `page.data.cms.docs[scopeKey][name]` otherwise.
-- Skip scope lookup when `value !== undefined` — that prop is the per-item override used inside `<CmsRepeater/>`.
-- Optionally provide an editable sibling that's dynamically `import()`'d when `cmsStore.isEditing` flips on, so editing code doesn't ship to public visitors.
+- Accept `{ name: string; scope?: string; fallback?: …; value?: unknown }` props (and any extras you need).
+- Call `useCmsField(() => ({ name, scope, value }), read)` once at init. It resolves the scope (context, `'root'`, or an explicit id), reads the merged value, reports `editable`, and exposes `set` / `clear`.
+- Treat `undefined` as "render the fallback" and `null` as "render empty" in `read`.
+- Optionally provide an editable sibling that's dynamically `import()`'d when `field.editable` flips on, so editing code doesn't ship to public visitors.
 
-The four built-ins are reference implementations; copy `src/lib/components/cms/cms-text.svelte` (or one of the other built-ins with a paired `*-editable.svelte` sibling) as a starting point.
+The built-ins are reference implementations; copy `src/lib/components/cms/cms-text.svelte` (or one of the others with a paired `*-editable.svelte` sibling) as a starting point.
 
 ## Architecture
 
@@ -399,7 +451,7 @@ Display components prefer drafts over published values when `isEditing` is true.
 
 ### Page metadata
 
-Page scopes carry an editable metadata field list (default: `title`, `description`, `canonical`, `robots`). Resolution order, per design:
+Every page scope carries the full metadata set by default — `title`, `description`, `ogTitle`, `ogDescription`, `ogImage`, `twitterCard`, `canonical`, `noindex` — and a route's `page.cms.ts` `metadata` schema adds to or overrides it. The SEO panel previews the search snippet and the share card; blank share fields reuse the search fields. Resolution order, per design:
 
 ```
 editable page metadata (cms.metadata)
@@ -407,7 +459,19 @@ editable page metadata (cms.metadata)
   → static site defaults (defineBaseMetaTags)
 ```
 
-Hand `cms.metadata` directly to `definePageMetaTags(...)` from `svelte-meta-tags` and you're done.
+`toMetaTags(cms.metadata, { siteName })` turns the branch into `svelte-meta-tags` props, with the title template and Open Graph site name from the root layout's `branding.name`:
+
+```svelte
+<script lang="ts">
+	import { cms, toMetaTags } from '@velastack/cms';
+	const siteName = $derived(cms.docs['layout:/']?.branding?.name as string | undefined);
+	const metaTags = $derived(deepMerge(data.baseMetaTags, toMetaTags(cms.metadata, { siteName })));
+</script>
+```
+
+### Site options
+
+`createCms({ site })` declares the **Site Options** panel: project-wide values that never render on the page — the schema.org type (`enum`), the default share image (`image`), which locales are enabled (`boolean`). Field types are `text`, `markdown`, `number`, `datetime`, `url`, `color`, `image`, `enum` (with `values`) and `boolean`. Anything a visitor sees belongs in the root layout scope, edited in place with `scope="root"`; the site tree is one non-localised tree per project.
 
 ## Adapters
 
@@ -578,6 +642,24 @@ cms.locale; // 'es'
 cms.locales; // ['en', 'es', 'fr']
 ```
 
+## Seeding a project
+
+A fresh project should open with content, not a blank site. The backend accepts a project's whole published state as one object and returns it in the same shape:
+
+```ts
+type CmsSeed = {
+	layouts?: Record<locale, Record<routeId, Tree>>;
+	pages?: Record<locale, Record<routeId, Tree | PageEntry[]>>; // a bare tree is a static page
+	site?: Tree;
+};
+```
+
+- `POST /seed` with a `CmsSeed` (plus `force?: true`) writes the published rows directly, outside the release flow. It answers `409 { ok: false, reason: 'already-seeded' }` when the project already has published rows unless `force` is set, so it can never silently overwrite edits. Image values are seeded as URLs; nothing is uploaded.
+- `GET /export` returns the published rows as a `CmsSeed` (tombstoned pages omitted).
+- In-process: `backend.store.seed(projectId, seed, { force })` and `backend.store.exportPublished(projectId)`.
+
+Both routes require an editor session. A host that creates projects (velastack.dev's `/setup`) reads the template's published `content/` and calls `store.seed` right after creating the project, in the locales the owner enabled.
+
 ## Redirects & tombstones
 
 Pages can be deleted with three different outcomes:
@@ -611,9 +693,16 @@ cms({
 	endpoint: 'https://cms.example.com/v1/projects/p1/cms',
 	locales: ['en'], // mirror createCms({ locales })
 	mediaDir: 'static/cms-media', // download target (default)
-	mediaPrefix: '/cms-media' // URL prefix in rewritten content (default)
+	mediaPrefix: '/cms-media', // URL prefix in rewritten content (default)
+
+	// Content manifest: `content/<locale>.json` keyed by scope id. When the
+	// default locale's file exists its values are injected as `fallback`
+	// props into every walked .svelte file, so components stay name-only.
+	content: 'content' // default; `false` disables
 });
 ```
+
+Build tooling that needs the same parser — a `pack` step inlining fallbacks into a tarball, a `verify` step checking usages against a content manifest — imports it from `@velastack/cms/build`: `scanUsages(source)`, `injectFallbacks(source, treeOrResolver)` / `inlineFallbacks`, `buildManifest(...)` and `fallbackResolverFor(result, file, content)`. The manifest records each usage's component type (`scope.usages`), and the walk reports dynamic `name`s and out-of-chain `scope=` attributes as warnings instead of dropping them silently.
 
 The plugin also exposes `virtual:vela-cms/manifest` (typed via the package's ambient declaration). You almost never need to import it directly — `loadCms` does that internally — but it's there if you want to introspect the manifest at build time.
 
@@ -621,7 +710,7 @@ The plugin also exposes `virtual:vela-cms/manifest` (typed via the package's amb
 
 Static analysis is conservative on purpose:
 
-- `name=` props must be string literals or `name={'literal'}`. Computed names are not extracted.
+- `name=` props must be string literals or `name={'literal'}`. Computed names are not extracted; the plugin warns about each one.
 - Only static `import` of `.svelte` files is followed when walking the component graph. Bare specifiers (npm packages) are skipped unless they're the @velastack/cms package itself, are listed under `components`, or match a `traverse` pattern.
 - `<svelte:component this={…} />` and dynamic component selection are not traced.
 - Layout reset segments (`+page@layout.svelte`) are not yet supported.
