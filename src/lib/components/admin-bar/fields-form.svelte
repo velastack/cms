@@ -35,7 +35,10 @@
 			const g = f.group ?? GENERAL;
 			if (!names.includes(g)) names.push(g);
 		}
-		if (names.includes(GENERAL)) (names.splice(names.indexOf(GENERAL), 1), names.unshift(GENERAL));
+		if (names.includes(GENERAL)) {
+			names.splice(names.indexOf(GENERAL), 1);
+			names.unshift(GENERAL);
+		}
 		return names.map((name) => ({
 			name,
 			rows: pairRows(fields.filter((f) => (f.group ?? GENERAL) === name))
