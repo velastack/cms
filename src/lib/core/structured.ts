@@ -21,7 +21,7 @@
  *    the default locale only, so the item list can never fork between
  *    languages.
  */
-import { get, type Tree } from './path.js';
+import { get, leafPaths, type Tree } from './path.js';
 
 /** Branch under a structured value that holds a locale's string overlay. */
 export const TRANSLATIONS_KEY = '$t';
@@ -34,15 +34,29 @@ export type TranslationOverlay = Record<string, Record<string, string>>;
 
 export type StructuredItem = { id: string } & Record<string, unknown>;
 
+/**
+ * One list of items inside a structured value. `key` names the array field,
+ * `translatable` the item fields holding translatable text (a string, or an
+ * array of strings, translated per index as `<field>.<i>`), and `items` any
+ * lists nested inside each item (a collection item's `details`, a pricing
+ * tier's `features`). Every item at every level carries a stable `id`.
+ */
+export type ItemsSpec = {
+	key: string;
+	translatable: readonly string[];
+	items?: ItemsSpec | readonly ItemsSpec[];
+};
+
 export type StructuredSchema<T extends Tree> = {
 	/** Exported component name, e.g. `'CmsHours'`. Recorded in the manifest. */
 	component: string;
 	/** Current shape version, written as `v` on every value. */
 	version: number;
-	/** Root-level fields holding translatable strings, e.g. `['note']`. */
+	/** Root-level fields holding translatable strings, e.g. `['note']`. A
+	 * dotted path addresses a nested field (`'labels.closed'`). */
 	translatable: readonly string[];
-	/** The item list, when the value has one, and the item fields that translate. */
-	items?: { key: string; translatable: readonly string[] };
+	/** The value's item lists, when it has any, and the item fields that translate. */
+	items?: ItemsSpec | readonly ItemsSpec[];
 	/**
 	 * Turn anything the store may hold — an older version, a hand-seeded
 	 * partial object, garbage — into the current shape. Must never throw.
@@ -67,7 +81,8 @@ export const isPlainObject = (v: unknown): v is Tree =>
 export const defineStructured = <T extends Tree>(schema: StructuredSchema<T>): Structured<T> => ({
 	...schema,
 	read: (raw, fallback) => {
-		if (raw === undefined) return fallback === undefined ? schema.empty() : fallback;
+		if (raw === undefined)
+			return fallback === undefined ? schema.empty() : schema.normalize(fallback);
 		if (raw === null) return schema.empty();
 		const overlay = extractTranslations(raw);
 		const value = schema.normalize(stripTranslations(raw));
@@ -79,7 +94,9 @@ export const defineStructured = <T extends Tree>(schema: StructuredSchema<T>): S
 export const translationPath = (name: string, id: string, field: string): string =>
 	`${name}.${TRANSLATIONS_KEY}.${id}.${field}`;
 
-/** The `$t` branch of a stored value, when it is one. */
+/** The `$t` branch of a stored value, when it is one. A dotted field
+ * (`labels.closed`, `tags.0`) is stored nested by the path-based writes and
+ * read back flat here. */
 export const extractTranslations = (raw: unknown): TranslationOverlay | undefined => {
 	if (!isPlainObject(raw)) return undefined;
 	const t = raw[TRANSLATIONS_KEY];
@@ -88,8 +105,9 @@ export const extractTranslations = (raw: unknown): TranslationOverlay | undefine
 	for (const [id, fields] of Object.entries(t)) {
 		if (!isPlainObject(fields)) continue;
 		const strings: Record<string, string> = {};
-		for (const [field, v] of Object.entries(fields)) {
-			if (typeof v === 'string') strings[field] = v;
+		for (const path of leafPaths(fields)) {
+			const v = get(fields, path);
+			if (typeof v === 'string') strings[path] = v;
 		}
 		out[id] = strings;
 	}
@@ -113,11 +131,70 @@ const overlayString = (
 	return typeof v === 'string' && v !== '' ? v : undefined;
 };
 
+const specList = (items: ItemsSpec | readonly ItemsSpec[] | undefined): readonly ItemsSpec[] =>
+	items === undefined ? [] : Array.isArray(items) ? items : [items as ItemsSpec];
+
+const isStringArray = (v: unknown): v is string[] =>
+	Array.isArray(v) && v.every((s) => typeof s === 'string');
+
+/** `set` that copies along the path instead of mutating shared branches. */
+export const setIn = (obj: Tree, path: string, value: unknown): Tree => {
+	const [head, ...rest] = path.split('.');
+	const out = { ...obj };
+	if (rest.length === 0) {
+		out[head] = value;
+		return out;
+	}
+	const child = obj[head];
+	out[head] = setIn(isPlainObject(child) ? child : {}, rest.join('.'), value);
+	return out;
+};
+
+/**
+ * Fold a locale's string overlay into one object (the root value or an item)
+ * and, recursively, into the item lists it holds.
+ */
+const applyTo = (
+	obj: Tree,
+	id: string,
+	translatable: readonly string[],
+	items: ItemsSpec | readonly ItemsSpec[] | undefined,
+	overlay: TranslationOverlay
+): Tree => {
+	let out: Tree = { ...obj };
+	for (const field of translatable) {
+		const cur = get(obj, field);
+		if (typeof cur === 'string') {
+			const s = overlayString(overlay, id, field);
+			if (s !== undefined) out = setIn(out, field, s);
+		} else if (isStringArray(cur)) {
+			let changed = false;
+			const next = cur.map((v, i) => {
+				const s = overlayString(overlay, id, `${field}.${i}`);
+				if (s === undefined) return v;
+				changed = true;
+				return s;
+			});
+			if (changed) out = setIn(out, field, next);
+		}
+	}
+	for (const spec of specList(items)) {
+		const list = obj[spec.key];
+		if (!Array.isArray(list)) continue;
+		out[spec.key] = list.map((item) =>
+			isPlainObject(item) && typeof item.id === 'string'
+				? applyTo(item, item.id, spec.translatable, spec.items, overlay)
+				: item
+		);
+	}
+	return out;
+};
+
 /**
  * Fold a locale's string overlay into a normalized default-locale value.
- * Root fields come from the `_` id; item fields from the item's own `id`.
- * Only non-empty strings override, so an untranslated field shows the
- * default-locale text rather than a blank.
+ * Root fields come from the `_` id; item fields from the item's own `id`,
+ * at every nesting level. Only non-empty strings override, so an
+ * untranslated field shows the default-locale text rather than a blank.
  */
 export const applyTranslations = <T extends Tree>(
 	value: T,
@@ -125,34 +202,43 @@ export const applyTranslations = <T extends Tree>(
 	schema: Pick<StructuredSchema<T>, 'translatable' | 'items'>
 ): T => {
 	if (!overlay) return value;
-	const out: Tree = { ...value };
-	for (const field of schema.translatable) {
-		const s = overlayString(overlay, ROOT_ID, field);
-		if (s !== undefined) out[field] = s;
-	}
-	if (schema.items) {
-		const list = value[schema.items.key];
-		if (Array.isArray(list)) {
-			out[schema.items.key] = list.map((item) => {
-				if (!isPlainObject(item) || typeof item.id !== 'string') return item;
-				const next: Tree = { ...item };
-				for (const field of schema.items!.translatable) {
-					const s = overlayString(overlay, item.id, field);
-					if (s !== undefined) next[field] = s;
-				}
-				return next;
-			});
-		}
-	}
-	return out as T;
+	return applyTo(value, ROOT_ID, schema.translatable, schema.items, overlay) as T;
 };
 
 export type TranslatableField = {
 	/** Overlay id: an item id, or `_` for a root field. */
 	id: string;
+	/** Field path within the object the id addresses (`note`, `labels.closed`, `tags.0`). */
 	field: string;
 	/** The default-locale string being translated. */
 	source: string;
+};
+
+const collectFrom = (
+	obj: Tree,
+	id: string,
+	translatable: readonly string[],
+	items: ItemsSpec | readonly ItemsSpec[] | undefined,
+	out: TranslatableField[]
+): void => {
+	for (const field of translatable) {
+		const cur = get(obj, field);
+		if (typeof cur === 'string') {
+			if (cur !== '') out.push({ id, field, source: cur });
+		} else if (isStringArray(cur)) {
+			cur.forEach((s, i) => {
+				if (s !== '') out.push({ id, field: `${field}.${i}`, source: s });
+			});
+		}
+	}
+	for (const spec of specList(items)) {
+		const list = obj[spec.key];
+		if (!Array.isArray(list)) continue;
+		for (const item of list) {
+			if (!isPlainObject(item) || typeof item.id !== 'string') continue;
+			collectFrom(item, item.id, spec.translatable, spec.items, out);
+		}
+	}
 };
 
 /**
@@ -164,22 +250,7 @@ export const translatableFields = <T extends Tree>(
 	schema: Pick<StructuredSchema<T>, 'translatable' | 'items'>
 ): TranslatableField[] => {
 	const out: TranslatableField[] = [];
-	for (const field of schema.translatable) {
-		const s = value[field];
-		if (typeof s === 'string' && s !== '') out.push({ id: ROOT_ID, field, source: s });
-	}
-	if (schema.items) {
-		const list = value[schema.items.key];
-		if (Array.isArray(list)) {
-			for (const item of list) {
-				if (!isPlainObject(item) || typeof item.id !== 'string') continue;
-				for (const field of schema.items.translatable) {
-					const s = item[field];
-					if (typeof s === 'string' && s !== '') out.push({ id: item.id, field, source: s });
-				}
-			}
-		}
-	}
+	collectFrom(value, ROOT_ID, schema.translatable, schema.items, out);
 	return out;
 };
 
@@ -243,3 +314,23 @@ export const newItemId = (): string => {
 /** Read a structured value's overlay for one locale out of a whole scope tree. */
 export const overlayAt = (tree: Tree | undefined, name: string): TranslationOverlay | undefined =>
 	extractTranslations(get(tree, name));
+
+/** A list of strings; anything else is dropped. */
+export const asStrings = (v: unknown): string[] =>
+	Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string') : [];
+
+/** A nullable string: `null` (cleared) stays `null`; anything else is a string. */
+export const asOptionalString = (v: unknown): string | null =>
+	typeof v === 'string' && v !== '' ? v : null;
+
+/** One of a fixed set of strings, else the fallback. */
+export const asEnum = <E extends string>(v: unknown, values: readonly E[], fallback: E): E =>
+	typeof v === 'string' && (values as readonly string[]).includes(v) ? (v as E) : fallback;
+
+/** Move an item within a list, returning a new list. */
+export const moveItem = <I>(list: readonly I[], from: number, to: number): I[] => {
+	const next = [...list];
+	const [item] = next.splice(from, 1);
+	next.splice(to, 0, item);
+	return next;
+};

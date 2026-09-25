@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { cmsStore, type ReleaseItem } from '$lib/components/cms/cms-store.svelte.js';
 	import type { CmsPayload } from '$lib/components/cms/scope.js';
-	import { getStructured } from '$lib/components/cms/structured-registry.js';
+	import { getStructured } from '$lib/core/structured-registry.js';
 	import { countTranslations, extractTranslations } from '$lib/core/structured.js';
 	import PanelFooter from './panel-footer.svelte';
 	import PanelHeader from './panel-header.svelte';

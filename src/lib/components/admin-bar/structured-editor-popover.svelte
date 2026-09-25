@@ -24,6 +24,7 @@
 	import PencilIcon from './icons/pencil.svelte';
 	import { Button } from './ui/button/index.js';
 	import { Input } from './ui/input/index.js';
+	import { Textarea } from './ui/textarea/index.js';
 	import * as Popover from './ui/popover/index.js';
 	import * as Sheet from './ui/sheet/index.js';
 	import * as Tabs from './ui/tabs/index.js';
@@ -155,12 +156,20 @@
 						<span class="vela:text-[12px] vela:text-bar-text-secondary vela:truncate">
 							{f.source}
 						</span>
-						<Input
-							type="text"
-							value={translationValue(tab, f)}
-							placeholder={f.source}
-							oninput={(e) => setTranslation(tab, f, e.currentTarget.value)}
-						/>
+						{#if f.source.length > 80 || f.source.includes('<')}
+							<Textarea
+								value={translationValue(tab, f)}
+								placeholder={f.source}
+								oninput={(e) => setTranslation(tab, f, e.currentTarget.value)}
+							/>
+						{:else}
+							<Input
+								type="text"
+								value={translationValue(tab, f)}
+								placeholder={f.source}
+								oninput={(e) => setTranslation(tab, f, e.currentTarget.value)}
+							/>
+						{/if}
 					</label>
 				{/each}
 			{/if}

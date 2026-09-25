@@ -40,8 +40,9 @@
 		onChange: (next: unknown) => void;
 		label?: string;
 		placeholder?: string;
-		/** Options for `enum`. */
+		/** Options for `enum`, and optional display names. */
 		values?: readonly string[];
+		names?: Readonly<Record<string, string>>;
 		/** Right-aligned text beside the label, e.g. a character counter. */
 		hint?: string;
 		hintClass?: string;
@@ -57,6 +58,7 @@
 		label,
 		placeholder = '',
 		values = [],
+		names,
 		hint,
 		hintClass,
 		endpoint,
@@ -85,6 +87,11 @@
 		return '';
 	});
 	const imageIsObject = $derived(!!value && typeof value === 'object');
+	const imageAlt = $derived(
+		imageIsObject && typeof (value as { alt?: unknown }).alt === 'string'
+			? ((value as { alt: string }).alt as string)
+			: ''
+	);
 
 	const setString = (raw: string) => onChange(raw === '' ? null : raw);
 	const setNumber = (raw: string) => {
@@ -95,6 +102,9 @@
 	const setImage = (url: string) => {
 		if (imageIsObject) onChange({ ...(value as Record<string, unknown>), url: url || null });
 		else onChange(url === '' ? null : url);
+	};
+	const setAlt = (alt: string) => {
+		if (imageIsObject) onChange({ ...(value as Record<string, unknown>), alt: alt || null });
 	};
 
 	let libraryOpen = $state(false);
@@ -207,6 +217,15 @@
 					alt=""
 					class="vela:max-h-24 vela:w-auto vela:rounded vela:border vela:border-[var(--cms-bar-divider)] vela:object-contain vela:bg-[var(--cms-bar-bg-hover)]"
 				/>
+				{#if imageIsObject}
+					<Input
+						type="text"
+						value={imageAlt}
+						placeholder="Alt text"
+						aria-label="Alt text"
+						oninput={(e) => setAlt(e.currentTarget.value)}
+					/>
+				{/if}
 			{/if}
 		{:else}
 			<Input
