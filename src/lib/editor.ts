@@ -10,6 +10,10 @@ export { default as StructuredEditorPopover } from './components/admin-bar/struc
 export { default as FieldInput } from './components/admin-bar/field-input.svelte';
 export type { FieldInputType } from './components/admin-bar/field-input.svelte';
 export { default as ReorderButtons } from './components/admin-bar/reorder-buttons.svelte';
+export { default as FieldsForm } from './components/admin-bar/fields-form.svelte';
+export { default as ListField } from './components/admin-bar/list-field.svelte';
+export { default as LinkInput } from './components/admin-bar/link-input.svelte';
+export { default as RichTextInput } from './components/admin-bar/rich-text-input.svelte';
 export { default as CssRoot } from './components/admin-bar/css-root.svelte';
 export { Button } from './components/admin-bar/ui/button/index.js';
 export { Input } from './components/admin-bar/ui/input/index.js';

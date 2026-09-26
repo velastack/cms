@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { cms } from '$lib/index.js';
+	import { page } from '$app/state';
+	import { cms, CmsNav, isActive } from '$lib/index.js';
+	import { demoPrimaryNav } from './demo-content.js';
 </script>
 
 <header class="header">
@@ -7,11 +9,19 @@
 		{(cms.site.branding as { name?: string } | undefined)?.name ?? 'Velastack'}
 	</a>
 	<nav>
-		<a href="/about">About</a>
-		<a href="/rooms/suite-1">Suite 1</a>
-		<a href="/rooms/suite-2">Suite 2</a>
-		<a href="/contact">Contact</a>
-		<a href="/dashboard">Dashboard</a>
+		<CmsNav name="nav.primary" scope="root" fallback={demoPrimaryNav}>
+			{#snippet children(items)}
+				{#each items as item (item.id)}
+					<a
+						href={item.href}
+						target={item.newTab ? '_blank' : undefined}
+						aria-current={isActive(item, page.url) ? 'page' : undefined}
+					>
+						{item.label}
+					</a>
+				{/each}
+			{/snippet}
+		</CmsNav>
 	</nav>
 </header>
 
@@ -37,7 +47,8 @@
 		color: inherit;
 		text-decoration: none;
 	}
-	nav a:hover {
+	nav a:hover,
+	nav a[aria-current='page'] {
 		text-decoration: underline;
 	}
 </style>

@@ -238,70 +238,93 @@ Rendered with `{@html}`. Edit mode swaps for a `<textarea>`.
 
 Renders an `<img>`. Edit mode shows the current image plus a URL input.
 
-### `<CmsRepeater />`
-
-```svelte
-<CmsRepeater name="gallery.items">
-	{#snippet children(item)}
-		<figure>
-			<CmsImage name="src" value={item.src} alt={item.caption} />
-			<figcaption>
-				<CmsText name="caption" value={item.caption} />
-			</figcaption>
-		</figure>
-	{/snippet}
-</CmsRepeater>
-```
-
-Iterates an array stored at `name`. Inside the snippet, pass per-item values via `value=` to bypass scope lookup. Edit mode renders the same snippet for each item plus add/remove controls and per-key inputs. `CmsRepeater` is the placeholder for the structured list components; new templates should build on `defineStructured` below.
-
 ## Structured components
 
-Hours, team, testimonials and the like are one value with a fixed shape, edited in a slot-anchored popover and rendered by the template through a snippet. The package ships the pieces a structured component is made of; the components themselves come with the editor-components release.
+Hours, navigation, a team, a price list: one value with a fixed shape, edited in a slot-anchored popover and rendered by the template through a snippet. Every structured component is headless: it reads the value at `name`, normalizes it, derives the view a template needs and hands it to `children`. It never emits markup of its own.
+
+```svelte
+<script lang="ts">
+	import { CmsHours, CmsNav, isActive } from '@velastack/cms';
+</script>
+
+<!-- In the root layout: site-wide by construction. -->
+<CmsNav name="nav.primary">
+	{#snippet children(items)}
+		{#each items as item (item.id)}
+			<a href={item.href} aria-current={isActive(item, page.url) ? 'page' : undefined}
+				>{item.label}</a
+			>
+		{/each}
+	{/snippet}
+</CmsNav>
+
+<!-- On the contact page: the same value, read and written through the root scope. -->
+<CmsHours name="hours" scope="root">
+	{#snippet children(h)}
+		<p>{h.today.label}: {h.today.text} · {h.status}</p>
+		{#each h.rows as row (row.id)}<dt>{row.days}</dt>
+			<dd>{row.text}</dd>{/each}
+	{/snippet}
+</CmsHours>
+```
+
+| Component                                                                      | Value                                                                                                                                 | Snippet receives                                                                | Helpers                                                 |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `CmsNav`                                                                       | `{ items: [{ id, label, link, children }] }`                                                                                          | items with resolved `href`                                                      | `isActive(item, url)`                                   |
+| `CmsHours`                                                                     | week grid, `exceptions`, `note`, `labels`, `timezone`                                                                                 | `rows`, `today`, `isOpenNow`, `status`, `exceptionRows` in the visitor's locale | `toOpeningHoursSpecification`                           |
+| `CmsContact`                                                                   | `name`, `address`, `phones`, `emails`, `whatsapp`, `directionsUrl`, `geo`, `labels`                                                   | plus `telHref`, `mailto`, `whatsappHref`, `mapsHref`, `formattedAddress`        | `toPostalAddress`                                       |
+| `CmsSocialLinks`                                                               | `{ items: [{ id, platform, url, label }] }`                                                                                           | items with `name` (label or platform name)                                      | `toSameAs`, `SOCIAL_PLATFORMS`                          |
+| `CmsCollection`                                                                | rooms, services, tours: title, summary, body, image, gallery, price, link, tags, features, `details` key-value list, featured, hidden | visible items with `href`; props `limit`, `featured`, `tag` slice them          | `formatCollectionPrice`, `collectionTags`, `toItemList` |
+| `CmsTeam`                                                                      | name, role, rich bio, photo, email, phone, profile links                                                                              | members                                                                         |                                                         |
+| `CmsTestimonials`                                                              | rich quote, author, role, company, photo, rating, source, date                                                                        | testimonials                                                                    | `toReview`                                              |
+| `CmsPricing`                                                                   | `currency`, `labels.custom`, tiers with a feature checklist and a CTA                                                                 | tiers with `priceText` and `href`                                               | `formatPrice`                                           |
+| `CmsFaq`                                                                       | question, rich answer                                                                                                                 | questions                                                                       | `toFaqPage`                                             |
+| `CmsStats`, `CmsSteps`, `CmsTimeline`, `CmsGallery`, `CmsLogos`, `CmsSchedule` | fixed list presets                                                                                                                    | items                                                                           | `logosView`, `scheduleByDay`                            |
+
+Templates use only these exports; there is no open item schema. A shape outside the presets is a new preset in the package. `fallback` takes the full value or a bare item list and is normalized like a stored value, so a hand-written seed with missing fields is safe. Prices, times, dates and day names format in the visitor's locale; `isOpenNow` is computed when the page renders, so a prerendered page shows the state at build time.
+
+Every value type (`CmsHoursValue`, `NavItem`, …), schema (`cmsHours`, …) and JSON-LD helper is exported from the package root.
+
+### Building one
+
+The package ships the pieces a structured component is made of, and the components above are built from nothing else.
 
 ```ts
-// hours.ts — the value's rules
-import { defineStructured, registerStructured, asItems, asString } from '@velastack/cms';
+// The value's rules: a versioned shape, its translatable strings, and the form the popover draws.
+import { defineForm, asItems, asString } from '@velastack/cms';
 
-export const hours = registerStructured(
-	defineStructured<Hours>({
-		component: 'CmsHours', // canonical export name, recorded in the manifest
-		version: 1, // written as `v` on every value
-		translatable: ['note'], // root fields that translate
-		items: { key: 'days', translatable: ['label'] }, // the list and its translatable fields
-		normalize: (raw) => ({ v: 1, note: asString(raw?.note), days: asItems(raw?.days, …) }),
-		empty: () => ({ v: 1, note: '', days: [] })
-	})
-);
+export const cmsFaq = defineForm<CmsFaqValue>({
+	component: 'CmsFaq', // canonical export name, recorded in the manifest
+	label: 'FAQ', // popover header
+	version: 1, // written as `v` on every value
+	translatable: [], // root fields that translate (dotted paths allowed: 'labels.closed')
+	items: { key: 'items', translatable: ['question', 'answer'] }, // lists and their translatable fields; nest `items` for lists inside items
+	normalize: (raw) => ({ v: 1, items: asItems(raw?.items, …) }),
+	empty: () => ({ v: 1, items: [] }),
+	fields: [{ key: 'items', type: 'list', label: 'Questions', itemLabel: 'question', titleKey: 'question', blank: () => ({ question: '', answer: '' }), fields: [
+		{ key: 'question', label: 'Question', type: 'text' },
+		{ key: 'answer', label: 'Answer', type: 'html' }
+	] }]
+});
 ```
 
 ```svelte
-<!-- cms-hours.svelte — the display component -->
+<!-- The display component, inside the package: the generic one, given the schema and a view function. -->
 <script lang="ts">
-	import { useCmsField } from '@velastack/cms';
-	let { name, scope, fallback, children } = $props();
-	const field = useCmsField(
-		() => ({ name, scope }),
-		(raw) => hours.read(raw, fallback)
-	);
+	import Structured from './cms-structured.svelte'; // src/lib/components/cms, inside the package
+	let { name, scope, fallback, value, children } = $props();
 </script>
 
-{#if field.editable}
-	{#await import('./cms-hours-editable.svelte') then { default: Editable }}
-		<Editable {field} {children} />
-	{/await}
-{:else}
-	{@render children(field.current)}
-{/if}
+<Structured schema={cmsFaq} {name} {scope} {fallback} {value} view={faqView} {children} />
 ```
 
-The editable sibling wraps `StructuredEditorPopover` from `@velastack/cms/editor` (also `FieldInput`, `ReorderButtons`, the Popover / Tabs / Switch / Checkbox / Sheet primitives and `CmsMediaPicker`), passes a `preview` snippet and an `editor` snippet over a local draft, and the popover commits on **Done**. Edit mode is page-wide; the bar's Save flushes the draft.
+Field types: `text`, `long-string`, `html` (TipTap), `number`, `boolean`, `date`, `time`, `url`, `image` and `images` (media picker, alt text), `enum`, `link` (page picker or URL, new tab), `strings` (one per line), `rating`, `list` (collapsible cards with reorder). `group` puts a field in a tab; `half` shares a row with the next field. A bespoke editor (the hours week grid) wraps `StructuredEditorPopover` from `@velastack/cms/editor` and renders `FieldsForm` for the rest; `FieldInput`, `ListField`, `LinkInput`, `RichTextInput`, `ReorderButtons` and the Popover / Tabs / Switch / Checkbox / Sheet primitives are exported there too. The popover commits on **Done**; edit mode is page-wide and the bar's Save flushes the draft.
 
 Rules every structured value follows (`core/structured.ts`):
 
 - **Whole-object writes, explicit `null` clears.** Components never patch a leaf; they write the full `{ v, … }` object. Cleared fields are `null`.
-- **List items carry a stable `id`** (`newItemId()`); reorder and delete work because arrays replace wholesale on merge.
-- **Localisation is a string overlay.** The default locale stores the full value at `<name>`; every other locale stores only strings at `<name>.$t.<id>.<field>` (`_` is the id for root fields). `read()` folds the overlay in, structure never forks between languages, and the popover's locale tabs write only the overlay. The Locales panel counts translatable strings per locale for every structured usage on the current route.
+- **List items carry a stable `id`** (`newItemId()`) at every nesting level; reorder and delete work because arrays replace wholesale on merge.
+- **Localisation is a string overlay.** The default locale stores the full value at `<name>`; every other locale stores only strings at `<name>.$t.<id>.<field>` (`_` is the id for root fields, `field` may be a dotted path, and a string array translates per index as `tags.0`). `read()` folds the overlay in, structure never forks between languages, and the popover's locale tabs write only the overlay. The Locales panel counts translatable strings per locale for every structured usage on the current route.
 
 ### `<CmsEntries />`
 

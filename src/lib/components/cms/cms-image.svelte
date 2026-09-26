@@ -1,34 +1,12 @@
 <script lang="ts" module>
-	/**
-	 * Stored shape of an image slot. Seeds and fallbacks may pass a bare URL
-	 * string; it is normalized to `{ url }`. A cleared slot stores `url: null`.
-	 */
-	export type CmsImageValue = {
-		url?: string | null;
-		alt?: string | null;
-		width?: number;
-		height?: number;
-	};
-
-	export const normalizeImage = (raw: unknown): CmsImageValue => {
-		if (raw == null) return {};
-		if (typeof raw === 'string') return { url: raw };
-		if (typeof raw === 'object' && !Array.isArray(raw)) {
-			const r = raw as Record<string, unknown>;
-			const out: CmsImageValue = {};
-			if (typeof r.url === 'string') out.url = r.url;
-			if (typeof r.alt === 'string') out.alt = r.alt;
-			if (typeof r.width === 'number') out.width = r.width;
-			if (typeof r.height === 'number') out.height = r.height;
-			return out;
-		}
-		return {};
-	};
+	export { normalizeImage } from '../../core/shapes/image.js';
+	export type { CmsImageValue } from '../../core/shapes/image.js';
 </script>
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { useCmsField } from './use-cms-field.svelte.js';
+	import { normalizeImage, type CmsImageValue } from '../../core/shapes/image.js';
 
 	type Props = {
 		name: string;

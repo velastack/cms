@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { cmsStore, type CmsScopeRef } from './cms-store.svelte.js';
 	import { resolveRouteUrl } from '../admin-bar/resolve-route.js';
+	import { fetchPageOptions, pageOptionValue, type PageOption } from '../admin-bar/page-options.js';
 	import type { CmsLinkValue, CmsLinkRenderProps } from './cms-link.svelte';
 	import { Button } from '../admin-bar/ui/button/index.js';
 	import { Input } from '../admin-bar/ui/input/index.js';
@@ -15,19 +16,6 @@
 	import CheckIcon from '../admin-bar/icons/check.svelte';
 	import XIcon from '../admin-bar/icons/x.svelte';
 	import Trash from '../admin-bar/icons/trash-2.svelte';
-
-	type PageEntry = {
-		params: Record<string, string>;
-		isDraft: boolean;
-		isDeletePending: boolean;
-		redirectTo?: string;
-		gone?: boolean;
-	};
-	type PageRoute = {
-		routeId: string;
-		ownedParams: string[];
-		entries: PageEntry[];
-	};
 
 	type Props = {
 		scope: CmsScopeRef;
@@ -65,7 +53,7 @@
 	let urlInput = $state('');
 	let urlInputEl: HTMLInputElement | null = $state(null);
 
-	let pages: PageRoute[] = $state([]);
+	let pageOptions: PageOption[] = $state([]);
 	let pagesLoaded = $state(false);
 	let selectedValue = $state('');
 	let pageSelectOpen = $state(false);
@@ -128,60 +116,16 @@
 		else if (e.key === 'Escape') cancelMode(e);
 	};
 
-	const optionValueFor = (routeId: string, params: Record<string, string>) =>
-		`${routeId}::${JSON.stringify(params)}`;
-
 	const enterPageMode = async (e: Event) => {
 		e.preventDefault();
 		e.stopPropagation();
-		selectedValue = current.routeId ? optionValueFor(current.routeId, current.params ?? {}) : '';
+		selectedValue = current.routeId ? pageOptionValue(current.routeId, current.params ?? {}) : '';
 		mode = 'page';
 		if (!pagesLoaded) {
-			try {
-				const res = await fetch(`${endpoint}/pages`, { credentials: 'include' });
-				if (res.ok) {
-					const data = (await res.json()) as { routes: PageRoute[] };
-					pages = data.routes;
-				}
-			} catch {
-				/* ignore — picker shows "No pages found" */
-			}
+			pageOptions = await fetchPageOptions(endpoint);
 			pagesLoaded = true;
 		}
 	};
-
-	const pageOptions = $derived.by(() => {
-		const opts: {
-			value: string;
-			label: string;
-			routeId: string;
-			params: Record<string, string>;
-		}[] = [];
-		for (const r of pages) {
-			const entries =
-				r.entries.length > 0
-					? r.entries
-					: [{ params: {} as Record<string, string>, isDraft: false, isDeletePending: false }];
-			for (const ent of entries) {
-				// Tombstones (redirected / gone) aren't real link targets.
-				if (ent.redirectTo || ent.gone) continue;
-				let url: string;
-				try {
-					url = resolveRouteUrl(r.routeId, ent.params);
-				} catch {
-					continue;
-				}
-				opts.push({
-					value: optionValueFor(r.routeId, ent.params),
-					label: url,
-					routeId: r.routeId,
-					params: ent.params
-				});
-			}
-		}
-		opts.sort((a, b) => a.label.localeCompare(b.label));
-		return opts;
-	});
 
 	const applyPageValue = (value: string) => {
 		const opt = pageOptions.find((o) => o.value === value);
