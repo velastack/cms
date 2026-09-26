@@ -4,8 +4,8 @@
  * count translatable strings for every usage the manifest recorded on the
  * current route without importing the components themselves.
  */
-import type { Structured } from '../../core/structured.js';
-import type { Tree } from '../../core/path.js';
+import type { Structured } from './structured.js';
+import type { Tree } from './path.js';
 
 const registry = new Map<string, Structured<Tree>>();
 

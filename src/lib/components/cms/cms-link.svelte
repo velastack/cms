@@ -1,35 +1,15 @@
 <script lang="ts" module>
-	export type CmsLinkValue = {
-		label?: string;
-		/** Raw URL — used when `routeId` is absent. */
-		href?: string;
-		/** SvelteKit route id, e.g. `/blog/[slug]`. Resolved at render time. */
-		routeId?: string;
-		params?: Record<string, string>;
-		newTab?: boolean;
-	};
+	export { normalizeLink } from '../../core/shapes/link.js';
+	export type { CmsLinkValue } from '../../core/shapes/link.js';
 
 	export type CmsLinkRenderProps = { label: string; href: string; newTab: boolean };
-
-	export const normalizeLink = (raw: unknown): CmsLinkValue => {
-		if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
-		const r = raw as Record<string, unknown>;
-		const out: CmsLinkValue = {};
-		if (typeof r.label === 'string') out.label = r.label;
-		if (typeof r.href === 'string') out.href = r.href;
-		if (typeof r.routeId === 'string') out.routeId = r.routeId;
-		if (r.params && typeof r.params === 'object' && !Array.isArray(r.params)) {
-			out.params = r.params as Record<string, string>;
-		}
-		if (typeof r.newTab === 'boolean') out.newTab = r.newTab;
-		return out;
-	};
 </script>
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { useCmsField } from './use-cms-field.svelte.js';
 	import { resolveRouteUrl } from '../admin-bar/resolve-route.js';
+	import { normalizeLink, type CmsLinkValue } from '../../core/shapes/link.js';
 
 	type Props = {
 		name: string;

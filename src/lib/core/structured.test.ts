@@ -110,3 +110,90 @@ describe('translation overlay', () => {
 		expect(read.days.map((d) => d.label)).toEqual(['Monday', 'Sábado']);
 	});
 });
+
+describe('nested lists, dotted paths and string arrays', () => {
+	type Collection = {
+		v: number;
+		labels: { more: string };
+		items: Array<{
+			id: string;
+			title: string;
+			tags: string[];
+			details: Array<{ id: string; label: string; value: string }>;
+		}>;
+	};
+	const schema = {
+		translatable: ['labels.more'],
+		items: {
+			key: 'items',
+			translatable: ['title', 'tags'],
+			items: { key: 'details', translatable: ['label', 'value'] }
+		}
+	};
+	const value: Collection = {
+		v: 1,
+		labels: { more: 'Read more' },
+		items: [
+			{
+				id: 'a',
+				title: 'Suite',
+				tags: ['sea view', ''],
+				details: [{ id: 'd1', label: 'Sleeps', value: '4' }]
+			}
+		]
+	};
+
+	it('lists every string at every level', () => {
+		expect(translatableFields(value, schema)).toEqual([
+			{ id: ROOT_ID, field: 'labels.more', source: 'Read more' },
+			{ id: 'a', field: 'title', source: 'Suite' },
+			{ id: 'a', field: 'tags.0', source: 'sea view' },
+			{ id: 'd1', field: 'label', source: 'Sleeps' },
+			{ id: 'd1', field: 'value', source: '4' }
+		]);
+	});
+
+	it('applies an overlay at every level without mutating the source', () => {
+		const overlay = {
+			[ROOT_ID]: { 'labels.more': 'Leer más' },
+			a: { title: 'Suite (es)', 'tags.0': 'vista al mar' },
+			d1: { label: 'Duerme' }
+		};
+		const out = applyTranslations(value, overlay, schema);
+		expect(out.labels.more).toBe('Leer más');
+		expect(out.items[0].title).toBe('Suite (es)');
+		expect(out.items[0].tags).toEqual(['vista al mar', '']);
+		expect(out.items[0].details[0]).toEqual({ id: 'd1', label: 'Duerme', value: '4' });
+		expect(value.labels.more).toBe('Read more');
+		expect(value.items[0].tags[0]).toBe('sea view');
+		expect(countTranslations(value, overlay, schema)).toEqual({ total: 5, missing: 1 });
+	});
+
+	it('reads a dotted key back flat from a nested $t branch', () => {
+		const stored = { $t: { _: { labels: { more: 'Leer más' } }, a: { tags: { '0': 'vista' } } } };
+		expect(extractTranslations(stored)).toEqual({
+			_: { 'labels.more': 'Leer más' },
+			a: { 'tags.0': 'vista' }
+		});
+	});
+
+	it('accepts several item lists', () => {
+		const contact = { phones: [{ id: 'p', label: 'Desk' }], emails: [{ id: 'e', label: 'Hi' }] };
+		const s = {
+			translatable: [],
+			items: [
+				{ key: 'phones', translatable: ['label'] },
+				{ key: 'emails', translatable: ['label'] }
+			]
+		};
+		expect(translatableFields(contact, s).map((f) => f.id)).toEqual(['p', 'e']);
+	});
+});
+
+describe('read', () => {
+	it('normalizes the fallback so a partial fallback is safe', () => {
+		const out = hours.read(undefined, { days: [{ label: 'Mon' }] } as unknown as Hours);
+		expect(out.note).toBe('');
+		expect(out.days[0]).toEqual({ id: 'item-0', label: 'Mon', open: '', close: '' });
+	});
+});

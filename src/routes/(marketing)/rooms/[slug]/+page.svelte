@@ -2,14 +2,12 @@
 	import { page } from '$app/state';
 	import {
 		CmsDateTime,
+		CmsGallery,
 		CmsImage,
 		CmsMarkdown,
 		CmsNumber,
-		CmsRepeater,
 		CmsText
 	} from '$lib/index.js';
-
-	type GalleryItem = { src: string; caption: string };
 
 	const formatTime = (raw: string): string => {
 		const m = /^(\d{2}):(\d{2})/.exec(raw);
@@ -63,16 +61,18 @@ Need a recommendation? Ask the front desk for our [neighborhood guide](#).`}
 		/>
 	</section>
 
-	<section class="gallery">
-		<CmsRepeater name="gallery.items">
-			{#snippet children(item: GalleryItem)}
-				<figure>
-					<CmsImage name="src" value={item.src} alt={item.caption} />
-					<figcaption><CmsText name="caption" value={item.caption} /></figcaption>
-				</figure>
-			{/snippet}
-		</CmsRepeater>
-	</section>
+	<CmsGallery name="gallery.items">
+		{#snippet children(items)}
+			<section class="gallery">
+				{#each items as item (item.id)}
+					<figure>
+						<img src={item.image?.url} alt={item.image?.alt ?? item.caption} />
+						<figcaption>{item.caption}</figcaption>
+					</figure>
+				{/each}
+			</section>
+		{/snippet}
+	</CmsGallery>
 </article>
 
 <style>
@@ -123,6 +123,11 @@ Need a recommendation? Ask the front desk for our [neighborhood guide](#).`}
 	}
 	figure {
 		margin: 0;
+	}
+	figure img {
+		width: 100%;
+		height: auto;
+		border-radius: 0.25rem;
 	}
 	figcaption {
 		font-size: 0.9rem;

@@ -1,58 +1,41 @@
 <script lang="ts">
 	import { CmsText } from '$lib/index.js';
-	import DemoHours from '../_components/demo-hours.svelte';
+
+	const components = [
+		['nav', 'CmsNav', 'Navigation with one level of children; links pick a page or a URL.'],
+		[
+			'hours',
+			'CmsHours',
+			'Week grid, split shifts, exceptions; rows, today and open-now derived per locale.'
+		],
+		[
+			'contact',
+			'CmsContact',
+			'Address, phones, emails, WhatsApp, directions; hrefs and JSON-LD derived.'
+		],
+		['social-links', 'CmsSocialLinks', 'Ordered profiles with a platform for the icon set.'],
+		['collection', 'CmsCollection', 'Rooms, services, tours: one list, sliced on the home page.'],
+		['team', 'CmsTeam', 'People with a portrait, rich bio and profile links.'],
+		['testimonials', 'CmsTestimonials', 'Quotes with rating, source and date; Review JSON-LD.'],
+		['pricing', 'CmsPricing', 'Tiers with a feature checklist and a call to action.'],
+		['faq', 'CmsFaq', 'Questions with rich answers; FAQPage JSON-LD.'],
+		['presets', 'Presets', 'CmsStats, CmsSteps, CmsTimeline, CmsGallery, CmsLogos, CmsSchedule.']
+	] as const;
 </script>
 
-<section class="wrap">
-	<h1><CmsText name="structured.title" fallback="Structured editing" /></h1>
-	<p>
-		Business name from the root layout, edited from this page through
-		<code>scope="root"</code>:
-		<strong><CmsText name="branding.name" scope="root" fallback="Velastack CMS" /></strong>
-	</p>
+<h1><CmsText name="structured.title" fallback="Structured editing" /></h1>
+<p class="lede">
+	Every component below reads one versioned value, opens a popover editor in edit mode and hands the
+	typed view to a snippet. Business name from the root layout, edited here through
+	<code>scope="root"</code>:
+	<strong><CmsText name="branding.name" scope="root" fallback="Velastack CMS" /></strong>
+</p>
 
-	<h2>Opening hours</h2>
-	<DemoHours
-		name="hours"
-		scope="root"
-		fallback={{
-			v: 1,
-			note: 'Closed on public holidays',
-			days: [
-				{ id: 'mon', label: 'Monday', open: '09:00', close: '17:00' },
-				{ id: 'sat', label: 'Saturday', open: '10:00', close: '14:00' }
-			]
-		}}
-	>
-		{#snippet children(hours)}
-			<dl class="hours">
-				{#each hours.days as day (day.id)}
-					<dt>{day.label}</dt>
-					<dd>{day.open} – {day.close}</dd>
-				{/each}
-			</dl>
-			{#if hours.note}<p class="note">{hours.note}</p>{/if}
-		{/snippet}
-	</DemoHours>
-</section>
-
-<style>
-	.wrap {
-		max-width: 56rem;
-		margin: 0 auto;
-		padding: 3rem 1.25rem;
-	}
-	.hours {
-		display: grid;
-		grid-template-columns: max-content 1fr;
-		gap: 0.25rem 1rem;
-		margin: 0;
-	}
-	.hours dd {
-		margin: 0;
-	}
-	.note {
-		color: #555;
-		font-size: 0.9rem;
-	}
-</style>
+<ul class="cards">
+	{#each components as [slug, name, blurb] (slug)}
+		<li class="card">
+			<h3><a href={`/structured/${slug}`}>{name}</a></h3>
+			<p>{blurb}</p>
+		</li>
+	{/each}
+</ul>
