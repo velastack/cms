@@ -9,13 +9,14 @@
 export { default as CmsText } from './components/cms/cms-text.svelte';
 export { default as CmsRichText } from './components/cms/cms-rich-text.svelte';
 export { default as CmsMarkdown } from './components/cms/cms-markdown.svelte';
-export { default as CmsImage } from './components/cms/cms-image.svelte';
+export { default as CmsImage, normalizeImage } from './components/cms/cms-image.svelte';
+export type { CmsImageValue } from './components/cms/cms-image.svelte';
 export { default as CmsBoolean } from './components/cms/cms-boolean.svelte';
 export { default as CmsNumber } from './components/cms/cms-number.svelte';
 export type { CmsNumberProps } from './components/cms/cms-number.svelte';
 export { default as CmsDateTime } from './components/cms/cms-date-time.svelte';
 export type { CmsDateTimeMode, CmsDateTimeProps } from './components/cms/cms-date-time.svelte';
-export { default as CmsLink } from './components/cms/cms-link.svelte';
+export { default as CmsLink, normalizeLink } from './components/cms/cms-link.svelte';
 export type { CmsLinkValue, CmsLinkRenderProps } from './components/cms/cms-link.svelte';
 export { default as CmsRepeater } from './components/cms/cms-repeater.svelte';
 export { default as CmsEntries } from './components/cms/cms-entries.svelte';
@@ -23,8 +24,52 @@ export { default as CmsEntries } from './components/cms/cms-entries.svelte';
 // Admin bar (sync wrapper; admin-bar-internal + seo-panel are async chunks)
 export { default as AdminBar } from './components/admin-bar/admin-bar.svelte';
 
+// Building blocks for structured components: the field hook, the value
+// rules (versioned shapes, `$t` overlay) and the registry the Locales panel
+// reads. The editor popover and field inputs are admin-bar chunks, imported
+// lazily by editable siblings:
+//   `import('@velastack/cms/editor')`
+export {
+	useCmsField,
+	resolveScopeRef,
+	ROOT_SCOPE_ID
+} from './components/cms/use-cms-field.svelte.js';
+export type { CmsField, CmsFieldInput } from './components/cms/use-cms-field.svelte.js';
+export {
+	defineStructured,
+	applyTranslations,
+	countTranslations,
+	extractTranslations,
+	stripTranslations,
+	translatableFields,
+	translationPath,
+	asBoolean,
+	asItems,
+	asNumber,
+	asString,
+	newItemId,
+	ROOT_ID,
+	TRANSLATIONS_KEY
+} from './core/structured.js';
+export type {
+	Structured,
+	StructuredItem,
+	StructuredSchema,
+	TranslatableField,
+	TranslationOverlay
+} from './core/structured.js';
+export { registerStructured, getStructured } from './components/cms/structured-registry.js';
+
+// Page metadata → svelte-meta-tags props.
+export { toMetaTags } from './core/metadata.js';
+export type { MetaTagsOptions, MetaTagsOutput } from './core/metadata.js';
+
 // Per-route page configuration — declare in `page.cms.ts` next to `+page.svelte`.
-export { definePage } from './components/admin-bar/page-config.js';
+export {
+	definePage,
+	DEFAULT_METADATA_SCHEMA,
+	metadataSchemaFor
+} from './components/admin-bar/page-config.js';
 export type {
 	CmsPageConfig,
 	CmsCreatablePageConfig,
@@ -51,7 +96,11 @@ export type {
 	CmsManifest,
 	CmsManifestRoute,
 	CmsManifestScope,
+	CmsManifestUsage,
 	CmsPayload,
 	CmsScope,
-	CmsScopeEntry
+	CmsScopeEntry,
+	SiteFieldSchema,
+	SiteFieldType,
+	SiteSchema
 } from './components/cms/scope.js';

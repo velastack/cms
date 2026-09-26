@@ -11,7 +11,7 @@
  * `published_at` stay snake_case because that is what the JSON carries.
  */
 import type { Tree } from './path.js';
-import type { PageDeleteOutcome } from './page-entry.js';
+import type { PageDeleteOutcome, PageEntry } from './page-entry.js';
 
 export type { PageDeleteOutcome };
 
@@ -166,6 +166,39 @@ export type CmsDeployState = {
 	site?: { url: string };
 	latest?: CmsDeployRun | null;
 };
+
+// ---------------------------------------------------------------------------
+// Seed / export
+// ---------------------------------------------------------------------------
+
+/**
+ * A project's published content in one object: `layouts` and `pages` keyed
+ * `[locale][routeId]`, plus the non-localised `site` tree. `POST /seed`
+ * accepts it and `GET /export` returns it, so a template's published
+ * `content/` can seed a fresh project and a project can be dumped back into
+ * the same shape. A page keyed by route id may be a bare tree (a static page,
+ * `params: {}`) or a full `PageEntry[]`.
+ */
+export type CmsSeed = {
+	layouts?: Record<string, Record<string, Tree>>;
+	pages?: Record<string, Record<string, Tree | PageEntry[]>>;
+	site?: Tree;
+};
+
+export type SeedRequest = CmsSeed & {
+	/** Overwrite a project that already has published rows. */
+	force?: boolean;
+};
+
+export type SeedSummary = {
+	locales: string[];
+	layouts: number;
+	pages: number;
+	site: boolean;
+};
+
+export type SeedResponse =
+	{ ok: true; seeded: SeedSummary } | { ok: false; reason: 'already-seeded' };
 
 // ---------------------------------------------------------------------------
 // Response envelopes

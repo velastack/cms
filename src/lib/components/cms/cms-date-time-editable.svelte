@@ -16,7 +16,7 @@
 	);
 
 	const live = $derived(cmsStore.getValue(scope, name));
-	const display = $derived(typeof live === 'string' ? live : (initial ?? ''));
+	const display = $derived(typeof live === 'string' ? live : live === null ? '' : (initial ?? ''));
 
 	let el = $state<HTMLInputElement>();
 
@@ -29,8 +29,8 @@
 
 	const onInput = (e: Event) => {
 		const raw = (e.currentTarget as HTMLInputElement).value;
-		if (raw === '') return;
-		cmsStore.setValue(scope, name, raw);
+		// An emptied input clears the field explicitly (`null`).
+		cmsStore.setValue(scope, name, raw === '' ? null : raw);
 	};
 </script>
 

@@ -1,35 +1,26 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { getCmsScope } from './scope.js';
-	import { cmsStore, type CmsScopeRef } from './cms-store.svelte.js';
+	import { useCmsField } from './use-cms-field.svelte.js';
 
 	type Props = {
 		name: string;
+		scope?: string;
 		initial?: boolean;
 		value?: unknown;
 		children?: Snippet<[boolean]>;
 	};
-	let { name, initial = false, value, children }: Props = $props();
+	let { name, scope, initial = false, value, children }: Props = $props();
 
-	const scope = getCmsScope();
-	const ref = $derived<CmsScopeRef | null>(
-		scope ? { scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params } : null
+	const field = useCmsField(
+		() => ({ name, scope, value }),
+		(raw): boolean => (typeof raw === 'boolean' ? raw : raw === null ? false : initial)
 	);
 
-	const resolved = $derived.by(() => {
-		if (value !== undefined) return value;
-		return ref ? cmsStore.getValue(ref, name) : undefined;
-	});
-
-	const current = $derived(typeof resolved === 'boolean' ? resolved : initial);
-	const editable = $derived(cmsStore.isEditing && value === undefined && !!ref);
-
-	const toggle = () => {
-		if (ref) cmsStore.setValue(ref, name, !current);
-	};
+	const current = $derived(field.current);
+	const toggle = () => field.set(!current);
 </script>
 
-{#if editable && ref}
+{#if field.editable && field.ref}
 	<span class="cms-boolean-edit">
 		{@render children?.(current)}
 		<button

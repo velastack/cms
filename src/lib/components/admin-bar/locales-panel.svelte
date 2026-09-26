@@ -1,5 +1,9 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { cmsStore, type ReleaseItem } from '$lib/components/cms/cms-store.svelte.js';
+	import type { CmsPayload } from '$lib/components/cms/scope.js';
+	import { getStructured } from '$lib/components/cms/structured-registry.js';
+	import { countTranslations, extractTranslations } from '$lib/core/structured.js';
 	import PanelFooter from './panel-footer.svelte';
 	import PanelHeader from './panel-header.svelte';
 	import Panel from './panel.svelte';
@@ -42,12 +46,48 @@
 
 	const counts = $derived(cmsStore.workingCopyCountsByLocale);
 
+	// Translatable strings inside structured values on this route, per
+	// locale: every usage the manifest recorded whose component registered a
+	// structured schema. Overlays for the other locales are loaded on open so
+	// stored translations count.
+	$effect(() => {
+		for (const locale of locales) {
+			if (locale !== defaultLocale) void cmsStore.loadLocaleOverlay(locale);
+		}
+	});
+
+	const stringCounts = $derived.by(() => {
+		const out = new Map<string, { total: number; missing: number }>();
+		const cms = page.data.cms as CmsPayload | undefined;
+		if (!cms) return out;
+		for (const locale of locales) {
+			if (locale === defaultLocale) continue;
+			let total = 0;
+			let missing = 0;
+			for (const scope of Object.values(cms.scopes)) {
+				const ref = { scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params };
+				for (const usage of scope.usages ?? []) {
+					const schema = getStructured(usage.component);
+					if (!schema) continue;
+					const value = schema.read(cmsStore.getValue(ref, usage.name, defaultLocale), undefined);
+					const overlay = extractTranslations(cmsStore.getValue(ref, usage.name, locale));
+					const c = countTranslations(value, overlay, schema);
+					total += c.total;
+					missing += c.missing;
+				}
+			}
+			out.set(locale, { total, missing });
+		}
+		return out;
+	});
+
 	type Row = {
 		locale: string;
 		isDefault: boolean;
 		isCurrent: boolean;
 		edits: number;
 		missing: number;
+		strings: { total: number; missing: number } | null;
 	};
 
 	const rows = $derived.by<Row[]>(() => {
@@ -65,7 +105,8 @@
 				isDefault: locale === defaultLocale,
 				isCurrent: locale === currentLocale,
 				edits: counts[locale]?.total ?? 0,
-				missing
+				missing,
+				strings: stringCounts.get(locale) ?? null
 			};
 		});
 	});

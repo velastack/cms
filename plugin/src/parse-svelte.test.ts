@@ -62,14 +62,20 @@ describe('parseSvelteSource — component usages', () => {
 			`<script>\nimport { CmsText } from '$lib/components/cms';\n</script>` +
 			`\n<CmsText name="hero.title" />`;
 		const { componentUsages } = parseSvelteSource(code);
-		expect(componentUsages).toEqual([
+		expect(componentUsages).toMatchObject([
 			{
 				componentName: 'CmsText',
 				fieldName: 'hero.title',
+				dynamicName: false,
 				hasValueAttr: false,
-				routeIdAttr: null
+				hasFallbackAttr: false,
+				routeIdAttr: null,
+				scopeAttr: null,
+				presetAttr: null,
+				line: 4
 			}
 		]);
+		expect(componentUsages[0].nameAttrEnd).toBe(code.indexOf('name="hero.title"') + 17);
 	});
 
 	it('captures `routeId` static value', () => {
@@ -89,12 +95,27 @@ describe('parseSvelteSource — component usages', () => {
 		expect(componentUsages[0].routeIdAttr).toBeNull();
 	});
 
-	it('returns null fieldName when name is dynamic', () => {
+	it('returns null fieldName and flags dynamicName when name is dynamic', () => {
 		const code =
 			`<script>\nimport { CmsText } from '$lib/components/cms';\nlet n = 'x';\n</script>` +
 			`\n<CmsText name={n} />`;
 		const { componentUsages } = parseSvelteSource(code);
 		expect(componentUsages[0].fieldName).toBeNull();
+		expect(componentUsages[0].dynamicName).toBe(true);
+	});
+
+	it('captures static scope, preset and fallback attributes', () => {
+		const code =
+			`<script>\nimport { CmsText, CmsList } from '@velastack/cms';\n</script>` +
+			`\n<CmsText name="branding.name" scope="root" fallback="Acme" />` +
+			`\n<CmsList name="stats" preset="stats" />`;
+		const { componentUsages } = parseSvelteSource(code);
+		expect(componentUsages[0]).toMatchObject({
+			scopeAttr: 'root',
+			hasFallbackAttr: true,
+			presetAttr: null
+		});
+		expect(componentUsages[1]).toMatchObject({ scopeAttr: null, presetAttr: 'stats' });
 	});
 
 	it('flags `value=` regardless of static-ness', () => {

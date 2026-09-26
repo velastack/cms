@@ -62,8 +62,23 @@ export const normalizeField = (f: CmsPageField): NormalizedField =>
 export const fieldType = (schema: MetadataFieldSchema): MetadataPrimitive | 'enum' =>
 	typeof schema === 'string' ? schema : schema.type;
 
-/** Default metadata schema applied when a route has no `page.cms.ts`. */
+/**
+ * Metadata every route gets, with or without a `page.cms.ts`: the search
+ * snippet, the share card, and the two indexing controls. A route's own
+ * `metadata` schema is merged over this, so it only ever adds or overrides.
+ * The Vite plugin's `DEFAULT_PAGE_METADATA_PATHS` mirrors these keys.
+ */
 export const DEFAULT_METADATA_SCHEMA: CmsPageMetadataSchema = {
 	title: 'string',
-	description: 'long-string'
+	description: 'long-string',
+	ogTitle: 'string',
+	ogDescription: 'long-string',
+	ogImage: 'image',
+	twitterCard: { type: 'enum', values: ['summary', 'summary_large_image'] },
+	canonical: 'string',
+	noindex: 'boolean'
 };
+
+/** A route's effective metadata schema: the defaults plus its own keys. */
+export const metadataSchemaFor = (own: CmsPageMetadataSchema | undefined): CmsPageMetadataSchema =>
+	own ? { ...DEFAULT_METADATA_SCHEMA, ...own } : DEFAULT_METADATA_SCHEMA;

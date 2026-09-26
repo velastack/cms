@@ -1041,7 +1041,7 @@
 		siteSettingsOpen = true;
 	};
 
-	// Mirrors `onSaveSeo`: flush the site-settings draft as part of the open
+	// Mirrors `onSaveSeo`: flush the site-options draft as part of the open
 	// release, refresh overlays so the just-saved values show via the
 	// preview-overlay path on the live page.
 	const onSaveSiteSettings = async () => {
@@ -1440,7 +1440,7 @@
 
 							<Menubar.Label class={menuLabelClass}>Settings</Menubar.Label>
 							<Menubar.Item class={menuItemClass} onSelect={onOpenSiteSettings}>
-								Site Settings
+								Site Options
 								<KbdShortcut keys="⌘," class={menuShortcutClass} />
 							</Menubar.Item>
 						</Menubar.Content>
@@ -1662,8 +1662,8 @@
 		{/if}
 
 		{#if siteSettingsOpen}
-			{#await import('./site-settings-panel.svelte') then { default: SiteSettingsPanel }}
-				<SiteSettingsPanel onClose={() => (siteSettingsOpen = false)} onSave={onSaveSiteSettings} />
+			{#await import('./site-options-panel.svelte') then { default: SiteOptionsPanel }}
+				<SiteOptionsPanel onClose={() => (siteSettingsOpen = false)} onSave={onSaveSiteSettings} />
 			{/await}
 		{/if}
 

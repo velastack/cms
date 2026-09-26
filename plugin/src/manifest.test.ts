@@ -86,8 +86,12 @@ describe('buildManifest', () => {
 		const expectedMeta = [
 			'metadata.title',
 			'metadata.description',
+			'metadata.ogTitle',
+			'metadata.ogDescription',
+			'metadata.ogImage',
+			'metadata.twitterCard',
 			'metadata.canonical',
-			'metadata.robots'
+			'metadata.noindex'
 		];
 		for (const route of Object.values(result.manifest.routes)) {
 			const pageScope = route.scopes.find((s) => s.kind === 'page');
@@ -112,6 +116,49 @@ describe('buildManifest', () => {
 		const result = await buildManifest({ routesDir: ROUTES_DIR, libDir: LIB_DIR });
 		const slug = result.pageCmsModules.find((m) => m.routeId === '/(marketing)/rooms/[slug]');
 		expect(slug?.creatable).toBe(true);
+	});
+
+	it('records component types per usage, canonical for default-imported files', async () => {
+		const result = await buildManifest({ routesDir: ROUTES_DIR, libDir: LIB_DIR });
+		const pageScope = result.manifest.routes['/'].scopes.find((s) => s.kind === 'page')!;
+		expect(pageScope.usages).toEqual([
+			{ name: 'welcome.title', component: 'CmsText' },
+			{ name: 'welcome.body', component: 'CmsText' },
+			{ name: 'welcome.hero', component: 'CmsImage' }
+		]);
+		const aboutScope = result.manifest.routes['/about'].scopes.find((s) => s.kind === 'page')!;
+		expect(aboutScope.usages).toEqual([{ name: 'about.cover', component: 'CmsImage' }]);
+	});
+
+	it('routes `scope="root"` usages to the root layout scope and records the rest as warnings', async () => {
+		const result = await buildManifest({ routesDir: ROUTES_DIR, libDir: LIB_DIR });
+		const route = result.manifest.routes['/scoped'];
+		const root = route.scopes.find((s) => s.scopeId === 'layout:/')!;
+		const pageScope = route.scopes.find((s) => s.kind === 'page')!;
+		expect(root.usages).toContainEqual({ name: 'hours', component: 'CmsHours' });
+		expect(root.fields).toContain('hours');
+		expect(pageScope.fields).not.toContain('hours');
+		expect(pageScope.usages).toContainEqual({
+			name: 'stats',
+			component: 'CmsList',
+			preset: 'stats'
+		});
+		// A scope outside the chain is reported, not silently dropped.
+		expect(result.warnings.some((w) => w.includes('scope="layout:/(nowhere)"'))).toBe(true);
+		// Dynamic names are reported.
+		expect(result.warnings.some((w) => w.includes('has a dynamic name'))).toBe(true);
+	});
+
+	it('maps every visited file to the scopes that reach it, leaf first', async () => {
+		const result = await buildManifest({ routesDir: ROUTES_DIR, libDir: LIB_DIR });
+		const wrapper = [...result.scopesByFile.entries()].find(([f]) =>
+			f.endsWith('lib/components/wrapper/Wrapper.svelte')
+		)!;
+		expect(wrapper[1]).toEqual(['layout:/(marketing)']);
+		const rootLayout = [...result.scopesByFile.entries()].find(([f]) =>
+			f.endsWith('routes/+layout.svelte')
+		)!;
+		expect(rootLayout[1]).toEqual(['layout:/']);
 	});
 
 	it('records every visited svelte file', async () => {

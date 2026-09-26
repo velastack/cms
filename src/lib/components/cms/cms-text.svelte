@@ -1,30 +1,29 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { getCmsScope } from './scope.js';
-	import { cmsStore, type CmsScopeRef } from './cms-store.svelte.js';
+	import { useCmsField } from './use-cms-field.svelte.js';
 
 	type Props = {
 		name: string;
+		/** `'root'` for the root layout scope, or an explicit scope id. */
+		scope?: string;
 		fallback?: string;
-		/** Per-item override used by `CmsRepeater`. */
+		/** Per-item override used by structured components. */
 		value?: unknown;
 		children?: Snippet;
 	};
 
-	let { name, fallback, value, children }: Props = $props();
+	let { name, scope, fallback, value, children }: Props = $props();
 
-	const scope = getCmsScope();
-	const ref = $derived<CmsScopeRef | null>(
-		scope ? { scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params } : null
+	// `undefined` → fallback (or children); `null` → cleared, shown empty.
+	const field = useCmsField(
+		() => ({ name, scope, value }),
+		(raw): string | undefined => {
+			if (raw === undefined) return fallback;
+			return typeof raw === 'string' ? raw : '';
+		}
 	);
 
-	const resolved = $derived.by(() => {
-		if (value !== undefined) return value;
-		return ref ? cmsStore.getValue(ref, name) : undefined;
-	});
-
-	const display = $derived(typeof resolved === 'string' ? resolved : (fallback ?? ''));
-	const editable = $derived(cmsStore.isEditing && value === undefined && !!ref);
+	const display = $derived(field.current ?? '');
 
 	let el = $state<HTMLSpanElement>();
 	let childrenEl = $state<HTMLElement>();
@@ -32,17 +31,13 @@
 	let composing = false;
 
 	$effect.pre(() => {
-		if (editable && childrenEl && initialFromChildren === undefined) {
+		if (field.editable && childrenEl && initialFromChildren === undefined) {
 			const text = childrenEl.textContent?.trim();
 			initialFromChildren = text || undefined;
 		}
 	});
 
-	const editValue = $derived.by(() => {
-		if (typeof resolved === 'string') return resolved;
-		if (fallback !== undefined) return fallback;
-		return initialFromChildren ?? '';
-	});
+	const editValue = $derived(field.current ?? initialFromChildren ?? '');
 
 	$effect(() => {
 		if (!el) return;
@@ -52,14 +47,9 @@
 		el.textContent = target;
 	});
 
-	const writeValue = (text: string) => {
-		if (!ref) return;
-		cmsStore.setValue(ref, name, text);
-	};
-
 	const onInput = (e: Event) => {
 		if (composing) return;
-		writeValue((e.currentTarget as HTMLElement).textContent ?? '');
+		field.set((e.currentTarget as HTMLElement).textContent ?? '');
 	};
 
 	const onKeydown = (e: KeyboardEvent) => {
@@ -68,11 +58,11 @@
 
 	const onCompositionEnd = (e: CompositionEvent) => {
 		composing = false;
-		writeValue((e.currentTarget as HTMLElement).textContent ?? '');
+		field.set((e.currentTarget as HTMLElement).textContent ?? '');
 	};
 </script>
 
-{#if editable && ref}
+{#if field.editable && field.ref}
 	<!-- Mounted straight into edit mode (navigation while editing): the
 	     children branch below never rendered, so render it hidden once to
 	     capture the default text. Removed as soon as it's captured. -->
@@ -85,7 +75,7 @@
 		contenteditable="plaintext-only"
 		data-placeholder={name}
 		data-cms-name={name}
-		data-cms-scope={scope?.scopeId ?? '?'}
+		data-cms-scope={field.ref.scopeId}
 		role="textbox"
 		tabindex="0"
 		aria-multiline="false"
@@ -98,10 +88,13 @@
 	></span>
 {:else if display}
 	{display}
+{:else if field.raw === null}
+	<!-- cleared by the editor: render nothing -->
 {:else if children}
 	<span bind:this={childrenEl} class="cms-text-children">{@render children()}</span>
 {:else}
-	<span class="cms-missing" data-cms-name={name} data-cms-scope={scope?.scopeId ?? '?'}>{name}</span
+	<span class="cms-missing" data-cms-name={name} data-cms-scope={field.ref?.scopeId ?? '?'}
+		>{name}</span
 	>
 {/if}
 

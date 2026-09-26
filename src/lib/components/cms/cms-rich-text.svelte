@@ -1,48 +1,41 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { getCmsScope } from './scope.js';
-	import { cmsStore, type CmsScopeRef } from './cms-store.svelte.js';
+	import { useCmsField } from './use-cms-field.svelte.js';
 
 	type Props = {
 		name: string;
+		scope?: string;
 		fallback?: string;
 		value?: unknown;
 		children?: Snippet;
 	};
 
-	let { name, fallback, value, children }: Props = $props();
+	let { name, scope, fallback, value, children }: Props = $props();
 
-	const scope = getCmsScope();
-	const ref = $derived<CmsScopeRef | null>(
-		scope ? { scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params } : null
+	const field = useCmsField(
+		() => ({ name, scope, value }),
+		(raw): string | undefined => {
+			if (raw === undefined) return fallback;
+			return typeof raw === 'string' ? raw : '';
+		}
 	);
 
-	const resolved = $derived.by(() => {
-		if (value !== undefined) return value;
-		return ref ? cmsStore.getValue(ref, name) : undefined;
-	});
-
-	const html = $derived(typeof resolved === 'string' ? resolved : (fallback ?? ''));
-	const editable = $derived(cmsStore.isEditing && value === undefined && !!ref);
+	const html = $derived(field.current ?? '');
 
 	let childrenEl = $state<HTMLDivElement>();
 	let initialFromChildren = $state<string | undefined>(undefined);
 
 	$effect.pre(() => {
-		if (editable && childrenEl && initialFromChildren === undefined) {
+		if (field.editable && childrenEl && initialFromChildren === undefined) {
 			const inner = childrenEl.innerHTML.trim();
 			initialFromChildren = inner || undefined;
 		}
 	});
 
-	const editInitial = $derived.by(() => {
-		if (typeof resolved === 'string') return resolved;
-		if (fallback !== undefined) return fallback;
-		return initialFromChildren ?? '';
-	});
+	const editInitial = $derived(field.current ?? initialFromChildren ?? '');
 </script>
 
-{#if editable && ref}
+{#if field.editable && field.ref}
 	<!-- Mounted straight into edit mode (navigation while editing): the
 	     children branch below never rendered, so render it hidden once to
 	     capture the default markup. Removed as soon as it's captured. -->
@@ -50,14 +43,16 @@
 		<div bind:this={childrenEl} class="cms-rich-text-capture">{@render children()}</div>
 	{/if}
 	{#await import('./cms-rich-text-editable.svelte') then { default: Editable }}
-		<Editable scope={ref} {name} initial={editInitial} />
+		<Editable scope={field.ref} {name} initial={editInitial} />
 	{/await}
 {:else if html}
 	<div class="cms-rich-text">{@html html}</div>
+{:else if field.raw === null}
+	<!-- cleared by the editor -->
 {:else if children}
 	<div bind:this={childrenEl} class="cms-rich-text-children">{@render children()}</div>
 {:else}
-	<div class="cms-missing" data-cms-name={name} data-cms-scope={scope?.scopeId ?? '?'}>
+	<div class="cms-missing" data-cms-name={name} data-cms-scope={field.ref?.scopeId ?? '?'}>
 		{name}
 	</div>
 {/if}

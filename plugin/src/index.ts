@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { transformWithOxc, type Plugin, type ResolvedConfig } from 'vite';
@@ -11,6 +11,7 @@ import {
 	type ImportResolver
 } from './manifest.js';
 import { deriveUploadsBase, downloadMedia, extractMediaUrls } from './media.js';
+import { fallbackResolverFor, injectFallbacks } from './build.js';
 import {
 	INSTALL_IMPORT_SOURCE,
 	PAGE_CMS_VIRTUAL_PREFIX,
@@ -57,6 +58,15 @@ export type CmsPluginOptions = {
 	mediaDir?: string;
 	/** URL prefix used in rewritten content. Defaults to `'/cms-media'`. */
 	mediaPrefix?: string;
+	/**
+	 * Directory of per-locale content manifests, `content/<locale>.json`,
+	 * keyed by scope id (`layout:/`, `page:/(public)/about`, `site`). When the
+	 * default locale's file exists (`locales[0]`, else `en`), its values are
+	 * injected into every walked `.svelte` file as `fallback` props, so
+	 * components stay name-only in source. Relative to the Vite root; defaults
+	 * to `'content'`. Pass `false` to disable.
+	 */
+	content?: string | false;
 };
 
 const VIRTUAL_ID = 'virtual:vela-cms/manifest';
@@ -280,6 +290,39 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 	let cached: Promise<BuildManifestResult> | null = null;
 	let cachedSync: BuildManifestResult | null = null;
 	let velacmsRoots: string[] | null = null;
+	let warned = false;
+
+	// The default-locale content manifest, re-read when its mtime changes so
+	// edits show up in dev without a restart.
+	let contentPath: string | null = null;
+	let contentCache: { mtime: number; tree: Record<string, Record<string, unknown>> } | null = null;
+	const readContent = (): Record<string, Record<string, unknown>> | null => {
+		if (!contentPath) return null;
+		let mtime: number;
+		try {
+			mtime = statSync(contentPath).mtimeMs;
+		} catch {
+			return null;
+		}
+		if (contentCache && contentCache.mtime === mtime) return contentCache.tree;
+		try {
+			const tree = JSON.parse(readFileSync(contentPath, 'utf-8')) as Record<
+				string,
+				Record<string, unknown>
+			>;
+			contentCache = { mtime, tree };
+			return tree;
+		} catch (e) {
+			config.logger.warn(`@velastack/cms: could not read ${contentPath}: ${String(e)}`);
+			return null;
+		}
+	};
+
+	const logWarnings = (result: BuildManifestResult) => {
+		if (warned) return;
+		warned = true;
+		for (const w of result.warnings) config.logger.warn(`@velastack/cms: ${w}`);
+	};
 
 	const ensureManifest = (resolver: ImportResolver): Promise<BuildManifestResult> => {
 		if (cached) return cached;
@@ -312,6 +355,7 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 			});
 			cachedSync = result;
 			setPageCmsModules(result.pageCmsModules);
+			logWarnings(result);
 			return result;
 		})();
 		return cached;
@@ -346,12 +390,19 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 			installImportSource = matchPackageName(viteRoot, '@velastack/cms')
 				? SELF_INSTALL_IMPORT_SOURCE
 				: INSTALL_IMPORT_SOURCE;
+			if (options.content !== false) {
+				const dir = resolve(config.root, options.content ?? 'content');
+				const defaultLocale = options.locales?.[0] ?? 'en';
+				const file = resolve(dir, `${defaultLocale}.json`);
+				contentPath = existsSync(file) ? file : null;
+			}
 		},
 
 		async buildStart() {
 			cached = null;
 			cachedSync = null;
 			velacmsRoots = null;
+			warned = false;
 
 			// Media discovery + download is only meaningful for `vite build`.
 			// In dev (`vite serve`), images load from the backend as today.
@@ -478,16 +529,29 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 			// (`?svelte&type=style&lang.css`, etc.) — only transform the original
 			// route source.
 			if (id.includes('?')) return;
-			if (!id.startsWith(routesDir + '/')) return;
+			const inRoutes = id.startsWith(routesDir + '/');
+			if (!inRoutes && !(contentPath && id.endsWith('.svelte'))) return;
 			const result = await ensureManifest(
 				makeResolver(this as unknown as { resolve: RollupResolver })
 			);
 
 			if (id.endsWith('.svelte')) {
+				let next = code;
+				// Content manifest fallbacks go into every file the walk reached,
+				// route entrypoints and shared components alike.
+				const content = result.scopesByFile.has(id) ? readContent() : null;
+				if (content) {
+					this.addWatchFile(contentPath as string);
+					next = injectFallbacks(next, fallbackResolverFor(result, id, content), {
+						filename: id
+					}).code;
+				}
 				const info = result.scopeByEntryPath.get(id);
-				if (!info) return;
-				return { code: injectScopeInstall(code, info, id, installImportSource), map: null };
+				if (info) next = injectScopeInstall(next, info, id, installImportSource);
+				if (next === code) return;
+				return { code: next, map: null };
 			}
+			if (!inRoutes) return;
 
 			if (id.endsWith('+page.ts') || id.endsWith('+page.server.ts')) {
 				const routeId = result.routeIdByScriptPath.get(id);
@@ -524,6 +588,7 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 			cached = null;
 			cachedSync = null;
 			velacmsRoots = null;
+			warned = false;
 
 			const manifestMod = server.moduleGraph.getModuleById(RESOLVED_VIRTUAL_ID);
 			if (manifestMod) server.moduleGraph.invalidateModule(manifestMod);
@@ -537,4 +602,9 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 	};
 };
 
-export type { CmsManifest, CmsManifestScope, ExternalCmsComponentSpec } from './manifest.js';
+export type {
+	CmsManifest,
+	CmsManifestScope,
+	CmsManifestUsage,
+	ExternalCmsComponentSpec
+} from './manifest.js';

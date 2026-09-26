@@ -10,37 +10,43 @@
 	};
 
 	export type CmsLinkRenderProps = { label: string; href: string; newTab: boolean };
+
+	export const normalizeLink = (raw: unknown): CmsLinkValue => {
+		if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+		const r = raw as Record<string, unknown>;
+		const out: CmsLinkValue = {};
+		if (typeof r.label === 'string') out.label = r.label;
+		if (typeof r.href === 'string') out.href = r.href;
+		if (typeof r.routeId === 'string') out.routeId = r.routeId;
+		if (r.params && typeof r.params === 'object' && !Array.isArray(r.params)) {
+			out.params = r.params as Record<string, string>;
+		}
+		if (typeof r.newTab === 'boolean') out.newTab = r.newTab;
+		return out;
+	};
 </script>
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { getCmsScope } from './scope.js';
-	import { cmsStore, type CmsScopeRef } from './cms-store.svelte.js';
+	import { useCmsField } from './use-cms-field.svelte.js';
 	import { resolveRouteUrl } from '../admin-bar/resolve-route.js';
 
 	type Props = {
 		name: string;
+		scope?: string;
 		fallback?: CmsLinkValue;
 		value?: unknown;
 		class?: string;
 		children?: Snippet<[CmsLinkRenderProps]>;
 	};
-	let { name, fallback, value, class: className, children }: Props = $props();
+	let { name, scope, fallback, value, class: className, children }: Props = $props();
 
-	const scope = getCmsScope();
-	const ref = $derived<CmsScopeRef | null>(
-		scope ? { scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params } : null
+	const field = useCmsField(
+		() => ({ name, scope, value }),
+		(raw): CmsLinkValue => (raw === undefined ? (fallback ?? {}) : normalizeLink(raw))
 	);
 
-	const resolved = $derived.by(() => {
-		if (value !== undefined) return value;
-		return ref ? cmsStore.getValue(ref, name) : undefined;
-	});
-
-	const link = $derived.by((): CmsLinkValue => {
-		if (resolved && typeof resolved === 'object') return resolved as CmsLinkValue;
-		return fallback ?? {};
-	});
+	const link = $derived(field.current);
 
 	const href = $derived.by(() => {
 		if (link.routeId) {
@@ -55,12 +61,11 @@
 
 	const label = $derived(link.label ?? '');
 	const newTab = $derived(!!link.newTab);
-	const editable = $derived(cmsStore.isEditing && value === undefined && !!ref);
 </script>
 
-{#if editable && ref}
+{#if field.editable && field.ref}
 	{#await import('./cms-link-editable.svelte') then { default: Editable }}
-		<Editable scope={ref} {name} initial={link} {className} {children} />
+		<Editable scope={field.ref} {name} initial={link} {className} {children} />
 	{/await}
 {:else if children}
 	{@render children({ label, href, newTab })}
@@ -73,8 +78,10 @@
 	>
 		{label || name}
 	</a>
+{:else if field.raw === null}
+	<!-- cleared by the editor -->
 {:else}
-	<span class="cms-missing" data-cms-name={name} data-cms-scope={scope?.scopeId ?? '?'}>
+	<span class="cms-missing" data-cms-name={name} data-cms-scope={field.ref?.scopeId ?? '?'}>
 		{name}
 	</span>
 {/if}

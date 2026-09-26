@@ -1,42 +1,41 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { marked } from 'marked';
-	import { getCmsScope } from './scope.js';
-	import { cmsStore, type CmsScopeRef } from './cms-store.svelte.js';
+	import { useCmsField } from './use-cms-field.svelte.js';
 
 	type Props = {
 		name: string;
+		scope?: string;
 		fallback?: string;
 		value?: unknown;
 		children?: Snippet;
 	};
 
-	let { name, fallback, value, children }: Props = $props();
+	let { name, scope, fallback, value, children }: Props = $props();
 
-	const scope = getCmsScope();
-	const ref = $derived<CmsScopeRef | null>(
-		scope ? { scopeId: scope.scopeId, routeId: scope.routeId, params: scope.params } : null
+	const field = useCmsField(
+		() => ({ name, scope, value }),
+		(raw): string | undefined => {
+			if (raw === undefined) return fallback;
+			return typeof raw === 'string' ? raw : '';
+		}
 	);
 
-	const resolved = $derived.by(() => {
-		if (value !== undefined) return value;
-		return ref ? cmsStore.getValue(ref, name) : undefined;
-	});
-
-	const source = $derived(typeof resolved === 'string' ? resolved : (fallback ?? ''));
-	const editable = $derived(cmsStore.isEditing && value === undefined && !!ref);
+	const source = $derived(field.current ?? '');
 </script>
 
-{#if editable && ref}
+{#if field.editable && field.ref}
 	{#await import('./cms-markdown-editable.svelte') then { default: Editable }}
-		<Editable scope={ref} {name} initial={source} />
+		<Editable scope={field.ref} {name} initial={source} />
 	{/await}
 {:else if source}
 	<div class="cms-markdown">{@html marked.parse(source, { async: false })}</div>
+{:else if field.raw === null}
+	<!-- cleared by the editor -->
 {:else if children}
 	{@render children()}
 {:else}
-	<div class="cms-missing" data-cms-name={name} data-cms-scope={scope?.scopeId ?? '?'}>
+	<div class="cms-missing" data-cms-name={name} data-cms-scope={field.ref?.scopeId ?? '?'}>
 		{name}
 	</div>
 {/if}

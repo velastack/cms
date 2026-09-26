@@ -29,13 +29,17 @@
 	// Read leaves through `getValue` so live drafts reflect immediately. Fall
 	// back to the snapshot the display passed in when nothing's been written.
 	const currentUrl = $derived.by(() => {
-		const v = pathGet(cmsStore.getValue(scope, name), 'url');
+		const stored = cmsStore.getValue(scope, name);
+		const v = pathGet(stored, 'url');
 		if (typeof v === 'string') return v;
+		if (v === null || stored === null) return '';
 		return initial.url ?? '';
 	});
 	const currentAlt = $derived.by(() => {
-		const v = pathGet(cmsStore.getValue(scope, name), 'alt');
+		const stored = cmsStore.getValue(scope, name);
+		const v = pathGet(stored, 'alt');
 		if (typeof v === 'string') return v;
+		if (v === null || stored === null) return '';
 		return initial.alt ?? '';
 	});
 
@@ -55,8 +59,13 @@
 	let uploading = $state(false);
 	let error: string | null = $state(null);
 
-	const writeUrl = (v: string) => cmsStore.setValue(scope, `${name}.url`, v);
-	const writeAlt = (v: string) => cmsStore.setValue(scope, `${name}.alt`, v);
+	// Whole-object writes (see `core/structured.ts`): a cleared image is
+	// `{ url: null }`, which merges over the published tree as "cleared"
+	// instead of falling back to the template's demo image.
+	const writeUrl = (v: string) =>
+		cmsStore.setValue(scope, name, { url: v || null, alt: currentAlt || null });
+	const writeAlt = (v: string) =>
+		cmsStore.setValue(scope, name, { url: currentUrl || null, alt: v || null });
 
 	const upload = async (file: File) => {
 		if (!file.type.startsWith('image/')) {
