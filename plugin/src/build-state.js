@@ -16,14 +16,24 @@
 
 const KEY = Symbol.for('@velastack/cms.buildState');
 
-/** @type {{ pageCmsModules: PageCmsModule[] }} */
+/** @type {{ pageCmsModules: PageCmsModule[]; reported?: boolean }} */
 // @ts-ignore
 const store = /** @type {any} */ (globalThis[KEY] ??= { pageCmsModules: [] });
 
 /** @param {PageCmsModule[]} modules */
 export const setPageCmsModules = (modules) => {
 	store.pageCmsModules = modules;
+	store.reported = true;
 };
 
 /** @returns {PageCmsModule[]} */
 export const getPageCmsModules = () => store.pageCmsModules;
+
+/**
+ * Whether the plugin has reported its route walk in this process at all —
+ * `false` means the adapter is running without the `cms()` Vite plugin (or
+ * the two no longer share a process), not that there are no page.cms files.
+ *
+ * @returns {boolean}
+ */
+export const pageCmsModulesReported = () => store.reported === true;

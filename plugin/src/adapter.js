@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { minifySync } from 'vite';
-import { getPageCmsModules } from './build-state.js';
+import { getPageCmsModules, pageCmsModulesReported } from './build-state.js';
 
 const ROUTE_GROUP_RE = /^\([^)]+\)$/;
 
@@ -28,7 +28,7 @@ const loadMinifiedShim = () => {
 		// would ship unminified bytes on every page.
 		throw new Error(
 			`@velastack/cms-static: failed to minify fallback-shim.js: ${result.errors
-				.map((/** @type {any} */ e) => e.message ?? String(e))
+				.map((e) => e.message ?? String(e))
 				.join('; ')}`
 		);
 	}
@@ -203,10 +203,12 @@ export const buildParamExtractor = (segments) => {
 				} else {
 					params[seg.name] = '';
 				}
-			} else {
+			} else if (seg.kind === 'dynamic') {
 				if (pi >= parts.length) return null;
 				params[seg.name] = parts[pi];
 				pi++;
+			} else {
+				return null;
 			}
 		}
 		if (pi !== parts.length) return null;
@@ -246,19 +248,24 @@ const transformDataJson = (jsonText) => {
  * `%name%`. The runtime can fetch the fallback when navigating to a CMS page
  * that wasn't prerendered, then substitute the actual params client-side.
  *
+ * Everything else (`supports`, `emulate`, `vite`, whatever adapter-static
+ * grows) comes from the inner adapter unchanged.
+ *
  * @param {StaticAdapterOptions} [options]
+ * @returns {import('@sveltejs/kit').Adapter}
  */
 export default function adapter(options) {
 	const inner = staticAdapter(options);
 
 	return {
+		...inner,
 		name: '@velastack/cms-static',
 
 		/** @param {import('@sveltejs/kit').Builder} builder */
 		async adapt(builder) {
 			await inner.adapt(builder);
 
-			const pages = (options && /** @type {any} */ (options).pages) || 'build';
+			const pages = options?.pages ?? 'build';
 			const buildDir = path.resolve(pages);
 
 			// `prerendered.paths` mixes html and data entries, so use the
@@ -298,7 +305,7 @@ export default function adapter(options) {
 			// pages, navigation to routes that didn't exist at build time).
 			// Prerendered pages embed their own data via `__data.json`, so
 			// they don't need the global.
-			const fallbackName = options && /** @type {any} */ (options).fallback;
+			const fallbackName = options?.fallback;
 			if (!fallbackName) return;
 
 			const fallbackPath = path.join(buildDir, fallbackName);
@@ -309,12 +316,23 @@ export default function adapter(options) {
 				return;
 			}
 
+			if (!pageCmsModulesReported()) {
+				builder.log.warn(
+					`@velastack/cms-static: no page.cms modules were seen, so ${fallbackName} gets no __velastack_manifest and the admin bar cannot create pages that were not prerendered. Add the cms() plugin from @velastack/cms/vite to vite.config.`
+				);
+				return;
+			}
 			const creatableRouteIds = new Set(
 				getPageCmsModules()
 					.filter((m) => m.creatable)
 					.map((m) => m.routeId)
 			);
-			if (creatableRouteIds.size === 0) return;
+			if (creatableRouteIds.size === 0) {
+				builder.log.minor(
+					`@velastack/cms-static: no creatable page.cms modules; skipping manifest injection`
+				);
+				return;
+			}
 
 			/** @type {{ creatable: Record<string, { entries: Record<string, string>[] }> }} */
 			const manifest = { creatable: {} };
