@@ -203,14 +203,12 @@ export const injectFallbacks = (
 		}
 		const prop = FALLBACK_PROP[component] ?? 'fallback';
 		const literal = JSON.stringify(value);
-		if (u.hasFallbackAttr) {
-			const existing = findAttr(source, u.start, u.end, prop);
-			if (existing)
-				edits.push({ at: existing[0], text: `${prop}={${literal}}`, replace: existing });
-			else edits.push({ at: u.nameAttrEnd, text: ` ${prop}={${literal}}` });
-		} else {
-			edits.push({ at: u.nameAttrEnd, text: ` ${prop}={${literal}}` });
-		}
+		// Replace the prop where it already stands (shorthand `initial`,
+		// `{initial}`, `initial={…}` or `initial="…"`), so the result never
+		// carries it twice; otherwise add it after `name=`.
+		const existing = u.fallbackAttrSpans[prop as 'fallback' | 'initial'];
+		if (existing) edits.push({ at: existing[0], text: `${prop}={${literal}}`, replace: existing });
+		else edits.push({ at: u.nameAttrEnd, text: ` ${prop}={${literal}}` });
 		injected.push(u.fieldName);
 	}
 
@@ -227,48 +225,6 @@ export const injectFallbacks = (
 /** Same operation as {@link injectFallbacks}, named for the `pack` step that
  * writes the result to disk. */
 export const inlineFallbacks = injectFallbacks;
-
-/** Locate `prop=` inside a component node's source. Returns `[start, end]`. */
-const findAttr = (
-	source: string,
-	start: number,
-	end: number,
-	prop: string
-): [number, number] | null => {
-	const re = new RegExp(`\\s${prop}\\s*=`, 'g');
-	const slice = source.slice(start, end);
-	const m = re.exec(slice);
-	if (!m) return null;
-	const attrStart = start + m.index + 1;
-	// Find the matching end: either a quoted string or a balanced `{…}`.
-	let i = start + m.index + m[0].length;
-	while (i < end && /\s/.test(source[i])) i++;
-	if (source[i] === '"' || source[i] === "'") {
-		const q = source[i];
-		i++;
-		while (i < end && source[i] !== q) i++;
-		return [attrStart, i + 1];
-	}
-	if (source[i] === '{') {
-		let depth = 0;
-		for (; i < end; i++) {
-			const c = source[i];
-			if (c === '{') depth++;
-			else if (c === '}') {
-				depth--;
-				if (depth === 0) return [attrStart, i + 1];
-			} else if (c === '"' || c === "'" || c === '`') {
-				const q = c;
-				i++;
-				while (i < end && source[i] !== q) {
-					if (source[i] === '\\') i++;
-					i++;
-				}
-			}
-		}
-	}
-	return null;
-};
 
 /**
  * A resolver for one file, given a built manifest and a content manifest

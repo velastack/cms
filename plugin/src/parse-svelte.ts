@@ -17,6 +17,13 @@ export type ComponentUsage = {
 	hasValueAttr: boolean;
 	/** Whether a `fallback=` or `initial=` prop was present. */
 	hasFallbackAttr: boolean;
+	/**
+	 * Source spans (`[start, end]`) of the `fallback` and `initial` attributes,
+	 * whatever their form: shorthand `initial`, `{initial}`, `initial={…}` or
+	 * `initial="…"`. Lets an injector replace the attribute instead of adding
+	 * a second one.
+	 */
+	fallbackAttrSpans: Partial<Record<'fallback' | 'initial', [number, number]>>;
 	/** Static value of the `routeId=` prop, or `null` if absent / non-static. */
 	routeIdAttr: string | null;
 	/** Static value of the `scope=` prop (`'root'` or a scope id), or `null`. */
@@ -150,12 +157,20 @@ export const parseSvelteSource = (code: string, filename?: string): ParsedSvelte
 		const presetAttr = find('preset');
 		const fieldName = nameAttr ? staticAttributeValue(nameAttr.value) : null;
 		const start = (node.start as number | undefined) ?? 0;
+		const fallbackAttrSpans: ComponentUsage['fallbackAttrSpans'] = {};
+		for (const prop of ['fallback', 'initial'] as const) {
+			const attr = find(prop);
+			if (attr && typeof attr.start === 'number' && typeof attr.end === 'number') {
+				fallbackAttrSpans[prop] = [attr.start, attr.end];
+			}
+		}
 		componentUsages.push({
 			componentName,
 			fieldName,
 			dynamicName: !!nameAttr && fieldName === null,
 			hasValueAttr: !!find('value'),
 			hasFallbackAttr: !!find('fallback') || !!find('initial'),
+			fallbackAttrSpans,
 			routeIdAttr: routeIdAttr ? staticAttributeValue(routeIdAttr.value) : null,
 			scopeAttr: scopeAttr ? staticAttributeValue(scopeAttr.value) : null,
 			presetAttr: presetAttr ? staticAttributeValue(presetAttr.value) : null,

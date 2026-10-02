@@ -82,6 +82,35 @@ describe('injectFallbacks', () => {
 		expect(code).not.toContain('fallback={{ v: 1 }}');
 	});
 
+	describe('an existing `initial` on CmsBoolean', () => {
+		const withInitial = (attr: string) =>
+			`<script>import { CmsBoolean } from '@velastack/cms';</script>\n` +
+			`<CmsBoolean name="hero.showCta" ${attr} label="CTA" />`;
+
+		it.each([
+			['shorthand', 'initial'],
+			['curly shorthand', '{initial}'],
+			['expression', 'initial={false}'],
+			['quoted', 'initial="false"']
+		])('replaces the %s form under overwrite instead of adding a second', (_, attr) => {
+			const { code, injected } = injectFallbacks(
+				withInitial(attr),
+				{ hero: { showCta: true } },
+				{ overwrite: true }
+			);
+			expect(code).toContain('<CmsBoolean name="hero.showCta" initial={true} label="CTA" />');
+			expect(code.match(/initial/g)).toHaveLength(1);
+			expect(injected).toEqual(['hero.showCta']);
+		});
+
+		it('leaves the shorthand form alone without overwrite', () => {
+			const src = withInitial('initial');
+			const { code, injected } = injectFallbacks(src, { hero: { showCta: true } });
+			expect(code).toBe(src);
+			expect(injected).toEqual([]);
+		});
+	});
+
 	it('leaves the source byte-identical when nothing resolves', () => {
 		const { code, injected } = injectFallbacks(SRC, {});
 		expect(code).toBe(SRC);
