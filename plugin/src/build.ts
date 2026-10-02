@@ -68,8 +68,8 @@ export type ScanOptions = {
 	filename?: string;
 	/**
 	 * Extra local names to treat as CMS components, for wrappers a template
-	 * declares itself. Package imports and `$lib/components/cms/*` are always
-	 * recognized.
+	 * declares itself. Package imports and `#lib/components/cms/*` (or the
+	 * older `$lib/components/cms/*`) are always recognized.
 	 */
 	components?: string[];
 };
@@ -80,12 +80,19 @@ export type ScanResult = {
 	warnings: string[];
 };
 
-const IN_TREE_CMS_DIR = '$lib/components/cms';
+/** The in-tree component directory, by subpath import (Kit 3) or the old `$lib` alias. */
+const IN_TREE_CMS_DIRS = ['#lib/components/cms', '$lib/components/cms'];
+
+const isInTreeCmsBarrel = (source: string): boolean =>
+	IN_TREE_CMS_DIRS.some((dir) => source === dir || source === dir + '/index.js');
+
+const isInTreeCmsFile = (source: string): boolean =>
+	source.endsWith('.svelte') && IN_TREE_CMS_DIRS.some((dir) => source.startsWith(dir + '/'));
 
 /**
  * Classify a single file's imports without a bundler: the package by name,
- * the in-tree `$lib/components/cms` barrel or files, and the caller's own
- * list. Returns local binding → canonical component name.
+ * the in-tree `#lib/components/cms` (or `$lib/…`) barrel or files, and the
+ * caller's own list. Returns local binding → canonical component name.
  */
 const classifyImports = (
 	imports: ReturnType<typeof parseSvelteSource>['imports'],
@@ -94,15 +101,11 @@ const classifyImports = (
 	const out = new Map<string, string>();
 	for (const imp of imports) {
 		const source = imp.source;
-		if (
-			isPackageSource(source) ||
-			source === IN_TREE_CMS_DIR ||
-			source === IN_TREE_CMS_DIR + '/index.js'
-		) {
+		if (isPackageSource(source) || isInTreeCmsBarrel(source)) {
 			for (const b of imp.bindings) if (b.imported !== 'default') out.set(b.local, b.imported);
 			continue;
 		}
-		if (source.startsWith(IN_TREE_CMS_DIR + '/') && source.endsWith('.svelte')) {
+		if (isInTreeCmsFile(source)) {
 			for (const b of imp.bindings) {
 				if (b.imported === 'default') out.set(b.local, basename(source, '.svelte'));
 			}

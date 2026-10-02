@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildManifest, type ImportResolver } from './manifest.js';
+import { buildManifest, readPackageImports, type ImportResolver } from './manifest.js';
 
 const FIXTURE_ROOT = fileURLToPath(new URL('../__fixtures__/manifest-app', import.meta.url));
 const ROUTES_DIR = resolve(FIXTURE_ROOT, 'routes');
@@ -173,6 +173,42 @@ describe('buildManifest', () => {
 		expect(visited).toContain('/lib/components/cms/CmsImage.svelte');
 	});
 
+	it('resolves `#lib/…` against libDir when no imports map is given', async () => {
+		// about/+page.svelte and the (marketing) layout import via `#lib/…`;
+		// the other fixtures keep `$lib/…`, so both spellings are covered.
+		const result = await buildManifest({ routesDir: ROUTES_DIR, libDir: LIB_DIR });
+		const aboutScope = result.manifest.routes['/about'].scopes.find((s) => s.kind === 'page')!;
+		expect(stripDefaultMeta(aboutScope.fields)).toEqual(['about.cover']);
+		const visited = result.visitedFiles.map((f) => f.replace(FIXTURE_ROOT, ''));
+		expect(visited).toContain('/lib/components/wrapper/Wrapper.svelte');
+	});
+
+	it('resolves other `#` subpath imports only through the package.json map', async () => {
+		const pageFields = async (imports?: Record<string, string>) => {
+			const result = await buildManifest({ routesDir: ROUTES_DIR, libDir: LIB_DIR, imports });
+			const scope = result.manifest.routes['/aliased'].scopes.find((s) => s.kind === 'page')!;
+			return stripDefaultMeta(scope.fields);
+		};
+		expect(await pageFields()).toEqual([]);
+		expect(await pageFields(readPackageImports(FIXTURE_ROOT))).toEqual(['aliased.title']);
+	});
+
+	it('prefers a package.json `#lib/*` target over libDir', async () => {
+		const elsewhere = mkdtempSync(join(tmpdir(), 'velacms-lib-'));
+		try {
+			const result = await buildManifest({
+				routesDir: ROUTES_DIR,
+				libDir: LIB_DIR,
+				imports: { '#lib/': elsewhere }
+			});
+			// `#lib/components/cms/CmsImage.svelte` now points into an empty dir.
+			const aboutScope = result.manifest.routes['/about'].scopes.find((s) => s.kind === 'page')!;
+			expect(stripDefaultMeta(aboutScope.fields)).toEqual([]);
+		} finally {
+			rmSync(elsewhere, { recursive: true, force: true });
+		}
+	});
+
 	it('honors external `components` specs and their auto-traverse', async () => {
 		const resolveExternal: ImportResolver = async (source) => {
 			if (source === '@external/pack') return EXTERNAL_PACK_FILE;
@@ -187,5 +223,19 @@ describe('buildManifest', () => {
 		// No routes-external dir exists → no routes; verify the spec wiring
 		// doesn't throw and components map is built up correctly.
 		expect(result.manifest.routes).toEqual({});
+	});
+});
+
+describe('readPackageImports', () => {
+	it('flattens `#x/*` to a directory prefix and `#x` to a file, like svelte-package', () => {
+		expect(readPackageImports(FIXTURE_ROOT)).toEqual({
+			'#lib': resolve(FIXTURE_ROOT, 'lib/index.js'),
+			'#lib/': resolve(FIXTURE_ROOT, 'lib'),
+			'#cms/': resolve(FIXTURE_ROOT, 'lib/components/cms')
+		});
+	});
+
+	it('returns an empty map without a package.json', () => {
+		expect(readPackageImports(resolve(FIXTURE_ROOT, 'routes'))).toEqual({});
 	});
 });

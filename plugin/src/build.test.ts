@@ -37,6 +37,27 @@ describe('scanUsages', () => {
 		const { usages } = scanUsages(SRC, { components: ['Card'] });
 		expect(usages.some((u) => u.component === 'Card' && u.name === 'not-cms')).toBe(true);
 	});
+
+	it('recognizes the in-tree components through `#lib` subpath imports', () => {
+		const src = `<script lang="ts">
+	import { CmsText } from '#lib/components/cms/index.js';
+	import { CmsImage } from '#lib/components/cms';
+	import Hero from '#lib/components/cms/Hero.svelte';
+	import Other from '#lib/components/other/Other.svelte';
+</script>
+
+<CmsText name="a" />
+<CmsImage name="b" />
+<Hero name="c" />
+<Other name="d" />
+`;
+		const { usages } = scanUsages(src);
+		expect(usages.map((u) => [u.name, u.component])).toEqual([
+			['a', 'CmsText'],
+			['b', 'CmsImage'],
+			['c', 'Hero']
+		]);
+	});
 });
 
 describe('injectFallbacks', () => {

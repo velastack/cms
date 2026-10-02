@@ -51,12 +51,12 @@ export const INSTALL_IMPORT_SOURCE = '@velastack/cms';
 
 /**
  * The package's own showcase routes are the one place the public entry is the
- * wrong import: there `$lib` *is* this package's source, and the package name
+ * wrong import: there `#lib` *is* this package's source, and the package name
  * would resolve to a stale `dist/` or not at all. The plugin passes this when
  * the Vite root is the package itself. Every consumer gets the package name —
- * their `$lib` is their own `src/lib`, where this path does not exist.
+ * their `#lib` is their own `src/lib`, where this path does not exist.
  */
-export const SELF_INSTALL_IMPORT_SOURCE = '$lib/components/cms/install-scope.svelte.js';
+export const SELF_INSTALL_IMPORT_SOURCE = '#lib/components/cms/install-scope.svelte.js';
 
 const buildInstallImport = (source: string): string =>
 	`import { installCmsScope as __velaCmsInstallScope } from '${source}';\n`;
@@ -97,7 +97,7 @@ export const injectScopeInstall = (
 /**
  * Quick scan for an `import { generateEntries[, …] } from '...'` binding.
  * The source module doesn't matter — typically the user re-exports
- * `generateEntries` from their own `$lib/cms.ts`. Returns true when the
+ * `generateEntries` from their own `src/lib/cms.ts`. Returns true when the
  * file contains an `import { ... }` statement that names `generateEntries`
  * (with or without an alias), false otherwise.
  */

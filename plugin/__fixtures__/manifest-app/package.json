@@ -1,0 +1,10 @@
+{
+	"private": true,
+	"imports": {
+		"#lib": "./lib/index.js",
+		"#lib/*": "./lib/*",
+		"#cms/*": {
+			"default": "./lib/components/cms/*"
+		}
+	}
+}

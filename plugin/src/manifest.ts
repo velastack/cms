@@ -95,9 +95,22 @@ export type ImportResolver = (
 	importer: string | undefined
 ) => Promise<string | null>;
 
+/**
+ * A project's package.json `imports`, flattened to absolute paths the way
+ * `@sveltejs/package` reads them: a `#x/*` key becomes the prefix `#x/` mapped
+ * to a directory, an exact `#x` key maps to a file. See {@link readPackageImports}.
+ */
+export type PackageImports = Record<string, string>;
+
 export type BuildManifestOptions = {
 	routesDir: string;
 	libDir: string;
+	/**
+	 * The consumer's `#` subpath imports (from {@link readPackageImports}).
+	 * `#lib` falls back to `libDir` when the map has no `#lib` entry, the same
+	 * way `$lib` always resolves there.
+	 */
+	imports?: PackageImports;
 	/** Absolute paths whose subtrees identify the velacms package. */
 	velacmsRoots?: string[];
 	/** Third-party CMS components recognized by the plugin. */
@@ -221,18 +234,85 @@ const parsePageCmsCreatable = async (filePath: string): Promise<boolean> => {
 	return false;
 };
 
+/** A string target, or a condition object's `default`, as svelte-package reads it. */
+const importTarget = (value: unknown): string | null => {
+	if (typeof value === 'string') return value;
+	if (
+		value &&
+		typeof value === 'object' &&
+		typeof (value as { default?: unknown }).default === 'string'
+	) {
+		return (value as { default: string }).default;
+	}
+	return null;
+};
+
 /**
- * Synchronous resolver for `$lib/...` and relative specifiers — the in-tree
- * paths the plugin handles without any bundler context. Returns `null` for
- * bare specifiers; callers fall through to the external resolver.
+ * Read the `#` subpath imports from `<root>/package.json`. `"#x/*": "./dir/*"`
+ * becomes `{ '#x/': '<root>/dir' }`; `"#x": "./file.js"` becomes
+ * `{ '#x': '<root>/file.js' }`. Missing or malformed files give `{}`.
  */
-const resolveLocal = (source: string, fromFile: string, libDir: string): string | null => {
-	let base: string;
-	if (source.startsWith('$lib/')) base = join(libDir, source.slice(5));
+export const readPackageImports = (root: string): PackageImports => {
+	const out: PackageImports = {};
+	let imports: unknown;
+	try {
+		imports = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8')).imports;
+	} catch {
+		return out;
+	}
+	if (!imports || typeof imports !== 'object') return out;
+	for (const [key, raw] of Object.entries(imports as Record<string, unknown>)) {
+		if (!key.startsWith('#')) continue;
+		const target = importTarget(raw);
+		if (!target) continue;
+		if (key.endsWith('/*')) {
+			const dir = target.endsWith('/*') ? target.slice(0, -2) : target;
+			out[key.slice(0, -1)] = resolve(root, dir);
+		} else {
+			out[key] = resolve(root, target);
+		}
+	}
+	return out;
+};
+
+/** Map a `#` specifier through `imports`; `#lib` falls back to `libDir`. */
+const resolvePackageImport = (
+	source: string,
+	imports: PackageImports,
+	libDir: string
+): string | null => {
+	if (Object.hasOwn(imports, source) && !source.endsWith('/')) return imports[source];
+	let best: string | null = null;
+	for (const key of Object.keys(imports)) {
+		if (!key.endsWith('/') || !source.startsWith(key)) continue;
+		if (best === null || key.length > best.length) best = key;
+	}
+	if (best !== null) return join(imports[best], source.slice(best.length));
+	if (source === '#lib') return libDir;
+	if (source.startsWith('#lib/')) return join(libDir, source.slice(5));
+	return null;
+};
+
+/**
+ * Synchronous resolver for `#…` subpath imports, `$lib/...` and relative
+ * specifiers — the in-tree paths the plugin handles without any bundler
+ * context. Returns `null` for bare specifiers; callers fall through to the
+ * external resolver.
+ */
+const resolveLocal = (
+	source: string,
+	fromFile: string,
+	libDir: string,
+	imports: PackageImports
+): string | null => {
+	let base: string | null;
+	if (source.startsWith('#')) base = resolvePackageImport(source, imports, libDir);
+	else if (source.startsWith('$lib/')) base = join(libDir, source.slice(5));
 	else if (source === '$lib') base = libDir;
 	else if (source.startsWith('./') || source.startsWith('../'))
 		base = resolve(dirname(fromFile), source);
 	else return null;
+	if (base === null) return null;
 
 	const candidates = [
 		base,
@@ -312,10 +392,11 @@ const resolveOrExternal = async (
 	source: string,
 	fromFile: string,
 	libDir: string,
+	imports: PackageImports,
 	resolveExternal: ImportResolver | undefined,
 	traversePatterns: (string | RegExp)[]
 ): Promise<string | null> => {
-	const local = resolveLocal(source, fromFile, libDir);
+	const local = resolveLocal(source, fromFile, libDir, imports);
 	if (local) return local;
 	if (!resolveExternal) return null;
 	if (!matchTraverse(source, traversePatterns)) return null;
@@ -333,6 +414,7 @@ const collectFieldsForEntry = async (
 	entry: string,
 	options: {
 		libDir: string;
+		imports: PackageImports;
 		velacmsRoots: string[];
 		specByResolvedPath: Map<string, ExternalCmsComponentSpec>;
 		specBySource: Map<string, ExternalCmsComponentSpec>;
@@ -344,6 +426,7 @@ const collectFieldsForEntry = async (
 ): Promise<CollectedEntry> => {
 	const {
 		libDir,
+		imports,
 		velacmsRoots,
 		specByResolvedPath,
 		specBySource,
@@ -392,7 +475,14 @@ const collectFieldsForEntry = async (
 			const imp = parsed.imports[i];
 			resolvedByImport.set(
 				i,
-				await resolveOrExternal(imp.source, filePath, libDir, resolveExternal, traversePatterns)
+				await resolveOrExternal(
+					imp.source,
+					filePath,
+					libDir,
+					imports,
+					resolveExternal,
+					traversePatterns
+				)
 			);
 		}
 
@@ -583,6 +673,7 @@ export const buildManifest = async (
 	const {
 		routesDir,
 		libDir,
+		imports = {},
 		velacmsRoots = [],
 		components = [],
 		traverse = [],
@@ -614,6 +705,7 @@ export const buildManifest = async (
 
 	const collectOptions: Parameters<typeof collectFieldsForEntry>[1] = {
 		libDir,
+		imports,
 		velacmsRoots,
 		specByResolvedPath,
 		specBySource,

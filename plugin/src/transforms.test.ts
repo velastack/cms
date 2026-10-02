@@ -181,11 +181,11 @@ describe('injectScopeInstall import source', () => {
 	};
 
 	it('imports installCmsScope from the package by default', () => {
-		// A consumer's `$lib` is its own `src/lib`, where the source path does
+		// A consumer's `#lib` is its own `src/lib`, where the source path does
 		// not exist — so anything but the package name breaks every route.
 		const out = injectScopeInstall(`<script>let x = 1;</script>`, info, '/x/+page.svelte');
 		expect(out).toContain(`from '@velastack/cms';`);
-		expect(out).not.toContain('$lib/components/cms');
+		expect(out).not.toContain('lib/components/cms');
 	});
 
 	it('imports from the package source when asked, for the showcase', () => {
@@ -195,6 +195,6 @@ describe('injectScopeInstall import source', () => {
 			'/x/+page.svelte',
 			SELF_INSTALL_IMPORT_SOURCE
 		);
-		expect(out).toContain(`from '$lib/components/cms/install-scope.svelte.js';`);
+		expect(out).toContain(`from '#lib/components/cms/install-scope.svelte.js';`);
 	});
 });

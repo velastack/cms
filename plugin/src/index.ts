@@ -7,8 +7,10 @@ import {
 	buildManifest,
 	type BuildManifestResult,
 	type CmsManifest,
+	readPackageImports,
 	type ExternalCmsComponentSpec,
-	type ImportResolver
+	type ImportResolver,
+	type PackageImports
 } from './manifest.js';
 import { deriveUploadsBase, downloadMedia, extractMediaUrls } from './media.js';
 import { fallbackResolverFor, injectFallbacks } from './build.js';
@@ -274,6 +276,7 @@ const discoverProjectMedia = async ({
 export const cms = (options: CmsPluginOptions = {}): Plugin => {
 	let routesDir = '';
 	let libDir = '';
+	let packageImports: PackageImports = {};
 	let viteRoot = '';
 	let config: ResolvedConfig;
 	// What the injected `installCmsScope` import points at. The package name
@@ -348,6 +351,7 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 			const result = await buildManifest({
 				routesDir,
 				libDir,
+				imports: packageImports,
 				velacmsRoots,
 				components: options.components,
 				traverse: options.traverse,
@@ -387,6 +391,8 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 			viteRoot = config.root;
 			routesDir = resolve(config.root, options.routesDir ?? 'src/routes');
 			libDir = resolve(config.root, options.libDir ?? 'src/lib');
+			// `#lib/…` and any other `#` subpath imports the consumer declares.
+			packageImports = readPackageImports(config.root);
 			installImportSource = matchPackageName(viteRoot, '@velastack/cms')
 				? SELF_INSTALL_IMPORT_SOURCE
 				: INSTALL_IMPORT_SOURCE;
