@@ -219,7 +219,7 @@
 		const key = cmsStore.openRelease?.preview_key;
 		if (key) url.searchParams.set('preview', key);
 		// onClose();
-		await goto(url, { keepFocus: true, noScroll: true });
+		await goto(url, { reset: false });
 	};
 
 	const onView = async (routeId: string, params: Record<string, string>) => {

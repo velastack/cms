@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { browser } from '$app/env';
-	import { beforeNavigate, goto, invalidateAll } from '$app/navigation';
+	import { beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { cmsStore } from '#lib/components/cms/cms-store.svelte.js';
 	import { adminBarTheme, type AdminBarTheme } from './theme.svelte.js';
@@ -53,7 +53,7 @@
 	// `cms.editEnabled` flag keeps it open. We deliberately do NOT
 	// react to `?edit` mid-session: a $effect on it would unconditionally
 	// re-set `cms.editEnabled='1'` and `barEnabled=true` every time the
-	// URL changed (including the replaceState we issue from teardown),
+	// URL changed (including the shallow `goto` we issue from teardown),
 	// resurrecting the bar after `closeBar`/`onLogout`.
 	if (browser) {
 		untrack(() => {
@@ -71,7 +71,7 @@
 				const url = new URL(page.url.href);
 				url.searchParams.delete('edit');
 				const path = url.pathname + url.search + url.hash;
-				setTimeout(() => goto(path, { shallow: true, replace: true, state: page.state }), 0);
+				setTimeout(() => void goto(path, { shallow: true, replace: true, state: page.state }), 0);
 			} else if (stored) {
 				barEnabled = true;
 			}

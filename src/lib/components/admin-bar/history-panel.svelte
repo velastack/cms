@@ -150,7 +150,7 @@
 		url.searchParams.delete('preview');
 		url.searchParams.delete('edit');
 		url.searchParams.set('version', release.preview_key);
-		await goto(url.pathname + url.search + url.hash, { keepFocus: true, noScroll: true });
+		await goto(url.pathname + url.search + url.hash, { reset: false });
 		onClose();
 	};
 </script>

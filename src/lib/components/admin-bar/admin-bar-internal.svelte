@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { afterNavigate, beforeNavigate, goto, invalidateAll } from '$app/navigation';
+	import { afterNavigate, beforeNavigate, goto, refreshAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { pages } from 'virtual:vela-cms/pages';
 	import { cmsStore, type PageDeleteOutcome } from '#lib/components/cms/cms-store.svelte.js';
@@ -217,9 +217,9 @@
 		}
 		const path = url.pathname + url.search + url.hash;
 		if (opts.replace) {
-			goto(path, { shallow: true, replace: true, state: page.state });
+			await goto(path, { shallow: true, replace: true, state: page.state });
 		} else {
-			await goto(path, { keepFocus: true, noScroll: true });
+			await goto(path, { reset: false });
 		}
 	};
 
@@ -237,14 +237,14 @@
 		}
 		const path = url.pathname + url.search + url.hash;
 		if (opts.replace) {
-			goto(path, { shallow: true, replace: true, state: page.state });
+			await goto(path, { shallow: true, replace: true, state: page.state });
 		} else {
-			await goto(path, { keepFocus: true, noScroll: true });
+			await goto(path, { reset: false });
 			// Force the server load to re-fetch. SvelteKit's URL tracking
 			// doesn't always pick up our `?version=` access (it lives behind
 			// the `loadCms` helper) — visible on Exit, where we'd otherwise
 			// keep showing the past release's `page.data.cms.docs`.
-			await invalidateAll();
+			await refreshAll();
 		}
 	};
 
@@ -269,18 +269,18 @@
 		}
 		const path = url.pathname + url.search + url.hash;
 		if (opts.replace) {
-			goto(path, { shallow: true, replace: true, state: page.state });
+			await goto(path, { shallow: true, replace: true, state: page.state });
 			return;
 		}
 		if (!locale) {
 			clearingLocale = true;
 			try {
-				await goto(path, { keepFocus: true, noScroll: true });
+				await goto(path, { reset: false });
 			} finally {
 				clearingLocale = false;
 			}
 		} else {
-			await goto(path, { keepFocus: true, noScroll: true });
+			await goto(path, { reset: false });
 		}
 	};
 
@@ -327,7 +327,7 @@
 	// Until then, the overlay-sync effect must NOT strip `?preview=` from the
 	// URL — `cmsStore.openRelease` is null pre-fetch, but that's "unknown",
 	// not "no draft". Without this gate, a hard refresh on `?preview=<key>`
-	// would treat the param as stale and replaceState it away.
+	// would treat the param as stale and shallow-replace it away.
 	let openReleaseFetched = $state(false);
 
 	// On mount and on subsequent URL/store changes: derive what to do (URL sync,
@@ -429,10 +429,7 @@
 				nav.cancel();
 				const url = new URL(nav.to.url);
 				carryLocaleOnto(url);
-				void goto(url.pathname + url.search + url.hash, {
-					keepFocus: true,
-					noScroll: true
-				});
+				void goto(url.pathname + url.search + url.hash, { reset: false });
 				return;
 			}
 			// Target has no `?version=`. If we're exiting on purpose, let the nav
@@ -443,10 +440,7 @@
 			url.searchParams.delete('preview');
 			url.searchParams.set('version', versionKey);
 			carryLocaleOnto(url);
-			void goto(url.pathname + url.search + url.hash, {
-				keepFocus: true,
-				noScroll: true
-			});
+			void goto(url.pathname + url.search + url.hash, { reset: false });
 			return;
 		}
 
@@ -457,10 +451,7 @@
 			nav.cancel();
 			const url = new URL(nav.to.url);
 			carryLocaleOnto(url);
-			void goto(url.pathname + url.search + url.hash, {
-				keepFocus: true,
-				noScroll: true
-			});
+			void goto(url.pathname + url.search + url.hash, { reset: false });
 			return;
 		}
 
@@ -472,15 +463,12 @@
 		const url = new URL(nav.to.url);
 		if (key) url.searchParams.set('preview', key);
 		carryLocaleOnto(url);
-		void goto(url.pathname + url.search + url.hash, {
-			keepFocus: true,
-			noScroll: true
-		});
+		void goto(url.pathname + url.search + url.hash, { reset: false });
 	});
 
 	// Re-apply the overlay on every internal navigation. SvelteKit may strip
 	// the gating param when nav targets aren't preserve-params links, so we
-	// reapply it via replaceState too. Merge (not reset) so unchanged-layout
+	// reapply it via a shallow replace too. Merge (not reset) so unchanged-layout
 	// overlays keep showing while new-page-scope fetches resolve.
 	afterNavigate(({ shallow }) => {
 		if (shallow) return;
@@ -490,7 +478,7 @@
 			if (url.searchParams.get('version') !== versionKey) {
 				url.searchParams.delete('preview');
 				url.searchParams.set('version', versionKey);
-				goto(url.pathname + url.search + url.hash, {
+				void goto(url.pathname + url.search + url.hash, {
 					shallow: true,
 					replace: true,
 					state: page.state
@@ -526,7 +514,7 @@
 		const url = new URL(page.url.href);
 		if (url.searchParams.get('preview') !== key) {
 			url.searchParams.set('preview', key);
-			goto(url.pathname + url.search + url.hash, {
+			void goto(url.pathname + url.search + url.hash, {
 				shallow: true,
 				replace: true,
 				state: page.state
@@ -1268,7 +1256,7 @@
 			duplicateSource = null;
 			pagesOpen = false;
 			cmsStore.isEditing = true;
-			await goto(url, { keepFocus: true, noScroll: true });
+			await goto(url, { reset: false });
 		} finally {
 			newPageCreating = false;
 		}
