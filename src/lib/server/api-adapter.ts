@@ -1,4 +1,4 @@
-import { building } from '$app/environment';
+import { building } from '$app/env';
 import { buildConfig } from 'virtual:vela-cms/build-config';
 import type {
 	CmsAdapter,

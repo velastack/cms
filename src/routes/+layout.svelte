@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { MetaTags, deepMerge } from 'svelte-meta-tags';
-	import { AdminBar, cms, CmsContact, CmsHours, CmsNav, CmsSocialLinks } from '$lib/index.js';
+	import { AdminBar, cms, CmsContact, CmsHours, CmsNav, CmsSocialLinks } from '#lib/index.js';
 	import { demoContact, demoFooterNav, demoHours, demoSocial } from './_components/demo-content.js';
 
 	let { data, children } = $props();

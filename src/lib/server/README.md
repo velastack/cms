@@ -29,7 +29,7 @@ export const { load: loadCms, generateEntries } = createCms({
 ```ts
 // src/routes/+layout.server.ts
 import { error, redirect } from '@sveltejs/kit';
-import { loadCms } from '$lib/cms.js';
+import { loadCms } from '#lib/cms.js';
 
 export const load = async (event) => {
 	// Pick the locale however you like — pathname, Accept-Language, cookie, …

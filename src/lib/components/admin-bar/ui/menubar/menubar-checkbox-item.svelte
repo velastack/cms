@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Menubar as MenubarPrimitive } from 'bits-ui';
-	import { cn, type WithoutChildrenOrChild } from '$lib/components/admin-bar/utils.js';
+	import { cn, type WithoutChildrenOrChild } from '#lib/components/admin-bar/utils.js';
 	import type { Snippet } from 'svelte';
 	import MinusIcon from '../../icons/minus.svelte';
 	import CheckIcon from '../../icons/check.svelte';

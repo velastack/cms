@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CmsTeam } from '$lib/index.js';
+	import { CmsTeam } from '#lib/index.js';
 	import { demoTeam } from '../../_components/demo-content.js';
 </script>
 

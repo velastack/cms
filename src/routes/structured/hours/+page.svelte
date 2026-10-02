@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CmsHours, toOpeningHoursSpecification } from '$lib/index.js';
+	import { CmsHours, toOpeningHoursSpecification } from '#lib/index.js';
 	import { demoHours } from '../../_components/demo-content.js';
 </script>
 

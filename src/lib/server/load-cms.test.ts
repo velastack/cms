@@ -563,7 +563,7 @@ describe('resolveCmsPayload — tombstones', () => {
 describe('loadCms — server-only guard', () => {
 	it('throws when called from the browser', async () => {
 		vi.resetModules();
-		vi.doMock('$app/environment', () => ({ browser: true, building: false }));
+		vi.doMock('$app/env', () => ({ browser: true, building: false }));
 		const { loadCms } = await import('./load-cms.ts');
 		const adapter = mockAdapter({});
 		const event = {
@@ -573,7 +573,7 @@ describe('loadCms — server-only guard', () => {
 			fetch: globalThis.fetch
 		} as unknown as Parameters<typeof loadCms>[0];
 		expect(() => loadCms(event, { locale: 'en', locales: ['en'], adapter })).toThrow(/server-only/);
-		vi.doUnmock('$app/environment');
+		vi.doUnmock('$app/env');
 		vi.resetModules();
 	});
 });

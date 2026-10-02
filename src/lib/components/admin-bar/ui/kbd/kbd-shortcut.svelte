@@ -32,7 +32,7 @@
 </script>
 
 <script lang="ts">
-	import { cn } from '$lib/components/admin-bar/utils.js';
+	import { cn } from '#lib/components/admin-bar/utils.js';
 	import Kbd from './kbd.svelte';
 	import KbdGroup from './kbd-group.svelte';
 

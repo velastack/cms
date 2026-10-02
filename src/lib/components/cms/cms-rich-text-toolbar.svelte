@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { Editor } from '@tiptap/core';
 	import { tick as svelteTick } from 'svelte';
-	import { Button } from '$lib/components/admin-bar/ui/button/index.js';
-	import { Input } from '$lib/components/admin-bar/ui/input/index.js';
+	import { Button } from '#lib/components/admin-bar/ui/button/index.js';
+	import { Input } from '#lib/components/admin-bar/ui/input/index.js';
 	import BoldIcon from '../admin-bar/icons/bold.svelte';
 	import ItalicIcon from '../admin-bar/icons/italic.svelte';
 	import LinkIcon from '../admin-bar/icons/link.svelte';

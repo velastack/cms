@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CmsText } from '$lib/index.js';
+	import { CmsText } from '#lib/index.js';
 
 	const components = [
 		['nav', 'CmsNav', 'Navigation with one level of children; links pick a page or a URL.'],

@@ -7,11 +7,11 @@
 		"prefix": "vela"
 	},
 	"aliases": {
-		"components": "$lib/components",
-		"ui": "$lib/components/admin-bar/ui",
-		"utils": "$lib/components/admin-bar/utils",
-		"hooks": "$lib/hooks",
-		"lib": "$lib"
+		"components": "#lib/components",
+		"ui": "#lib/components/admin-bar/ui",
+		"utils": "#lib/components/admin-bar/utils",
+		"hooks": "#lib/hooks",
+		"lib": "#lib"
 	},
 	"registry": "https://shadcn-svelte.com/registry"
 }

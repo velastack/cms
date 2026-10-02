@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { HTMLInputAttributes } from 'svelte/elements';
-	import { cn, type WithElementRef } from '$lib/components/admin-bar/utils.js';
+	import { cn, type WithElementRef } from '#lib/components/admin-bar/utils.js';
 
 	let {
 		ref = $bindable(null),

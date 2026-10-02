@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { browser } from '$app/environment';
-	import { beforeNavigate, goto, invalidateAll, replaceState } from '$app/navigation';
+	import { browser } from '$app/env';
+	import { beforeNavigate, goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
-	import { cmsStore } from '$lib/components/cms/cms-store.svelte.js';
+	import { cmsStore } from '#lib/components/cms/cms-store.svelte.js';
 	import { adminBarTheme, type AdminBarTheme } from './theme.svelte.js';
 
 	const STORAGE_KEY = 'cms.editEnabled';
@@ -68,10 +68,10 @@
 				localStorage.setItem(STORAGE_KEY, '1');
 				barEnabled = true;
 				// Strip `?edit` so reloads don't re-grant access without the persisted flag.
-				const url = new URL(page.url);
+				const url = new URL(page.url.href);
 				url.searchParams.delete('edit');
 				const path = url.pathname + url.search + url.hash;
-				setTimeout(() => replaceState(path, page.state), 0);
+				setTimeout(() => goto(path, { shallow: true, replace: true, state: page.state }), 0);
 			} else if (stored) {
 				barEnabled = true;
 			}
@@ -110,6 +110,7 @@
 
 	// ── Unsaved-changes guard ─────────────────────────────────────────
 	beforeNavigate((nav) => {
+		if (nav.shallow) return;
 		if (!cmsStore.isDirty) return;
 		if (!confirm('You have unsaved changes. Leave anyway?')) nav.cancel();
 	});
@@ -152,7 +153,7 @@
 
 	// ── Teardown (shared by closeBar + onLogout) ──────────────────────
 	const stripUrlParams = (...keys: string[]) => {
-		const url = new URL(page.url);
+		const url = new URL(page.url.href);
 		let changed = false;
 		for (const k of keys) {
 			if (url.searchParams.has(k)) {
@@ -206,9 +207,11 @@
 	{:else if barEnabled && authState === 'unauthed'}
 		<div class="cms-signin">
 			<span>Sign in to edit this site</span>
+
 			<button type="button" class="cms-signin__signin" onclick={() => (signinOpen = !signinOpen)}
 				>Sign in</button
 			>
+
 			<button type="button" class="cms-signin__close" aria-label="Close" onclick={closeBar}
 				>×</button
 			>

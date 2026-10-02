@@ -89,7 +89,7 @@ export const navView = (value: CmsNavValue): NavItemView[] =>
 	value.items.filter((i) => i.label !== '').map(viewItem);
 
 /** Whether `item` (or one of its children) points at the current page. */
-export const isActive = (item: NavItemView, url: URL | string): boolean => {
+export const isActive = (item: NavItemView, url: Pick<URL, 'pathname'> | string): boolean => {
 	const pathname = typeof url === 'string' ? url : url.pathname;
 	const path = pathname.replace(/\/+$/, '') || '/';
 	const href = item.href.replace(/\/+$/, '') || '/';

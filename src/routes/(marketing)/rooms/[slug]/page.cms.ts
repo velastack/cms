@@ -1,4 +1,4 @@
-import { type CmsPageConfig } from '$lib/index.js';
+import { type CmsPageConfig } from '#lib/index.js';
 
 export default {
 	type: 'Room',

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CmsTestimonials, toReview } from '$lib/index.js';
+	import { CmsTestimonials, toReview } from '#lib/index.js';
 	import { demoTestimonials } from '../../_components/demo-content.js';
 </script>
 

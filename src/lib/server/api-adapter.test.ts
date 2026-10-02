@@ -340,11 +340,11 @@ describe('apiAdapter — fetchEntries', () => {
 
 		beforeEach(() => {
 			vi.resetModules();
-			vi.doMock('$app/environment', () => ({ browser: false, building: true }));
+			vi.doMock('$app/env', () => ({ browser: false, building: true }));
 		});
 
 		afterEach(() => {
-			vi.doUnmock('$app/environment');
+			vi.doUnmock('$app/env');
 			vi.doUnmock('virtual:vela-cms/build-config');
 			vi.resetModules();
 		});

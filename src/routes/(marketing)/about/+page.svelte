@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CmsText, CmsRichText } from '$lib/index.js';
+	import { CmsText, CmsRichText } from '#lib/index.js';
 </script>
 
 <article>

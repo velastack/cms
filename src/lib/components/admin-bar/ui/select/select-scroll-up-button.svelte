@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Select as SelectPrimitive } from 'bits-ui';
-	import { cn, type WithoutChildrenOrChild } from '$lib/components/admin-bar/utils.js';
+	import { cn, type WithoutChildrenOrChild } from '#lib/components/admin-bar/utils.js';
 	import ChevronUpIcon from '../../icons/chevron-up.svelte';
 
 	let {

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { cms, CmsNav, isActive } from '$lib/index.js';
+	import { cms, CmsNav, isActive } from '#lib/index.js';
 	import { demoPrimaryNav } from './demo-content.js';
 </script>
 

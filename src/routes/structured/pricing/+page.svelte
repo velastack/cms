@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CmsPricing } from '$lib/index.js';
+	import { CmsPricing } from '#lib/index.js';
 	import { demoPricing } from '../../_components/demo-content.js';
 </script>
 

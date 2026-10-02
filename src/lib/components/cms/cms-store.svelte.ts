@@ -27,7 +27,7 @@
  * Locales panel passes an explicit locale to inspect other locales'
  * working-copy state without switching the page.
  */
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 import { page } from '$app/state';
 import { mergeLocaleDocs, mergeLocaleEntries } from './locale-merge.js';
 import { composeKey } from './overlay-sync.js';
@@ -323,6 +323,7 @@ class CmsStore {
 		// not cancel the page's own `en` overlay load, and vice versa.
 		const token = (this.localeOverlayTokens[opts.locale] =
 			(this.localeOverlayTokens[opts.locale] ?? 0) + 1);
+
 		this.overlayFetchToken = token;
 		const versionKey = opts.versionKey ?? null;
 		const locale = opts.locale;
@@ -540,9 +541,12 @@ class CmsStore {
 		const out: Record<string, { pages: number; layouts: number; total: number }> = {};
 		for (const item of this.openRelease?.items ?? []) {
 			if (item.kind === 'site') continue;
+
 			const bucket = (out[item.locale] ??= { pages: 0, layouts: 0, total: 0 });
+
 			if (item.kind === 'layout') bucket.layouts += 1;
 			else bucket.pages += 1;
+
 			bucket.total += 1;
 		}
 		return out;
@@ -633,8 +637,13 @@ class CmsStore {
 		if (params.limit != null) qs.set('limit', String(params.limit));
 		const res = await fetch(`${endpoint}/media?${qs}`, { credentials: 'include' });
 		if (!res.ok) throw new Error(`List failed (${res.status})`);
+
 		const data = (await res.json()) as { items: MediaItem[]; total: number };
-		return { ...data, items: data.items.map((i) => resolveMediaItem(i, endpoint)) };
+
+		return {
+			...data,
+			items: data.items.map((i) => resolveMediaItem(i, endpoint))
+		};
 	}
 
 	async deleteMedia(endpoint: string, id: string): Promise<void> {

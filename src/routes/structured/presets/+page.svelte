@@ -7,7 +7,7 @@
 		CmsSteps,
 		CmsTimeline,
 		scheduleByDay
-	} from '$lib/index.js';
+	} from '#lib/index.js';
 	import {
 		demoGallery,
 		demoLogos,

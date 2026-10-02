@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { cn } from '$lib/components/admin-bar/utils.js';
+	import { cn } from '#lib/components/admin-bar/utils.js';
 	import { type WithElementRef } from 'bits-ui';
 	import type { HTMLAttributes } from 'svelte/elements';
 

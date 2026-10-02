@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { CmsEntries, CmsText } from '$lib/index.js';
+	import { CmsEntries, CmsText } from '#lib/index.js';
 </script>
 
 <article>

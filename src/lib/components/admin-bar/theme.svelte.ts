@@ -6,7 +6,7 @@
  * the same singleton so theme changes propagate everywhere immediately.
  */
 
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 
 export type AdminBarTheme = 'system' | 'light' | 'dark';
 

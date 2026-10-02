@@ -1,5 +1,5 @@
-import { createCms, apiAdapter } from '$lib/server/index.js';
-import { locales } from '$locales/data.js';
+import { createCms, apiAdapter } from '#lib/server/index.js';
+import { locales } from '#locales/data.js';
 
 export const { load: loadCms, generateEntries } = createCms({
 	adapter: apiAdapter({ endpoint: 'https://velastack.dev/v1/projects/velastack-cms/cms' }),

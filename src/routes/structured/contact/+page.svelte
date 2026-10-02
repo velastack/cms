@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CmsContact, toPostalAddress } from '$lib/index.js';
+	import { CmsContact, toPostalAddress } from '#lib/index.js';
 	import { demoContact } from '../../_components/demo-content.js';
 </script>
 

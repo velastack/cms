@@ -7,7 +7,7 @@
 		CmsMarkdown,
 		CmsNumber,
 		CmsText
-	} from '$lib/index.js';
+	} from '#lib/index.js';
 
 	const formatTime = (raw: string): string => {
 		const m = /^(\d{2}):(\d{2})/.exec(raw);

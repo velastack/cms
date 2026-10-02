@@ -7,7 +7,7 @@
  * export const cms = createCmsBackend();
  *
  * // src/routes/cms/[...path]/+server.ts
- * import { cms } from '$lib/server/cms';
+ * import { cms } from '#lib/server/cms.js';
  * export const prerender = false;
  * export const fallback = cms.handler;
  * ```

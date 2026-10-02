@@ -1,5 +1,5 @@
 import type { RouteId, RouteParams } from './$types.d.ts';
-import { generateEntries } from '$lib/cms.js';
+import { generateEntries } from '../../../../cms.js';
 
 export const entries = async () => {
 	// const pages = await generateEntries('/(marketing)/rooms/[slug]' satisfies RouteId);

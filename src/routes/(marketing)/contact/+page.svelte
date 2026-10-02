@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CmsBoolean, CmsDateTime, CmsLink, CmsRichText, CmsText } from '$lib/index.js';
+	import { CmsBoolean, CmsDateTime, CmsLink, CmsRichText, CmsText } from '#lib/index.js';
 
 	const formatDateTime = (raw: string): string => {
 		const d = new Date(raw);

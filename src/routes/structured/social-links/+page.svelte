@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CmsSocialLinks } from '$lib/index.js';
+	import { CmsSocialLinks } from '#lib/index.js';
 	import { demoSocial } from '../../_components/demo-content.js';
 </script>
 

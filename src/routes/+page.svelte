@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CmsRichText, CmsText } from '$lib/index.js';
+	import { CmsRichText, CmsText } from '#lib/index.js';
 </script>
 
 <section class="hero">

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CmsCollection, formatCollectionPrice } from '$lib/index.js';
+	import { CmsCollection, formatCollectionPrice } from '#lib/index.js';
 	import { demoCollection } from '../../_components/demo-content.js';
 </script>
 

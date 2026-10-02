@@ -1,7 +1,7 @@
-import { loadCms } from '$lib/cms.js';
+import { loadCms } from '../cms.js';
 import { error, redirect } from '@sveltejs/kit';
 import { defineBaseMetaTags } from 'svelte-meta-tags';
-import { getLocale } from '$locales/main.url.js';
+import { getLocale } from '#locales/main.url.js';
 
 export const prerender = true;
 

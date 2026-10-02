@@ -19,7 +19,7 @@ import type {
 	TeamMember,
 	Testimonial,
 	TimelineItem
-} from '$lib/index.js';
+} from '#lib/index.js';
 
 const to = (routeId: string) => ({ routeId, params: {} });
 const nav = (id: string, label: string, link: NavItem['link']): NavItem => ({

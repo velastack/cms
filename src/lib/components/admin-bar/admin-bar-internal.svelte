@@ -1,16 +1,10 @@
 <script lang="ts">
-	import {
-		afterNavigate,
-		beforeNavigate,
-		goto,
-		invalidateAll,
-		replaceState
-	} from '$app/navigation';
+	import { afterNavigate, beforeNavigate, goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { pages } from 'virtual:vela-cms/pages';
-	import { cmsStore, type PageDeleteOutcome } from '$lib/components/cms/cms-store.svelte.js';
-	import { deriveOverlayIntents } from '$lib/components/cms/overlay-sync.js';
-	import type { CmsPayload, CmsScopeEntry } from '$lib/components/cms/scope.js';
+	import { cmsStore, type PageDeleteOutcome } from '#lib/components/cms/cms-store.svelte.js';
+	import { deriveOverlayIntents } from '#lib/components/cms/overlay-sync.js';
+	import type { CmsPayload, CmsScopeEntry } from '#lib/components/cms/scope.js';
 	import CssRoot from './css-root.svelte';
 	import { adminBarTheme, type AdminBarTheme } from './theme.svelte.js';
 	import type { CmsDeployState } from '../../core/wire.js';
@@ -186,7 +180,7 @@
 
 	const previewUrl = $derived.by(() => {
 		if (versionKey) {
-			const url = new URL(page.url);
+			const url = new URL(page.url.href);
 			url.searchParams.delete('edit');
 			url.searchParams.delete('preview');
 			url.searchParams.set('version', versionKey);
@@ -194,7 +188,7 @@
 		}
 		const key = previewKey;
 		if (!key) return '';
-		const url = new URL(page.url);
+		const url = new URL(page.url.href);
 		url.searchParams.delete('edit');
 		url.searchParams.set('preview', key);
 		return url.toString();
@@ -211,7 +205,7 @@
 	};
 
 	const setPreviewParam = async (key: string | null, opts: { replace?: boolean } = {}) => {
-		const url = new URL(page.url);
+		const url = new URL(page.url.href);
 		const current = url.searchParams.get('preview');
 		url.searchParams.delete('edit');
 		if (key) {
@@ -223,14 +217,14 @@
 		}
 		const path = url.pathname + url.search + url.hash;
 		if (opts.replace) {
-			replaceState(path, page.state);
+			goto(path, { shallow: true, replace: true, state: page.state });
 		} else {
 			await goto(path, { keepFocus: true, noScroll: true });
 		}
 	};
 
 	const setVersionParam = async (key: string | null, opts: { replace?: boolean } = {}) => {
-		const url = new URL(page.url);
+		const url = new URL(page.url.href);
 		const current = url.searchParams.get('version');
 		url.searchParams.delete('edit');
 		url.searchParams.delete('preview');
@@ -243,7 +237,7 @@
 		}
 		const path = url.pathname + url.search + url.hash;
 		if (opts.replace) {
-			replaceState(path, page.state);
+			goto(path, { shallow: true, replace: true, state: page.state });
 		} else {
 			await goto(path, { keepFocus: true, noScroll: true });
 			// Force the server load to re-fetch. SvelteKit's URL tracking
@@ -264,7 +258,7 @@
 	// (and on static-export sites with no server load to re-run). Like the
 	// other gating params, we strip the param when `null`.
 	const setLocaleParam = async (locale: string | null, opts: { replace?: boolean } = {}) => {
-		const url = new URL(page.url);
+		const url = new URL(page.url.href);
 		const current = url.searchParams.get('locale');
 		if (locale) {
 			if (current === locale) return;
@@ -275,7 +269,7 @@
 		}
 		const path = url.pathname + url.search + url.hash;
 		if (opts.replace) {
-			replaceState(path, page.state);
+			goto(path, { shallow: true, replace: true, state: page.state });
 			return;
 		}
 		if (!locale) {
@@ -411,6 +405,7 @@
 	// appended; already-correct nav targets pass through unchanged. Full-page
 	// unloads (`willUnload`) and external/hash-only navs bypass.
 	beforeNavigate((nav) => {
+		if (nav.shallow) return;
 		if (nav.type === 'leave' || nav.willUnload) return;
 		if (!nav.to) return;
 		if (nav.to.url.origin !== location.origin) return;
@@ -487,13 +482,19 @@
 	// the gating param when nav targets aren't preserve-params links, so we
 	// reapply it via replaceState too. Merge (not reset) so unchanged-layout
 	// overlays keep showing while new-page-scope fetches resolve.
-	afterNavigate(() => {
+	afterNavigate(({ shallow }) => {
+		if (shallow) return;
+
 		if (versionKey) {
-			const url = new URL(page.url);
+			const url = new URL(page.url.href);
 			if (url.searchParams.get('version') !== versionKey) {
 				url.searchParams.delete('preview');
 				url.searchParams.set('version', versionKey);
-				replaceState(url.pathname + url.search + url.hash, page.state);
+				goto(url.pathname + url.search + url.hash, {
+					shallow: true,
+					replace: true,
+					state: page.state
+				});
 			}
 			// `reset` so a nav from one release to another wipes the prior
 			// snapshot's overlay before merging in the new one — otherwise
@@ -522,10 +523,14 @@
 			cmsStore.clearOverlay();
 			return;
 		}
-		const url = new URL(page.url);
+		const url = new URL(page.url.href);
 		if (url.searchParams.get('preview') !== key) {
 			url.searchParams.set('preview', key);
-			replaceState(url.pathname + url.search + url.hash, page.state);
+			goto(url.pathname + url.search + url.hash, {
+				shallow: true,
+				replace: true,
+				state: page.state
+			});
 		}
 		void cmsStore.loadAndApplyOverlay(endpoint, currentScopes(), key, { locale: currentLocale });
 		void cmsStore.loadAndApplyEntriesOverlay(endpoint, currentEntriesRouteIds(), key, {
@@ -1171,6 +1176,7 @@
 		const sourceContents: Record<string, unknown> = res.ok
 			? ((await res.json()) as { contents: Record<string, unknown> }).contents
 			: {};
+
 		const { metadata: meta, ...rest } = sourceContents as { metadata?: unknown } & Record<
 			string,
 			unknown
@@ -1179,6 +1185,7 @@
 			meta && typeof meta === 'object' && !Array.isArray(meta)
 				? (meta as Record<string, unknown>)
 				: {};
+
 		closeAllPanels();
 		duplicateSource = { tree: rest, metadata: sourceMetadata };
 		newDialog = config;
@@ -1320,7 +1327,7 @@
 								<KbdShortcut keys="⌘E" class={menuShortcutClass} />
 							</Menubar.Item>
 							<Menubar.Item class={menuItemClass} onSelect={onOpenSeo}>
-								SEO &amp; Metadata
+								SEO & Metadata
 								<KbdShortcut keys="⌘I" class={menuShortcutClass} />
 							</Menubar.Item>
 							<Menubar.Separator class={menuSeparatorClass} />
@@ -1394,7 +1401,7 @@
 								onSelect={onOpenPublish}
 								disabled={counts.total === 0}
 							>
-								Review &amp; Publish…
+								Review & Publish…
 								{#if counts.total > 0}
 									<span class="vela:ml-auto vela:flex vela:items-center vela:gap-2">
 										<span
@@ -1410,9 +1417,11 @@
 									<KbdShortcut keys="⌘P" class={menuShortcutClass} />
 								{/if}
 							</Menubar.Item>
-							<Menubar.Item class={menuItemClass} onSelect={onShareLink} disabled={!previewUrl}>
-								Share Preview Link…
-							</Menubar.Item>
+
+							<Menubar.Item class={menuItemClass} onSelect={onShareLink} disabled={!previewUrl}
+								>Share Preview Link…</Menubar.Item
+							>
+
 							<Menubar.Item
 								class={menuItemDestructiveClass}
 								onSelect={onDiscardAllChanges}

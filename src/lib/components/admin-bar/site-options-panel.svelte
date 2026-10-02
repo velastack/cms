@@ -9,8 +9,8 @@
 	 * non-localised tree per project.
 	 */
 	import { page } from '$app/state';
-	import { cmsStore } from '$lib/components/cms/cms-store.svelte.js';
-	import type { CmsPayload, SiteFieldSchema, SiteSchema } from '$lib/components/cms/scope.js';
+	import { cmsStore } from '#lib/components/cms/cms-store.svelte.js';
+	import type { CmsPayload, SiteFieldSchema, SiteSchema } from '#lib/components/cms/scope.js';
 	import FieldInput from './field-input.svelte';
 	import PanelFooter from './panel-footer.svelte';
 	import PanelHeader from './panel-header.svelte';

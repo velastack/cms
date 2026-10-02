@@ -15,7 +15,7 @@ import type {
 	CmsAdapterTombstone,
 	CmsScopeQuery
 } from './types.ts';
-import { browser, building } from '$app/environment';
+import { browser, building } from '$app/env';
 
 const builtManifest = cmsManifest as CmsManifest;
 

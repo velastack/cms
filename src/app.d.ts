@@ -1,7 +1,7 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
 
-import type { CmsPayload } from '$lib/components/cms/scope.js';
+import type { CmsPayload } from '#lib/components/cms/scope.js';
 
 declare global {
 	namespace App {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CmsFaq, toFaqPage } from '$lib/index.js';
+	import { CmsFaq, toFaqPage } from '#lib/index.js';
 	import { demoFaq } from '../../_components/demo-content.js';
 </script>
 

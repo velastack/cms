@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config';
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { cms } from './plugin/src/index.js';
+import adapter from './plugin/src/adapter.js';
 
 const testManifestFixture = fileURLToPath(
 	new URL('./src/routes/api/cms/__tests__/__fixtures__/test-manifest.ts', import.meta.url)
@@ -15,7 +16,13 @@ export default defineConfig({
 			endpoint: 'https://velastack.dev/v1/projects/velastack-cms/cms',
 			locales: ['en', 'es']
 		}),
-		sveltekit()
+		sveltekit({
+			compilerOptions: {
+				runes: ({ filename }) =>
+					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
+			},
+			adapter: adapter({ fallback: '200.html' })
+		})
 	],
 	build: {
 		sourcemap: true
