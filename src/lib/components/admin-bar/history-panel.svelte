@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { cmsFetch } from '../../core/cms-fetch.js';
 	import PanelFooter from './panel-footer.svelte';
 	import PanelHeader from './panel-header.svelte';
 	import Panel from './panel.svelte';
@@ -68,8 +69,7 @@
 			return;
 		reverting = release.id;
 		try {
-			const res = await fetch(`${endpoint}/release/history/${release.id}/revert`, {
-				credentials: 'include',
+			const res = await cmsFetch(`${endpoint}/release/history/${release.id}/revert`, {
 				method: 'POST'
 			});
 			if (!res.ok) return;

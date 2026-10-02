@@ -25,10 +25,12 @@
  * default; enabling it with an `origin` predicate that returns `true`
  * unconditionally lets any site drive the mutating endpoints with a signed-in
  * editor's cookie, because SvelteKit's CSRF check only guards form content
- * types and these are JSON. And SvelteKit *does* guard `multipart/form-data`,
- * so a cross-origin `POST /media` needs the site's origin in
- * `kit.csrf.trustedOrigins` — that check is production-only, so it will not
- * show up in `vela dev`.
+ * types (and, since Kit 3, requests with no content type) and these are JSON.
+ * The admin bar sends every mutation with a JSON content type for that reason.
+ * SvelteKit *does* guard `multipart/form-data`, so a cross-origin
+ * `POST /media` needs the site's origin in the backend app's
+ * `sveltekit({ csrf: { trustedOrigins: ['https://site.example'] } })` — that
+ * check is production-only, so it will not show up in `vela dev`.
  *
  * The session cookie is scoped to the mount path (`/cms`, or
  * `/v1/projects/<id>/cms`), so several projects on one origin hold independent

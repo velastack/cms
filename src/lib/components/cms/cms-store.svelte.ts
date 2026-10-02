@@ -29,6 +29,7 @@
  */
 import { browser } from '$app/env';
 import { page } from '$app/state';
+import { cmsFetch } from '../../core/cms-fetch.js';
 import { mergeLocaleDocs, mergeLocaleEntries } from './locale-merge.js';
 import { composeKey } from './overlay-sync.js';
 import { get, has, mergeTree, set, type Tree } from '../../core/path.js';
@@ -647,9 +648,8 @@ class CmsStore {
 	}
 
 	async deleteMedia(endpoint: string, id: string): Promise<void> {
-		const res = await fetch(`${endpoint}/media/${id}`, {
-			method: 'DELETE',
-			credentials: 'include'
+		const res = await cmsFetch(`${endpoint}/media/${id}`, {
+			method: 'DELETE'
 		});
 		if (!res.ok) throw new Error(`Delete failed (${res.status})`);
 	}

@@ -148,7 +148,7 @@ export type CmsBackendOptions = {
 	 *
 	 * Enabling this is a security decision, not a convenience one: the session
 	 * cookie is credentialed and the JSON mutation endpoints are not covered by
-	 * SvelteKit's CSRF check (it only guards form content types). An `origin`
+	 * SvelteKit's CSRF check (it only guards form and missing content types). An `origin`
 	 * predicate that returns `true` unconditionally lets any site on the
 	 * internet drive those endpoints with a signed-in editor's cookie. Allowlist
 	 * the origins you actually serve.

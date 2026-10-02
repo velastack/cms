@@ -8,6 +8,7 @@
 	import CssRoot from './css-root.svelte';
 	import { adminBarTheme, type AdminBarTheme } from './theme.svelte.js';
 	import type { CmsDeployState } from '../../core/wire.js';
+	import { cmsFetch } from '../../core/cms-fetch.js';
 	import DeletePageDialog, {
 		type DeletePageMode,
 		type RedirectTarget
@@ -677,7 +678,7 @@
 		deploying = true;
 		deployError = null;
 		try {
-			const res = await fetch(`${endpoint}/deploy`, { method: 'POST', credentials: 'include' });
+			const res = await cmsFetch(`${endpoint}/deploy`, { method: 'POST' });
 			if (!res.ok) {
 				deployError = (await res.text()) || 'Could not start the deploy.';
 				return;
@@ -918,9 +919,8 @@
 
 	const onRegeneratePreviewKey = async () => {
 		if (versionKey && versionRelease) {
-			const res = await fetch(`${endpoint}/release/history/${versionRelease.id}/preview-key`, {
-				method: 'POST',
-				credentials: 'include'
+			const res = await cmsFetch(`${endpoint}/release/history/${versionRelease.id}/preview-key`, {
+				method: 'POST'
 			});
 			if (!res.ok) return;
 			const data = (await res.json()) as { preview_key: string };
@@ -941,9 +941,8 @@
 			return;
 		}
 
-		const res = await fetch(`${endpoint}/release/preview-key`, {
-			method: 'POST',
-			credentials: 'include'
+		const res = await cmsFetch(`${endpoint}/release/preview-key`, {
+			method: 'POST'
 		});
 		if (!res.ok) return;
 		await cmsStore.fetchOpenRelease(endpoint);
@@ -952,9 +951,8 @@
 
 	const onDiscardAllChanges = async () => {
 		if (!confirm('Discard all unpublished changes in your working copy?')) return;
-		const res = await fetch(`${endpoint}/release/discard`, {
-			method: 'POST',
-			credentials: 'include'
+		const res = await cmsFetch(`${endpoint}/release/discard`, {
+			method: 'POST'
 		});
 		if (!res.ok) return;
 		cmsStore.setOpenRelease(null);

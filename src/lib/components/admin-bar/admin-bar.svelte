@@ -4,6 +4,7 @@
 	import { beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { cmsStore } from '#lib/components/cms/cms-store.svelte.js';
+	import { cmsFetch } from '#lib/core/cms-fetch.js';
 	import { adminBarTheme, type AdminBarTheme } from './theme.svelte.js';
 
 	const STORAGE_KEY = 'cms.editEnabled';
@@ -191,7 +192,7 @@
 	const onLogout = async () => {
 		if (cmsStore.isDirty && !confirm('Discard unsaved changes?')) return;
 		try {
-			await fetch(`${endpoint}/logout`, { method: 'POST', credentials: 'include' });
+			await cmsFetch(`${endpoint}/logout`, { method: 'POST' });
 		} catch {
 			// Server call failed; tear down locally regardless.
 		}
