@@ -359,7 +359,7 @@ export default function adapter(options) {
 
 			const json = JSON.stringify(manifest).replace(/</g, '\\u003c');
 			const shim = loadMinifiedShim();
-			const tag = `<script>var __velastack_manifest = ${json};${shim}</script>`;
+			const tag = `<script>var __velastack_manifest = ${json};${shim}<\/script>`;
 			const next = fallbackHtml.slice(0, headIdx) + tag + fallbackHtml.slice(headIdx);
 			fs.writeFileSync(fallbackPath, next);
 
