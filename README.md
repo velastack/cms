@@ -42,6 +42,8 @@ CMS identity therefore can't be `(component file + field name)`. It has to be `(
 npm install @velastack/cms
 ```
 
+Requires SvelteKit 3, Svelte 5.57.1+, Vite 8.0.12+ and Node 22.17+. SvelteKit 2 projects stay on `@velastack/cms@^0.5`.
+
 ## Quick start
 
 ### 1. Register the Vite plugin
@@ -57,9 +59,20 @@ export default defineConfig({
 });
 ```
 
-The plugin reads `src/routes/` and `src/lib/` by default. Override with `cms({ routesDir, libDir })` if your project is laid out differently.
+The plugin reads `src/routes/` and `src/lib/` by default. Override with `cms({ routesDir, libDir })` if your project is laid out differently. Imports through `#lib/…` (and any other `#` subpath import in your `package.json` `imports`) are followed, as are older `$lib/…` ones.
 
-### 2. Create the CMS in `$lib/cms.ts`
+### 2. Create the CMS in `src/lib/cms.ts`
+
+SvelteKit 3 projects import `src/lib` through the `#lib` subpath import, which `sv create` (and `sv migrate sveltekit-3`) declares in `package.json`:
+
+```json
+{
+	"imports": {
+		"#lib": "./src/lib/index.js",
+		"#lib/*": "./src/lib/*"
+	}
+}
+```
 
 ```ts
 // src/lib/cms.ts
@@ -84,7 +97,7 @@ Optionally include `svelte-meta-tags` for easy page metadata handling, but it is
 // src/routes/+layout.server.ts
 import { error, redirect, type ServerLoad } from '@sveltejs/kit';
 import { defineBaseMetaTags } from 'svelte-meta-tags';
-import { loadCms } from '$lib/cms.js';
+import { loadCms } from '#lib/cms.js';
 
 export const load: ServerLoad = async (event) => {
 	const { baseMetaTags } = defineBaseMetaTags({
@@ -198,6 +211,27 @@ Only URLs that flow through `apiAdapter` responses are rewritten. If you build a
 **`@sveltejs/enhanced-img` interop:** since media lands in `static/`, you can reference specific images by static path (e.g. `<enhanced:img src="/cms-media/hero.webp" />`) and get all the usual `<picture>`/`srcset` benefits. Fully dynamic enhanced-img on CMS-driven images isn't built in.
 
 If `endpoint` is omitted (e.g. when using `mockAdapter` for tests/demos), the plugin's media steps are no-ops — builds proceed exactly as before.
+
+### Static sites: `@velastack/cms/adapter`
+
+A fully static site uses the bundled adapter, a wrapper around `@sveltejs/adapter-static` (same options). SvelteKit 3 takes the adapter in `sveltekit({...})`:
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { cms } from '@velastack/cms/vite';
+import cmsAdapter from '@velastack/cms/adapter';
+
+export default defineConfig({
+	plugins: [
+		cms({ endpoint: 'https://cms.example.com/v1/projects/p1/cms' }),
+		sveltekit({ adapter: cmsAdapter({ fallback: '200.html' }) })
+	]
+});
+```
+
+After adapter-static writes the site, it adds what the admin bar needs to preview and create pages that were not prerendered: a `__fallback.json` next to each parameterized route (`rooms/__fallback.json` for `/(marketing)/rooms/[slug]`), and a `__velastack_manifest` of the creatable routes' prerendered entries injected into the `fallback` page. The manifest needs `fallback` set and the `cms()` plugin in the same build; the adapter warns if the plugin never reported.
 
 ## CMS components
 
@@ -370,7 +404,7 @@ A component is treated as a CMS component if **any** of the following hold:
 
    Use it from any route: `<CmsLink name="hero.cta" />`. The plugin picks up `hero.cta` as a field on the page's scope; no plugin config edit required.
 
-2. **It's a named export from your local `src/lib/components/cms/index.{ts,js}` barrel.** Re-export your component there if you prefer a single import path..
+2. **It's a named export from your local `src/lib/components/cms/index.{ts,js}` barrel** (imported as `#lib/components/cms/index.js`). Re-export your component there if you prefer a single import path.
 
 3. **It's imported from the `@velastack/cms` package itself.** Every named import from `@velastack/cms` is a CMS component, whether or not the bundler resolved the package.
 

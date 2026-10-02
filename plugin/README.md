@@ -44,7 +44,10 @@ type ExternalCmsComponentSpec =
 ```
 
 - `routesDir` / `libDir` — only override if your project diverges from the
-  SvelteKit defaults.
+  SvelteKit defaults. `#lib/…` imports resolve through the project's
+  `package.json` `imports` (read once when the config resolves), falling back
+  to `libDir` when `#lib` isn't declared there; `$lib/…` still resolves to
+  `libDir`.
 - `components` — third-party CMS component packs the walker should recognize.
   Auto-discovered for everything inside `<libDir>/components/cms/` and the
   `@velastack/cms` package itself; use this for components installed from npm.
@@ -111,7 +114,7 @@ instance script (or creates one if absent). Authors never write
 ### `routeId` into zero-arg `generateEntries()` calls
 
 In any `+page.ts` or `+page.server.ts` that imports `generateEntries` (from
-anywhere — typically `$lib/cms.ts`), zero-argument calls
+anywhere — typically `#lib/cms.js`), zero-argument calls
 `generateEntries()` are rewritten to `generateEntries('<routeId>')`. Calls
 with any explicit argument are left alone — that's the documented opt-out.
 
@@ -123,8 +126,10 @@ Imports get classified as CMS components by:
 
 0. **`@velastack/cms` by name** — every named import from the package
    specifier, with no resolver needed.
-1. **In-tree barrel** — anything from `<libDir>/components/cms/index.{ts,js}`.
-   Named imports are CMS components; default isn't.
+1. **In-tree barrel** — anything from `<libDir>/components/cms/index.{ts,js}`,
+   however it's imported (`#lib/components/cms/index.js`, `$lib/components/cms`,
+   a relative path or another `#` subpath import). Named imports are CMS
+   components; default isn't.
 2. **In-tree files** — `.svelte` files directly under `<libDir>/components/cms/`.
    Default imports are CMS components.
 3. **`@velastack/cms` package** — any import resolving inside the `@velastack/cms`
@@ -138,6 +143,31 @@ attribute records the usage under that layout scope instead of the file's
 own. Dynamic `name={expr}` props and `scope=` attributes naming a scope
 outside the route's chain are reported as warnings on the build result and
 logged by the plugin.
+
+## Static adapter
+
+`@velastack/cms/adapter` wraps `@sveltejs/adapter-static` and takes the same
+options. It goes in `sveltekit({...})` next to `cms()`:
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { cms } from '@velastack/cms/vite';
+import cmsAdapter from '@velastack/cms/adapter';
+
+export default defineConfig({
+	plugins: [cms(), sveltekit({ adapter: cmsAdapter({ fallback: '200.html' }) })]
+});
+```
+
+After the inner adapter runs it writes `__fallback.json` beside each
+parameterized route's parent directory (built from a prerendered
+`__data.json`, with docs and metadata cleared and params replaced by
+`%name%`), and injects `__velastack_manifest` plus a small fetch shim into the
+`fallback` page. The manifest lists the prerendered entries of every
+`creatable` `page.cms.ts` route; the plugin hands those routes to the adapter
+in-process, so the adapter warns when the `cms()` plugin never ran.
 
 ## HMR
 

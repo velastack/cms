@@ -53,7 +53,7 @@ export type Cms = {
  * Typical usage:
  *
  * ```ts
- * // $lib/cms.ts
+ * // src/lib/cms.ts
  * import { createCms, mockAdapter } from '@velastack/cms/server';
  * export const { load: loadCms, generateEntries } = createCms({
  *   adapter: mockAdapter({ layoutDocs, pageDocs }),
