@@ -1,6 +1,6 @@
 {
 	"name": "@velastack/cms",
-	"version": "0.6.1",
+	"version": "0.6.2",
 	"description": "A scope-aware CMS for SvelteKit, for static or dynamic sites.",
 	"keywords": [
 		"svelte",
