@@ -51,6 +51,28 @@ describe('createCms.load', () => {
 		);
 		expect(result.notFound).toBe(true);
 	});
+
+	it('loads a prerendered page, where SvelteKit makes url.searchParams throw', async () => {
+		const adapter = mockAdapter({
+			pageDocs: {
+				en: { '/': [{ params: {}, published: { welcome: { title: 'Hi' } } }] }
+			}
+		});
+		const cms = createCms({ adapter, locales: ['en'] });
+		const event = fakeEvent({ routeId: '/' });
+		// What Kit's `disable_search` installs on a prerendered page's URL, in
+		// `vite dev` too since 3.0: a getter that throws instead of a value.
+		for (const property of ['search', 'searchParams']) {
+			Object.defineProperty(event.url, property, {
+				get() {
+					throw new Error(`Cannot access url.${property} on a page with prerendering enabled`);
+				}
+			});
+		}
+		const { cms: payload, notFound } = await cms.load(event, { locale: 'en' });
+		expect(notFound).toBe(false);
+		expect(payload.docs['page:/']).toEqual({ welcome: { title: 'Hi' } });
+	});
 });
 
 describe('createCms.generateEntries', () => {
