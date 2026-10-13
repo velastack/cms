@@ -134,5 +134,10 @@
 		"#lib": "./src/lib/index.js",
 		"#lib/*": "./src/lib/*",
 		"#locales/*": "./src/locales/*"
+	},
+	"overrides": {
+		"runed": {
+			"@sveltejs/kit": "$@sveltejs/kit"
+		}
 	}
 }
