@@ -1,6 +1,6 @@
 import { dirname } from 'node:path';
 import { mkdirSync } from 'node:fs';
-import { loadDriver, type SqliteDb } from './sqlite.js';
+import { loadDriver, withoutReportNetwork, type SqliteDb } from './sqlite.js';
 import { runMigrations } from './migrate.js';
 import { MIGRATIONS } from './migrations/index.js';
 
@@ -17,7 +17,7 @@ export const openDatabase = (dbPath: string): SqliteDb => {
 	if (dbPath !== ':memory:') {
 		mkdirSync(dirname(dbPath), { recursive: true });
 	}
-	const db = new Driver(dbPath);
+	const db = withoutReportNetwork(() => new Driver(dbPath));
 	db.pragma('journal_mode = WAL');
 	db.pragma('synchronous = NORMAL');
 	db.pragma('cache_size = -65536');
