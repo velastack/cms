@@ -40,7 +40,9 @@ describe('registry', () => {
 			'CmsTimeline',
 			'CmsGallery',
 			'CmsLogos',
-			'CmsSchedule'
+			'CmsSchedule',
+			'CmsFormFields',
+			'CmsWhatsAppForm'
 		]) {
 			expect(getStructured(c)?.component, c).toBe(c);
 		}

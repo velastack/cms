@@ -38,6 +38,15 @@ export { default as CmsTimeline } from './components/cms/cms-timeline.svelte';
 export { default as CmsGallery } from './components/cms/cms-gallery.svelte';
 export { default as CmsLogos } from './components/cms/cms-logos.svelte';
 export { default as CmsSchedule } from './components/cms/cms-schedule.svelte';
+
+// Forms: post to a hosted form by `key` or the template's own `action`.
+// The inputs are the template's children, or a `CmsFormFields` block when
+// editors should control them.
+export { default as CmsForm } from './components/cms/cms-form.svelte';
+export type { CmsFormState, CmsFormStatus } from './components/cms/cms-form.svelte';
+export { default as CmsFormFields } from './components/cms/cms-form-fields.svelte';
+export { default as CmsWhatsAppForm } from './components/cms/cms-whatsapp-form.svelte';
+export type { CmsWhatsAppFormState } from './components/cms/cms-whatsapp-form.svelte';
 export * from './core/shapes/index.js';
 
 // Admin bar (sync wrapper; admin-bar-internal + seo-panel are async chunks)

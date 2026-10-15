@@ -99,6 +99,17 @@ export { cmsFaq, faqView, toFaqPage } from './faq.js';
 export type { CmsFaqValue, FaqItem } from './faq.js';
 
 export {
+	cmsFormFields,
+	formFieldsView,
+	fieldNameFromLabel,
+	FORM_FIELD_TYPES
+} from './form-fields.js';
+export type { CmsFormFieldsValue, CmsFormFieldItem, CmsFormFieldType } from './form-fields.js';
+
+export { cmsWhatsApp } from './whatsapp.js';
+export type { CmsWhatsAppValue } from './whatsapp.js';
+
+export {
 	cmsStats,
 	cmsSteps,
 	cmsTimeline,
