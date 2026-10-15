@@ -8,11 +8,14 @@
  *
  * One deliberate change from the original: that version did
  * `rm(uploadDir(), { recursive: true, force: true })` — a recursive delete of a
- * host-configured directory, on an unauthenticated POST. Here only files whose
- * names this backend could have generated are unlinked, and never the directory
- * itself, so a misconfigured `uploadDir` cannot be destroyed.
+ * host-configured directory, on an unauthenticated POST. Here only the files of
+ * the project's own media rows are unlinked, and never the directory itself, so
+ * a misconfigured `uploadDir` cannot be destroyed and a reset of one project
+ * cannot delete another's uploads (several projects, or several test files
+ * running in parallel, share one `uploadDir`).
  */
-import { readdir, unlink } from 'node:fs/promises';
+import { unlink } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { PageEntry } from '../../core/page-entry.js';
 import type { Tree } from '../../core/path.js';
 import { DEFAULT_LOCALE } from '../store/queries.js';
@@ -88,16 +91,13 @@ export const normalizeSeed = (seed: SeedInput) => {
 	return { layouts, pages };
 };
 
-/** Remove only files this backend could have written. */
-export const clearUploads = async (uploadDir: string): Promise<void> => {
-	let names: string[];
-	try {
-		names = await readdir(uploadDir);
-	} catch {
-		return;
-	}
+/**
+ * Unlink the given uploads (the reset project's media files), skipping any name
+ * this backend could not have generated. A file already gone is not an error.
+ */
+export const clearUploads = async (uploadDir: string, filenames: string[]): Promise<void> => {
 	await Promise.all(
-		names.filter(isSafeUploadFilename).map((n) => unlink(`${uploadDir}/${n}`).catch(() => {}))
+		filenames.filter(isSafeUploadFilename).map((n) => unlink(join(uploadDir, n)).catch(() => {}))
 	);
 };
 
@@ -105,9 +105,9 @@ export const postTestReset = async (ctx: RouteCtx): Promise<Response> => {
 	const body = await readJson(ctx.event);
 	if (body !== undefined && !isObjectRecord(body)) return badRequest('invalid json');
 
-	ctx.store.__resetProjectForTests(ctx.projectId);
+	const filenames = ctx.store.__resetProjectForTests(ctx.projectId);
 	ctx.cache.clear();
-	await clearUploads(ctx.storage.dir());
+	await clearUploads(ctx.storage.dir(), filenames);
 
 	const { layouts, pages } = normalizeSeed((body ?? {}) as SeedInput);
 	if (Object.keys(layouts).length > 0 || Object.keys(pages).length > 0) {
