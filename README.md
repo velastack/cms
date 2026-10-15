@@ -380,6 +380,91 @@ Rules every structured value follows (`core/structured.ts`):
 
 Iterates over a set of pages by route ID. Useful for index pages.
 
+## Forms
+
+`<CmsForm>` posts a form to a hosted form by `key` or to the template's own `action`. It does not care which: it renders a real `<form method="POST">`, so it works without JavaScript, and with JavaScript it posts in place through `use:enhance` and hands `children` the outcome.
+
+```svelte
+<script lang="ts">
+	import { CmsForm, CmsText } from '@velastack/cms';
+</script>
+
+<!-- Your own backend: fixed fields, editors change only the copy. -->
+<CmsForm action="?/contact" redirect="/thanks">
+	{#snippet children(form)}
+		<label
+			><CmsText name="contact.nameLabel" fallback="Name" /> <input name="name" required /></label
+		>
+		<label>
+			<CmsText name="contact.emailLabel" fallback="Email" />
+			<input name="email" type="email" required />
+		</label>
+		<button disabled={form.status === 'submitting'}>Send</button>
+		{#if form.status === 'success'}<p>Thanks, we'll be in touch.</p>{/if}
+		{#if form.status === 'failure'}<p>{form.message}</p>{/if}
+	{/snippet}
+</CmsForm>
+```
+
+- **Where it posts.** `action` wins when given: a route, or a SvelteKit action. Otherwise `key` names a hosted form, the forms a template's manifest declares: when the CMS endpoint is `…/v1/projects/<id>/cms`, the form posts to `…/v1/projects/<id>/forms/<key>`. Any other endpoint has no hosted forms and needs `action` (dev logs a warning).
+- **`children(form)`** gets `status` (`idle`, `submitting`, `success`, `failure`, `error`), the endpoint's or action's `message`, and the action's returned `data`. A successful post resets the form.
+- **Control fields.** `redirect` becomes `_redirect`: where a post without JavaScript lands, and where the form navigates after a successful enhanced post. Every form carries a hidden `_gotcha` honeypot, and a hosted form a load-time `_token`, fetched on mount, that marks its submissions verified. A same-app action receives these fields too and can ignore them.
+- In edit mode forms do not submit.
+
+### Editable fields: `<CmsFormFields>`
+
+Put `<CmsFormFields>` inside a form when editors should control the fields themselves: add, remove, reorder and retype them, and translate labels, placeholders and choices. The `field` snippet renders each one; without it, plain labelled inputs are rendered.
+
+```svelte
+<CmsForm key="contact">
+	{#snippet children(form)}
+		<CmsFormFields
+			name="contactFields"
+			fallback={[
+				{ name: 'name', label: 'Name', type: 'text', required: true },
+				{ name: 'email', label: 'Email', type: 'email', required: true },
+				{ name: 'message', label: 'Message', type: 'textarea' }
+			]}
+		>
+			{#snippet field(f)}
+				<label>
+					<span>{f.label}</span>
+					{#if f.type === 'textarea'}
+						<textarea name={f.name} required={f.required} placeholder={f.placeholder}></textarea>
+					{:else}
+						<input name={f.name} type={f.type} required={f.required} placeholder={f.placeholder} />
+					{/if}
+				</label>
+			{/snippet}
+		</CmsFormFields>
+		<button disabled={form.status === 'submitting'}>Send</button>
+	{/snippet}
+</CmsForm>
+```
+
+Types are `text`, `email`, `tel`, `number`, `date`, `textarea`, `select` (with `options`) and `checkbox`. A field's `name` is the key its answers are stored under and never follows a label edit: fallback fields carry their own, and a field an editor adds takes one from its first label (`Preferred date` → `preferred_date`). Since editors decide what is sent, pair `CmsFormFields` with a hosted form or an action that accepts any fields.
+
+### `<CmsWhatsAppForm>`
+
+The same form, but a submission opens a WhatsApp chat to the editor's number with the editor's message, the visitor's answers substituted for `{field}` placeholders. The answers are also posted to `key` or `action` in the background, so the lead is kept even if the visitor never sends the chat. Editors set the number and the message (translatable) from the pencil, which lists the placeholders the form's inputs provide.
+
+```svelte
+<CmsWhatsAppForm
+	key="booking"
+	name="whatsapp"
+	fallback={{ number: '+1 555 010 0199', message: "Hi, I'm {name}. A table for {guests}, please." }}
+>
+	{#snippet children(form)}
+		<label>Name <input name="name" required /></label>
+		<label>Guests <input name="guests" type="number" /></label>
+		<button>Chat on WhatsApp</button>
+		<noscript><a href={form.whatsappHref}>Message us on WhatsApp</a></noscript>
+	{/snippet}
+</CmsWhatsAppForm>
+```
+
+The chat opens in a new tab (this one, if the popup is blocked), and `redirect` then moves this tab on. Without JavaScript the form posts normally, so the answers are still stored; `form.whatsappHref` links to the number alone for a `<noscript>` fallback. `CmsFormFields` works inside it as in `CmsForm`.
+
 ## Custom CMS components
 
 VelaStack CMS discovers your custom or third-party CMS components by convention.
