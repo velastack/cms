@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	findPageEntry,
 	mockAdapter,
+	type MockAdapterOptions,
 	type PageEntry,
 	type ReleaseSnapshot
 } from './mock-adapter.ts';
@@ -445,8 +446,8 @@ describe('mockAdapter.fetchEntries', () => {
 		expect(entries).toEqual([{ params: { slug: 'a' }, metadata: { title: 'A' }, gone: true }]);
 	});
 
-	it('returns published-state tombstones with appropriate flags (no release)', async () => {
-		const adapter = mockAdapter({
+	it('returns published redirects but not gone tombstones (no release)', async () => {
+		const options: MockAdapterOptions = {
 			pageDocs: {
 				en: {
 					'/r/[slug]': [
@@ -464,13 +465,21 @@ describe('mockAdapter.fetchEntries', () => {
 					]
 				}
 			}
-		});
-		const entries = await adapter.fetchEntries('/r/[slug]', ctx);
-		expect(entries).toEqual([
+		};
+		const adapter = mockAdapter(options);
+		// Like apiAdapter: published reads keep redirects (prerender writes the
+		// redirect page) but drop `gone`, which prerender can only fail on.
+		expect(await adapter.fetchEntries('/r/[slug]', ctx)).toEqual([
 			{ params: { slug: 'live' }, metadata: {} },
-			{ params: { slug: 'old' }, metadata: {}, redirectTo: '/new' },
-			{ params: { slug: 'dead' }, metadata: {}, gone: true }
+			{ params: { slug: 'old' }, metadata: {}, redirectTo: '/new' }
 		]);
+		// Preview keeps it, flagged, so the editor sees the deletion.
+		const preview = mockAdapter({ ...options, resolvePreview: () => ({ id: 'r', items: [] }) });
+		expect(await preview.fetchEntries('/r/[slug]', { ...ctx, previewKey: 'k' })).toContainEqual({
+			params: { slug: 'dead' },
+			metadata: {},
+			gone: true
+		});
 	});
 
 	it('appends release-only draft entries that have no matching published entry', async () => {

@@ -572,7 +572,7 @@ Page-kind docs own a `metadata` branch on the doc tree. `loadCms` aliases that b
 
 A page-kind scope can also resolve to a **tombstone** (`{ kind: 'gone' }` or `{ kind: 'redirect', to }`) instead of a doc. The loader short-circuits the page render and surfaces `gone` / `redirectTo` on the `LoadCmsResult` so the caller can return 410 / 308. Layout scopes never tombstone.
 
-`fetchEntries` enumerates publishable entries at one route id (used by `generateEntries` for prerender). Tombstoned entries are returned with `redirectTo` / `gone` flags so prerender visits the URL and SvelteKit emits the redirect file; the loader filters them out of `cms.entries` before display.
+`fetchEntries` enumerates publishable entries at one route id (used by `generateEntries` for prerender). Redirected entries are returned with a `redirectTo` flag so prerender visits the URL and SvelteKit emits the redirect page. `gone` entries are left out of published reads, since prerender fails on a 410 and a static host can't serve one; with a preview key they come back flagged `gone` so the editor sees the deletion. The loader filters both out of `cms.entries` before display.
 
 ### `mockAdapter` (built-in)
 
@@ -729,7 +729,7 @@ Pages can be deleted with three different outcomes:
 
 Tombstones live on the adapter's `PageEntry` (`tombstone: CmsAdapterTombstone`) for already-published deletions, and on a release's `page-delete` item (`outcome?: CmsAdapterTombstone`) for staged deletions in the editor's working copy. The loader returns whichever applies on `LoadCmsResult.{ gone, redirectTo }`; your `+layout.server.ts` branches on those flags before rendering.
 
-For prerender, `fetchEntries` returns tombstoned entries with `redirectTo` / `gone` flags so SvelteKit visits the URL and emits the redirect file — but `cms.entries[routeId]` strips them, so `<CmsEntries>` lists never display deleted pages.
+For prerender, `fetchEntries` returns redirected entries with a `redirectTo` flag so SvelteKit visits the URL and emits the redirect page. It leaves `gone` entries out: a static build has no way to serve a 410, so a removed page simply isn't written (and a link to it still fails the build, like any broken link). `cms.entries[routeId]` strips both, so `<CmsEntries>` lists never display deleted pages.
 
 ## Plugin options
 
