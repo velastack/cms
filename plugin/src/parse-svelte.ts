@@ -18,6 +18,12 @@ export type ComponentUsage = {
 	/** Whether a `fallback=` or `initial=` prop was present. */
 	hasFallbackAttr: boolean;
 	/**
+	 * Whether the component has children other than whitespace and
+	 * `{#snippet}` blocks: markup that CmsText, CmsRichText and CmsImage
+	 * render as their fallback.
+	 */
+	hasChildContent: boolean;
+	/**
 	 * Source spans (`[start, end]`) of the `fallback` and `initial` attributes,
 	 * whatever their form: shorthand `initial`, `{initial}`, `initial={…}` or
 	 * `initial="…"`. Lets an injector replace the attribute instead of adding
@@ -157,6 +163,9 @@ export const parseSvelteSource = (code: string, filename?: string): ParsedSvelte
 		const presetAttr = find('preset');
 		const fieldName = nameAttr ? staticAttributeValue(nameAttr.value) : null;
 		const start = (node.start as number | undefined) ?? 0;
+		const children =
+			(node.fragment as { nodes?: Array<{ type: string; data?: string }> } | undefined)?.nodes ??
+			[];
 		const fallbackAttrSpans: ComponentUsage['fallbackAttrSpans'] = {};
 		for (const prop of ['fallback', 'initial'] as const) {
 			const attr = find(prop);
@@ -170,6 +179,12 @@ export const parseSvelteSource = (code: string, filename?: string): ParsedSvelte
 			dynamicName: !!nameAttr && fieldName === null,
 			hasValueAttr: !!find('value'),
 			hasFallbackAttr: !!find('fallback') || !!find('initial'),
+			hasChildContent: children.some(
+				(n) =>
+					n.type !== 'SnippetBlock' &&
+					n.type !== 'Comment' &&
+					!(n.type === 'Text' && !n.data?.trim())
+			),
 			fallbackAttrSpans,
 			routeIdAttr: routeIdAttr ? staticAttributeValue(routeIdAttr.value) : null,
 			scopeAttr: scopeAttr ? staticAttributeValue(scopeAttr.value) : null,

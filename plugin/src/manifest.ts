@@ -121,6 +121,20 @@ export type BuildManifestOptions = {
 	resolveExternal?: ImportResolver;
 };
 
+/** One component usage in one file, attributed to the scope its value lives in. */
+export type UsageSite = {
+	scopeId: string;
+	name: string;
+	component: string;
+	/** A `fallback`/`initial` prop, or child markup for the components that render it. */
+	fallback: boolean;
+	file: string;
+	line: number;
+};
+
+/** Components whose child markup (not a snippet) is their fallback. */
+const CHILD_FALLBACK = new Set(['CmsText', 'CmsRichText', 'CmsImage']);
+
 export type ScopeInfo = Pick<CmsManifestScope, 'scopeId' | 'kind' | 'routeId' | 'ownedParams'>;
 
 export type BuildManifestResult = {
@@ -148,6 +162,18 @@ export type BuildManifestResult = {
 	 * uses it to find the content tree a usage's value lives in.
 	 */
 	scopesByFile: Map<string, string[]>;
+	/**
+	 * Every place a component reads a value, under the scope the value lives
+	 * in, deduped across routes. Lets tooling point at the line that lacks a
+	 * fallback, which the per-scope `usages` cannot.
+	 */
+	usageSites: UsageSite[];
+	/**
+	 * Each visited file's CMS components, local binding → canonical name, as
+	 * the walk classified them by resolved import. Fallback injection uses it
+	 * so it never disagrees with the manifest about what is a CMS component.
+	 */
+	cmsLocalsByFile: Map<string, Map<string, string>>;
 	/** Human-readable problems found during the walk: dynamic `name`s the
 	 * manifest cannot record, `scope=` attributes naming a scope outside the
 	 * route's chain. The plugin logs them; verify tooling can fail on them. */
@@ -336,6 +362,9 @@ type CollectedUsage = {
 	/** Resolved target scope id from a `scope=` attribute, or `null`. */
 	scope: string | null;
 	preset: string | null;
+	fallback: boolean;
+	file: string;
+	line: number;
 };
 
 type CollectedEntry = {
@@ -422,6 +451,7 @@ const collectFieldsForEntry = async (
 		resolveExternal: ImportResolver | undefined;
 		cache: Map<string, ParsedSvelte>;
 		allVisited: Set<string>;
+		localsByFile: Map<string, Map<string, string>>;
 	}
 ): Promise<CollectedEntry> => {
 	const {
@@ -433,7 +463,8 @@ const collectFieldsForEntry = async (
 		traversePatterns,
 		resolveExternal,
 		cache,
-		allVisited
+		allVisited,
+		localsByFile
 	} = options;
 
 	const visited = new Set<string>();
@@ -535,6 +566,7 @@ const collectFieldsForEntry = async (
 			if (spec) classify(spec, imp.bindings, cmsLocals, resolved);
 		}
 
+		localsByFile.set(filePath, cmsLocals);
 		for (const usage of parsed.componentUsages) {
 			const component = cmsLocals.get(usage.componentName);
 			if (!component) continue;
@@ -551,7 +583,10 @@ const collectFieldsForEntry = async (
 				name: usage.fieldName,
 				component,
 				scope: usage.scopeAttr ? resolveScopeAttr(usage.scopeAttr) : null,
-				preset: usage.presetAttr
+				preset: usage.presetAttr,
+				fallback: usage.hasFallbackAttr || (CHILD_FALLBACK.has(component) && usage.hasChildContent),
+				file: filePath,
+				line: usage.line
 			});
 		}
 
@@ -596,6 +631,7 @@ const buildScopeChain = async (
 	entriesRouteIds: string[];
 	warnings: string[];
 	filesByScope: Map<string, string[]>;
+	sites: UsageSite[];
 }> => {
 	const scopes: CmsManifestScope[] = [];
 	const entriesRouteIds: string[] = [];
@@ -648,7 +684,18 @@ const buildScopeChain = async (
 		}
 	}
 
+	const sites: UsageSite[] = [];
 	for (const scope of scopes) {
+		for (const u of ownUsages.get(scope.scopeId) ?? []) {
+			sites.push({
+				scopeId: scope.scopeId,
+				name: u.name,
+				component: u.component,
+				fallback: u.fallback,
+				file: u.file,
+				line: u.line
+			});
+		}
 		scope.usages = dedupeUsages(ownUsages.get(scope.scopeId) ?? []);
 		const fields = scope.usages.map((u) => u.name);
 		scope.fields =
@@ -664,7 +711,13 @@ const buildScopeChain = async (
 		for (const p of owned) seen.add(p);
 	}
 
-	return { scopes, entriesRouteIds: [...new Set(entriesRouteIds)], warnings, filesByScope };
+	return {
+		scopes,
+		entriesRouteIds: [...new Set(entriesRouteIds)],
+		warnings,
+		filesByScope,
+		sites
+	};
 };
 
 export const buildManifest = async (
@@ -686,6 +739,7 @@ export const buildManifest = async (
 	const visitedFiles = new Set<string>();
 	const scopeByEntryPath = new Map<string, ScopeInfo>();
 	const routeIdByScriptPath = new Map<string, string>();
+	const cmsLocalsByFile = new Map<string, Map<string, string>>();
 
 	// Auto-register every `components[].source` for traversal so users don't
 	// have to repeat themselves.
@@ -712,19 +766,24 @@ export const buildManifest = async (
 		traversePatterns,
 		resolveExternal,
 		cache,
-		allVisited: visitedFiles
+		allVisited: visitedFiles,
+		localsByFile: cmsLocalsByFile
 	};
 
 	const routes: CmsManifest['routes'] = {};
 	const pageCmsModules: BuildManifestResult['pageCmsModules'] = [];
 	const scopesByFile = new Map<string, string[]>();
 	const warnings = new Set<string>();
+	const usageSites = new Map<string, UsageSite>();
 	for (const node of nodes) {
 		if (!node.pagePath) continue;
 		const chain = await buildScopeChain(node, byRouteId, collectOptions);
 		const { scopes, entriesRouteIds } = chain;
 		routes[node.routeId] = { scopes, entriesRouteIds };
 		for (const w of chain.warnings) warnings.add(w);
+		for (const site of chain.sites) {
+			usageSites.set(`${site.scopeId}|${site.name}|${site.file}|${site.line}`, site);
+		}
 		// Leaf first: a page's own value beats a layout's for a shared component.
 		for (const scope of [...scopes].reverse()) {
 			for (const file of chain.filesByScope.get(scope.scopeId) ?? []) {
@@ -765,6 +824,8 @@ export const buildManifest = async (
 		routeIdByScriptPath,
 		pageCmsModules,
 		scopesByFile,
+		usageSites: [...usageSites.values()],
+		cmsLocalsByFile,
 		warnings: [...warnings]
 	};
 };

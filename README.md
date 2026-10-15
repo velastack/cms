@@ -759,7 +759,14 @@ cms({
 });
 ```
 
-Build tooling that needs the same parser — a `pack` step inlining fallbacks into a tarball, a `verify` step checking usages against a content manifest — imports it from `@velastack/cms/build`: `scanUsages(source)`, `injectFallbacks(source, treeOrResolver)` / `inlineFallbacks`, `buildManifest(...)` and `fallbackResolverFor(result, file, content)`. The manifest records each usage's component type (`scope.usages`), and the walk reports dynamic `name`s and out-of-chain `scope=` attributes as warnings instead of dropping them silently.
+Every usage should have a fallback, so a page renders before an editor touches it, and a new page created from the admin bar looks like a page. The dev server and `vite build` warn about both ways that rule breaks, each time the list changes:
+
+- **No fallback:** a usage with no `fallback`/`initial` prop, no fallback markup (the children of `CmsText`, `CmsRichText` and `CmsImage`), and no value in the default locale's content file, listed by file and line. `CmsBoolean` is exempt, since it reads `false` until set.
+- **Stale content:** a value in any `content/<locale>.json` that nothing reads, such as a scope whose route was renamed or a key left behind by a renamed `name=`. Page `metadata` and `site` aren't checked.
+
+To leave a field deliberately empty, store `null`: it renders nothing and never falls back.
+
+Build tooling that needs the same parser — a `pack` step inlining fallbacks into a tarball, a `verify` step checking usages against a content manifest — imports it from `@velastack/cms/build`: `scanUsages(source)`, `injectFallbacks(source, treeOrResolver)` / `inlineFallbacks`, `buildManifest(...)`, `fallbackResolverFor(result, file, content)` and `checkContent(result, contentByLocale, defaultLocale)`, the check above. The manifest records each usage's component type (`scope.usages`), and the walk reports dynamic `name`s and out-of-chain `scope=` attributes as warnings instead of dropping them silently.
 
 The plugin also exposes `virtual:vela-cms/manifest` (typed via the package's ambient declaration). You almost never need to import it directly — `loadCms` does that internally — but it's there if you want to introspect the manifest at build time.
 
