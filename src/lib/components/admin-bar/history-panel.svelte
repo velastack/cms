@@ -146,7 +146,7 @@
 	);
 
 	const onView = async (release: PublishedRelease) => {
-		const url = new URL(page.url.href);
+		const url = new URL((page.shallow?.url ?? page.url).href);
 		url.searchParams.delete('preview');
 		url.searchParams.delete('edit');
 		url.searchParams.set('version', release.preview_key);
