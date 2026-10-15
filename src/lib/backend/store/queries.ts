@@ -1885,16 +1885,28 @@ export const createStore = (db: SqliteDb) => {
 
 	let _truncators: Array<(projectId: string) => void> | null = null;
 
+	const mediaFilenamesStmt = () =>
+		db.prepare<[string], { filename: string }>(
+			'SELECT filename FROM media_items WHERE project_id = ?'
+		);
+
 	/** Wipe every CMS table for one project. Used by `__test_reset__`.
 	 * Also clears the in-process LRU — without this, the next test's first publish
 	 * would re-mint `cms_version=1` and collide with cached entries from the
-	 * previous test run (production never resets, so version is monotonic). */
-	const __resetProjectForTests = (projectId: string): void => {
+	 * previous test run (production never resets, so version is monotonic).
+	 *
+	 * Returns the filenames of the project's media rows it deleted, so the caller
+	 * can unlink exactly those files and leave other projects' uploads alone. */
+	const __resetProjectForTests = (projectId: string): string[] => {
 		if (!_truncators) _truncators = truncateProjectStmts();
 		const tx = db.transaction(() => {
+			const filenames = mediaFilenamesStmt()
+				.all(projectId)
+				.map((r) => r.filename);
 			for (const fn of _truncators!) fn(projectId);
+			return filenames;
 		});
-		tx();
+		return tx();
 	};
 
 	/**

@@ -254,9 +254,9 @@ export const createCmsBackend = (options: CmsBackendOptions = {}): CmsBackend =>
 				if (!testReset) {
 					throw new Error('createCmsBackend({ testReset: true }) is required to call reset()');
 				}
-				store.__resetProjectForTests(projectId);
+				const filenames = store.__resetProjectForTests(projectId);
 				cache.clear();
-				await clearUploads(uploadDir);
+				await clearUploads(uploadDir, filenames);
 				const { layouts, pages } = normalizeSeed(seed);
 				if (Object.keys(layouts).length > 0 || Object.keys(pages).length > 0) {
 					store.seedPublishedDocs(projectId, layouts, pages);
