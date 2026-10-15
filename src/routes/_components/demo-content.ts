@@ -34,19 +34,18 @@ export const demoPrimaryNav: NavItem[] = [
 	{
 		...nav('rooms', 'Rooms', to('/(marketing)/rooms')),
 		children: [
-			nav('suite-1', 'Balcony Suite', {
+			nav('balcony-suite', 'Balcony Suite', {
 				routeId: '/(marketing)/rooms/[slug]',
-				params: { slug: 'suite-1' }
+				params: { slug: 'balcony-suite' }
 			}),
-			nav('suite-2', 'Garden Room', {
+			nav('garden-room', 'Garden Room', {
 				routeId: '/(marketing)/rooms/[slug]',
-				params: { slug: 'suite-2' }
+				params: { slug: 'garden-room' }
 			})
 		]
 	},
 	nav('contact', 'Contact', to('/(marketing)/contact')),
-	nav('structured', 'Components', { href: '/structured' }),
-	nav('dashboard', 'Dashboard', to('/(app)/dashboard'))
+	nav('guest', 'Guest portal', to('/(guest)/guest'))
 ];
 
 export const demoFooterNav: NavItem[] = [
@@ -162,7 +161,7 @@ export const demoCollection: CollectionItem[] = [
 		gallery: [],
 		price: { amount: 180, currency: 'EUR', period: 'night', prefix: 'from' },
 		duration: '',
-		link: { routeId: '/(marketing)/rooms/[slug]', params: { slug: 'suite-1' } },
+		link: { routeId: '/(marketing)/rooms/[slug]', params: { slug: 'balcony-suite' } },
 		tags: ['suite'],
 		features: ['King bed', 'Balcony', 'Bath'],
 		featured: true,
@@ -181,7 +180,7 @@ export const demoCollection: CollectionItem[] = [
 		gallery: [],
 		price: { amount: 120, currency: 'EUR', period: 'night', prefix: 'from' },
 		duration: '',
-		link: { routeId: '/(marketing)/rooms/[slug]', params: { slug: 'suite-2' } },
+		link: { routeId: '/(marketing)/rooms/[slug]', params: { slug: 'garden-room' } },
 		tags: ['room'],
 		features: ['Queen bed', 'Garden access'],
 		featured: false,

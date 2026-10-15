@@ -26,3 +26,6 @@ vite.config.ts.timestamp-*
 # Local agent settings
 .claude/settings.local.json
 /plugin/dist
+
+# Local CMS backend data (npm run dev)
+/data

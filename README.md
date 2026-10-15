@@ -789,7 +789,7 @@ src/lib/         Public library
   components/cms/      Display + editable components, scope helpers, store
   components/admin-bar/ Admin bar wrapper + async internal + SEO panel
   server/              loadCms, mockAdapter, types
-src/routes/      Test harness / showcase
+src/routes/      Demo site (seeded from src/demo-seed.ts) and /playground
 ```
 
 ## License

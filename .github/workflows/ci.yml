@@ -48,6 +48,9 @@ jobs:
 
       - name: Build & validate package
         # `prepack` runs svelte-package + the Tailwind resolve + publint, which is
-        # the same gate `npm publish` uses. The demo site (`vite build`) is not
-        # built here — it prerenders against a live CMS backend.
+        # the same gate `npm publish` uses.
         run: npm run prepack
+
+      - name: Build demo site
+        # Prerenders from src/demo-seed.ts; no CMS backend needed.
+        run: npx vite build

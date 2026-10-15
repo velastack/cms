@@ -1,26 +1,34 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { CmsText } from '#lib/index.js';
+	import { CmsBoolean, CmsText } from '#lib/index.js';
 	import Header from '../_components/header.svelte';
 
 	type Props = { children: Snippet };
 	let { children }: Props = $props();
 </script>
 
-<Header />
+<!-- `(marketing)` layout scope: the announcement and the header tagline are
+     stored once for every page in this group. -->
+<CmsBoolean name="announcement.visible">
+	{#snippet children(visible)}
+		{#if visible}
+			<aside class="announcement">
+				<CmsText name="announcement.text" />
+			</aside>
+		{/if}
+	{/snippet}
+</CmsBoolean>
 
-<aside class="announcement">
-	<CmsText name="announcement.text" fallback="Fallback announcement text" />
-</aside>
+<Header />
 
 {@render children()}
 
 <style>
 	.announcement {
 		padding: 0.5rem 1.25rem;
-		background: #fff5d6;
-		border-bottom: 1px solid rgba(127, 127, 127, 0.25);
-		font-size: 0.9rem;
+		background: var(--sea);
+		color: white;
+		font-size: 0.875rem;
 		text-align: center;
 	}
 </style>

@@ -1,0 +1,46 @@
+{
+	"layout:/": {
+		"nav": {
+			"primary": {
+				"$t": {
+					"rooms": {
+						"label": "Habitaciones"
+					},
+					"experiences": {
+						"label": "Experiencias"
+					},
+					"about": {
+						"label": "Nosotros"
+					},
+					"contact": {
+						"label": "Contacto"
+					},
+					"guest": {
+						"label": "Portal del huésped"
+					}
+				}
+			}
+		},
+		"hours": {
+			"$t": {
+				"_": {
+					"note": "¿Llegas tarde? Toca el timbre de la puerta azul."
+				}
+			}
+		}
+	},
+	"layout:/(marketing)": {
+		"header": {
+			"tagline": "Siete habitaciones frente al puerto"
+		},
+		"announcement": {
+			"text": "Tarifas de invierno: quédate tres noches, paga dos."
+		}
+	},
+	"page:/(marketing)": {
+		"hero": {
+			"title": "Despierta frente al puerto",
+			"subtitle": "Siete habitaciones sobre los barcos de pesca de Ericeira, a una hora de Lisboa."
+		}
+	}
+}
