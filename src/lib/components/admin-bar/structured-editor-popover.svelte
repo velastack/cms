@@ -251,9 +251,27 @@
 		line-height: 1.4;
 		white-space: nowrap;
 	}
-	.cms-structured-edit:hover :global(.cms-structured-edit__trigger),
-	.cms-structured-edit:focus-within :global(.cms-structured-edit__trigger),
-	.cms-structured-edit[data-open] :global(.cms-structured-edit__trigger) {
+	.cms-structured-edit:hover > :global(.cms-structured-edit__trigger),
+	.cms-structured-edit:focus-within > :global(.cms-structured-edit__trigger),
+	.cms-structured-edit[data-open] > :global(.cms-structured-edit__trigger) {
 		display: inline-flex;
+	}
+	/* A slot inside another (form fields inside a WhatsApp form): the
+	   innermost one being pointed at or typed in owns the outline and the
+	   pencil, so the two pencils never stack in the same corner. The inner
+	   slot is another instance, rendered through a snippet, so the compiler
+	   cannot see it: hence `:global` inside `:has`. */
+	.cms-structured-edit:not([data-open]):has(
+			:global(.cms-structured-edit:hover),
+			:global(.cms-structured-edit:focus-within)
+		) {
+		outline: 1px dashed rgba(127, 127, 127, 0.6);
+	}
+	.cms-structured-edit:not([data-open]):has(
+			:global(.cms-structured-edit:hover),
+			:global(.cms-structured-edit:focus-within)
+		)
+		> :global(.cms-structured-edit__trigger) {
+		display: none;
 	}
 </style>
