@@ -177,7 +177,7 @@
 			>
 				<option value="">—</option>
 				{#each values as v (v)}
-					<option value={v}>{v}</option>
+					<option value={v}>{names?.[v] ?? v}</option>
 				{/each}
 			</select>
 		{:else if type === 'image'}
