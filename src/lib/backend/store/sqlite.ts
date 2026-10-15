@@ -48,3 +48,26 @@ export const loadDriver = (): SqliteDriver => {
 		);
 	}
 };
+
+/**
+ * Run `fn` with Node's diagnostic report leaving out networking details.
+ *
+ * better-sqlite3 loads its native addon on the first `new Database`, and on
+ * Linux picks the prebuilt binary by calling `process.report.getReport()` to
+ * tell glibc from musl. The report's network section resolves the address of
+ * every open socket, synchronously, so in a server with live connections the
+ * first open could block the event loop for seconds (10s on a CI runner).
+ * Nothing in that check needs the network section. The setting is restored
+ * before returning; `fn` is synchronous, so nothing else sees it changed.
+ */
+export const withoutReportNetwork = <T>(fn: () => T): T => {
+	// `excludeNetwork` exists from Node 20.13 / 22.0; older versions skip this.
+	const report = process.report as { excludeNetwork?: boolean } | undefined;
+	if (!report || typeof report.excludeNetwork !== 'boolean' || report.excludeNetwork) return fn();
+	report.excludeNetwork = true;
+	try {
+		return fn();
+	} finally {
+		report.excludeNetwork = false;
+	}
+};
