@@ -20,6 +20,7 @@ const fakeEvent = (
 		route: { id: overrides.routeId ?? null },
 		params: overrides.params ?? {},
 		url,
+		request: new Request(url.href),
 		fetch: globalThis.fetch
 		// Other ServerLoadEvent fields are unused by loadCms.
 	} as unknown as ServerLoadEvent;
@@ -72,6 +73,42 @@ describe('createCms.load', () => {
 		const { cms: payload, notFound } = await cms.load(event, { locale: 'en' });
 		expect(notFound).toBe(false);
 		expect(payload.docs['page:/']).toEqual({ welcome: { title: 'Hi' } });
+	});
+
+	it('previews a page that exists only in the open release, on a prerendered route', async () => {
+		// Creating a page in the admin bar navigates to it with `?preview=`.
+		// Outside a build the page renders on demand, so the key must reach
+		// the adapter even though Kit traps `url.searchParams`.
+		const routeId = '/(marketing)/rooms/[slug]';
+		const adapter = mockAdapter({
+			resolvePreview: (key) =>
+				key === 'k'
+					? {
+							id: 'r',
+							items: [
+								{
+									kind: 'page',
+									routeId,
+									params: { slug: 'new-room' },
+									locale: 'en',
+									tree: { metadata: { title: 'New room' } }
+								}
+							]
+						}
+					: null
+		});
+		const cms = createCms({ adapter, locales: ['en'] });
+		const event = fakeEvent({ routeId, params: { slug: 'new-room' }, previewKey: 'k' });
+		for (const property of ['search', 'searchParams']) {
+			Object.defineProperty(event.url, property, {
+				get() {
+					throw new Error(`Cannot access url.${property} on a page with prerendering enabled`);
+				}
+			});
+		}
+		const { cms: payload, notFound } = await cms.load(event, { locale: 'en' });
+		expect(notFound).toBe(false);
+		expect(payload.metadata.title).toBe('New room');
 	});
 });
 
