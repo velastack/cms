@@ -1,0 +1,736 @@
+{
+	"layout:/": {
+		"branding": {
+			"name": "Casa Marea"
+		},
+		"nav": {
+			"primary": {
+				"items": [
+					{
+						"id": "rooms",
+						"label": "Rooms",
+						"link": {
+							"routeId": "/(marketing)/rooms",
+							"params": {}
+						},
+						"children": []
+					},
+					{
+						"id": "experiences",
+						"label": "Experiences",
+						"link": {
+							"routeId": "/(marketing)/experiences",
+							"params": {}
+						},
+						"children": []
+					},
+					{
+						"id": "about",
+						"label": "About",
+						"link": {
+							"routeId": "/(marketing)/about",
+							"params": {}
+						},
+						"children": []
+					},
+					{
+						"id": "contact",
+						"label": "Contact",
+						"link": {
+							"routeId": "/(marketing)/contact",
+							"params": {}
+						},
+						"children": []
+					},
+					{
+						"id": "guest",
+						"label": "Guest portal",
+						"link": {
+							"routeId": "/(guest)/guest",
+							"params": {}
+						},
+						"children": []
+					}
+				]
+			},
+			"footer": {
+				"items": [
+					{
+						"id": "playground",
+						"label": "Component playground",
+						"link": {
+							"routeId": "/playground",
+							"params": {}
+						},
+						"children": []
+					},
+					{
+						"id": "github",
+						"label": "GitHub",
+						"link": {
+							"href": "https://github.com/velastack/cms",
+							"newTab": true
+						},
+						"children": []
+					}
+				]
+			}
+		},
+		"hours": {
+			"timezone": "Europe/Lisbon",
+			"days": {
+				"mon": {
+					"closed": false,
+					"ranges": [
+						{
+							"open": "07:00",
+							"close": "23:00"
+						}
+					]
+				},
+				"tue": {
+					"closed": false,
+					"ranges": [
+						{
+							"open": "07:00",
+							"close": "23:00"
+						}
+					]
+				},
+				"wed": {
+					"closed": false,
+					"ranges": [
+						{
+							"open": "07:00",
+							"close": "23:00"
+						}
+					]
+				},
+				"thu": {
+					"closed": false,
+					"ranges": [
+						{
+							"open": "07:00",
+							"close": "23:00"
+						}
+					]
+				},
+				"fri": {
+					"closed": false,
+					"ranges": [
+						{
+							"open": "07:00",
+							"close": "00:00"
+						}
+					]
+				},
+				"sat": {
+					"closed": false,
+					"ranges": [
+						{
+							"open": "08:00",
+							"close": "00:00"
+						}
+					]
+				},
+				"sun": {
+					"closed": false,
+					"ranges": [
+						{
+							"open": "08:00",
+							"close": "22:00"
+						}
+					]
+				}
+			},
+			"note": "Late arrival? Ring the bell by the blue door.",
+			"exceptions": [
+				{
+					"id": "xmas",
+					"date": "2026-12-25",
+					"label": "Christmas Day",
+					"closed": false,
+					"ranges": [
+						{
+							"open": "09:00",
+							"close": "14:00"
+						}
+					]
+				}
+			]
+		},
+		"contact": {
+			"name": "Casa Marea",
+			"address": {
+				"lines": ["Rua do Cais 7"],
+				"locality": "Ericeira",
+				"region": "Lisboa",
+				"postcode": "2655-320",
+				"country": "Portugal"
+			},
+			"phones": [
+				{
+					"id": "desk",
+					"label": "Reception",
+					"number": "+351 261 000 000"
+				}
+			],
+			"emails": [
+				{
+					"id": "stay",
+					"label": "Bookings",
+					"address": "stay@casamarea.example"
+				}
+			],
+			"whatsapp": "+351 910 000 000",
+			"geo": {
+				"lat": 38.9629,
+				"lng": -9.4172
+			}
+		},
+		"social": {
+			"items": [
+				{
+					"id": "ig",
+					"platform": "instagram",
+					"url": "https://instagram.com/casamarea",
+					"label": ""
+				},
+				{
+					"id": "ta",
+					"platform": "tripadvisor",
+					"url": "https://tripadvisor.com/casamarea",
+					"label": "Reviews"
+				}
+			]
+		}
+	},
+	"layout:/(marketing)": {
+		"header": {
+			"tagline": "Seven rooms on the harbour"
+		},
+		"announcement": {
+			"visible": true,
+			"text": "Winter rates are live: stay three nights, pay for two."
+		}
+	},
+	"layout:/(guest)": {
+		"header": {
+			"tagline": "Guest portal"
+		}
+	},
+	"page:/(marketing)": {
+		"metadata": {
+			"title": "A small hotel on the harbour",
+			"description": "Seven rooms above the fishing harbour in Ericeira, Portugal.",
+			"ogImage": {
+				"url": "/demo/harbour.jpg",
+				"alt": "Fishing boats in the harbour"
+			}
+		},
+		"hero": {
+			"title": "Wake up to the harbour",
+			"subtitle": "Seven rooms above the fishing boats in Ericeira, an hour from Lisbon.",
+			"image": {
+				"url": "/demo/harbour.jpg",
+				"alt": "Fishing boats moored in the harbour"
+			},
+			"cta": {
+				"label": "See the rooms",
+				"routeId": "/(marketing)/rooms",
+				"params": {}
+			}
+		},
+		"intro": "<p>Casa Marea is a converted net-maker’s house on the harbour wall. Breakfast is on the terrace, dinner comes out of the wood oven, and the surf is a five-minute walk.</p>",
+		"rooms": {
+			"heading": "Rooms"
+		},
+		"stats": {
+			"items": [
+				{
+					"id": "rooms",
+					"value": "7",
+					"label": "Rooms",
+					"note": ""
+				},
+				{
+					"id": "walk",
+					"value": "5 min",
+					"label": "To the beach",
+					"note": ""
+				},
+				{
+					"id": "rating",
+					"value": "4.9",
+					"label": "Guest rating",
+					"note": "418 reviews"
+				}
+			]
+		},
+		"testimonials": {
+			"items": [
+				{
+					"id": "sofia",
+					"quote": "<p>We fell asleep to the boats knocking against the harbour wall. Breakfast on the terrace was the best part of the trip.</p>",
+					"author": "Sofia & Ben",
+					"role": "Stayed in the Balcony Suite",
+					"rating": 5,
+					"source": {
+						"label": "Google",
+						"url": "https://maps.google.com"
+					},
+					"date": "2026-08-14"
+				},
+				{
+					"id": "jonas",
+					"quote": "<p>Inês booked our surf lesson and a table at her cousin’s place. It felt like staying with friends.</p>",
+					"author": "Jonas K.",
+					"role": "Stayed in the Loft",
+					"rating": 5,
+					"source": {
+						"label": "Tripadvisor",
+						"url": "https://tripadvisor.com"
+					},
+					"date": "2026-06-02"
+				}
+			]
+		}
+	},
+	"page:/(marketing)/rooms": {
+		"metadata": {
+			"title": "Rooms",
+			"description": "Three kinds of room, all with a view of the water or the garden."
+		},
+		"intro": {
+			"title": "Rooms",
+			"body": "Every room looks over the harbour or the garden. Rates include breakfast."
+		}
+	},
+	"page:/(marketing)/rooms/[slug]": {
+		"metadata": {
+			"title": "New room",
+			"price_per_night": 150,
+			"max_guests": 2
+		},
+		"summary": "A quiet room a few steps from the harbour.",
+		"hero": {
+			"image": {
+				"url": "/demo/harbour.jpg",
+				"alt": "The harbour below Casa Marea"
+			}
+		},
+		"checkIn": "15:00",
+		"description": "## In the room\n\n- A comfortable double bed\n- Rain shower\n- Breakfast on the terrace, included",
+		"gallery": {
+			"items": [
+				{
+					"id": "view",
+					"image": {
+						"url": "/demo/harbour.jpg",
+						"alt": "The harbour"
+					},
+					"caption": "The harbour, two minutes away"
+				},
+				{
+					"id": "terrace",
+					"image": {
+						"url": "/demo/terrace.jpg",
+						"alt": "The breakfast terrace"
+					},
+					"caption": "Breakfast on the terrace"
+				}
+			]
+		}
+	},
+	"page:/(marketing)/experiences": {
+		"metadata": {
+			"title": "Experiences",
+			"description": "Sailing, the wood oven and the old town."
+		},
+		"intro": {
+			"title": "Things to do",
+			"body": "<p>We book everything for you. Ask at reception or message us before you arrive.</p>"
+		},
+		"experiences": {
+			"items": [
+				{
+					"id": "sailing",
+					"title": "Sunset sail",
+					"summary": "Two hours along the coast on a wooden sloop, with a glass of vinho verde.",
+					"image": {
+						"url": "/demo/sailing.jpg",
+						"alt": "A small sailboat on open water"
+					},
+					"price": {
+						"amount": 65,
+						"currency": "EUR",
+						"period": "person"
+					},
+					"duration": "2 hours",
+					"tags": ["sea"],
+					"featured": true
+				},
+				{
+					"id": "oven",
+					"title": "Wood-oven dinner",
+					"summary": "Five courses from the oven in the courtyard. Thursdays and Saturdays.",
+					"image": {
+						"url": "/demo/kitchen.jpg",
+						"alt": "Embers in the wood oven"
+					},
+					"price": {
+						"amount": 55,
+						"currency": "EUR",
+						"period": "person"
+					},
+					"duration": "From 8pm",
+					"tags": ["food"]
+				},
+				{
+					"id": "old-town",
+					"title": "Old town walk",
+					"summary": "Mateo shows you the chapel, the fish market and the best custard tarts.",
+					"image": {
+						"url": "/demo/old-town.jpg",
+						"alt": "A narrow cobblestone street"
+					},
+					"price": {
+						"amount": null,
+						"currency": "EUR",
+						"period": ""
+					},
+					"duration": "90 minutes",
+					"tags": ["town"],
+					"details": [
+						{
+							"id": "free",
+							"label": "Price",
+							"value": "Free for guests"
+						}
+					]
+				}
+			]
+		},
+		"weekly": {
+			"heading": "Every week",
+			"items": [
+				{
+					"id": "yoga-mon",
+					"day": "Monday",
+					"time": "08:00",
+					"title": "Yoga",
+					"body": "",
+					"location": "Terrace"
+				},
+				{
+					"id": "oven-thu",
+					"day": "Thursday",
+					"time": "20:00",
+					"title": "Wood-oven dinner",
+					"body": "",
+					"location": "Courtyard"
+				},
+				{
+					"id": "yoga-fri",
+					"day": "Friday",
+					"time": "08:00",
+					"title": "Yoga",
+					"body": "",
+					"location": "Terrace"
+				},
+				{
+					"id": "oven-sat",
+					"day": "Saturday",
+					"time": "20:00",
+					"title": "Wood-oven dinner",
+					"body": "",
+					"location": "Courtyard"
+				}
+			]
+		},
+		"packages": {
+			"heading": "Packages",
+			"currency": "EUR",
+			"labels": {
+				"custom": "Ask us"
+			},
+			"items": [
+				{
+					"id": "bb",
+					"name": "Bed & breakfast",
+					"price": {
+						"amount": 120,
+						"custom": false,
+						"period": "night"
+					},
+					"description": "Any room, breakfast on the terrace.",
+					"features": [
+						{
+							"id": "breakfast",
+							"text": "Breakfast",
+							"included": true
+						},
+						{
+							"id": "dinner",
+							"text": "Wood-oven dinner",
+							"included": false
+						}
+					],
+					"cta": {
+						"routeId": "/(marketing)/contact",
+						"params": {}
+					}
+				},
+				{
+					"id": "hb",
+					"name": "Half board",
+					"price": {
+						"amount": 170,
+						"custom": false,
+						"period": "night"
+					},
+					"description": "Breakfast, plus dinner from the oven on Thursdays and Saturdays.",
+					"features": [
+						{
+							"id": "breakfast",
+							"text": "Breakfast",
+							"included": true
+						},
+						{
+							"id": "dinner",
+							"text": "Wood-oven dinner",
+							"included": true
+						}
+					],
+					"cta": {
+						"routeId": "/(marketing)/contact",
+						"params": {}
+					},
+					"highlighted": true,
+					"badge": "Most booked"
+				},
+				{
+					"id": "house",
+					"name": "Whole house",
+					"price": {
+						"amount": null,
+						"custom": true,
+						"period": ""
+					},
+					"description": "All seven rooms for a wedding, a retreat or a big birthday.",
+					"features": [
+						{
+							"id": "chef",
+							"text": "Private chef",
+							"included": true
+						}
+					],
+					"cta": {
+						"href": "mailto:stay@casamarea.example"
+					}
+				}
+			]
+		}
+	},
+	"page:/(marketing)/about": {
+		"metadata": {
+			"title": "About",
+			"description": "A net-maker’s house turned into a hotel."
+		},
+		"hero": {
+			"title": "A net-maker’s house"
+		},
+		"story": "<p>For a hundred years this house was where the harbour’s nets were made and mended. Lúcia’s grandfather was the last net-maker. In 2016 she and Mateo turned his workshop into a terrace and the lofts into rooms.</p><p>One of his nets still hangs in reception.</p>",
+		"storyImage": {
+			"url": "/demo/reception.jpg",
+			"alt": "The reception desk"
+		},
+		"history": {
+			"items": [
+				{
+					"id": "1921",
+					"date": "1921",
+					"title": "The net-maker’s house",
+					"body": "<p>Built on the harbour wall.</p>"
+				},
+				{
+					"id": "2016",
+					"date": "2016",
+					"title": "Casa Marea opens",
+					"body": "<p>Four rooms and a terrace.</p>"
+				},
+				{
+					"id": "2022",
+					"date": "2022",
+					"title": "The Loft",
+					"body": "<p>The roof space becomes our family room.</p>"
+				},
+				{
+					"id": "2025",
+					"date": "2025",
+					"title": "The wood oven",
+					"body": "<p>Dinner twice a week in the courtyard.</p>"
+				}
+			]
+		},
+		"team": {
+			"items": [
+				{
+					"id": "lucia",
+					"name": "Lúcia Faria",
+					"role": "Owner",
+					"bio": "<p>Grew up in this house. Knows every fisherman by name.</p>",
+					"photo": {
+						"url": "/demo/team-lucia.jpg",
+						"alt": "Lúcia Faria"
+					},
+					"email": "lucia@casamarea.example"
+				},
+				{
+					"id": "mateo",
+					"name": "Mateo Reis",
+					"role": "Host & cook",
+					"bio": "<p>Runs the wood oven and the old town walk.</p>",
+					"photo": {
+						"url": "/demo/team-mateo.jpg",
+						"alt": "Mateo Reis"
+					}
+				},
+				{
+					"id": "ines",
+					"name": "Inês Costa",
+					"role": "Reception",
+					"bio": "<p>Books your surf lesson before you’ve finished asking.</p>",
+					"photo": {
+						"url": "/demo/team-ines.jpg",
+						"alt": "Inês Costa"
+					}
+				}
+			]
+		},
+		"gallery": {
+			"items": [
+				{
+					"id": "terrace",
+					"image": {
+						"url": "/demo/terrace.jpg",
+						"alt": "The terrace"
+					},
+					"caption": "The terrace"
+				},
+				{
+					"id": "pool",
+					"image": {
+						"url": "/demo/pool.jpg",
+						"alt": "The plunge pool"
+					},
+					"caption": "The plunge pool"
+				},
+				{
+					"id": "cove",
+					"image": {
+						"url": "/demo/cove.jpg",
+						"alt": "The cove below the cliffs"
+					},
+					"caption": "The cove, a ten-minute walk"
+				}
+			]
+		}
+	},
+	"page:/(marketing)/contact": {
+		"metadata": {
+			"title": "Contact",
+			"description": "How to reach Casa Marea, and how to get here."
+		},
+		"hero": {
+			"title": "Get in touch"
+		},
+		"notice": {
+			"visible": true,
+			"text": "Reception moves to the terrace bar after 6pm",
+			"until": "2026-10-31"
+		},
+		"gettingHere": {
+			"heading": "Getting here",
+			"items": [
+				{
+					"id": "airport",
+					"title": "Fly into Lisbon",
+					"body": "<p>The airport is 45 minutes away by car.</p>"
+				},
+				{
+					"id": "bus",
+					"title": "Take the Mafrense bus",
+					"body": "<p>Every hour from Campo Grande. Get off at the Ericeira terminal.</p>"
+				},
+				{
+					"id": "walk",
+					"title": "Walk down to the harbour",
+					"body": "<p>Ten minutes downhill. Look for the blue door.</p>"
+				}
+			]
+		},
+		"faq": {
+			"items": [
+				{
+					"id": "parking",
+					"question": "Is there parking?",
+					"answer": "<p>Street parking only. We can reserve a space in the public car park.</p>"
+				},
+				{
+					"id": "dogs",
+					"question": "Can we bring our dog?",
+					"answer": "<p>Yes, in the Garden Room.</p>"
+				},
+				{
+					"id": "surf",
+					"question": "Can you book surf lessons?",
+					"answer": "<p>Yes. Tell us your level and we’ll find the right school.</p>"
+				}
+			]
+		}
+	},
+	"page:/(guest)/guest": {
+		"metadata": {
+			"title": "Guest portal",
+			"description": "Wi-Fi, checkout and house rules for guests.",
+			"noindex": true
+		},
+		"welcome": {
+			"title": "Welcome to Casa Marea",
+			"body": "<p>Everything you need during your stay. Message Inês on WhatsApp if anything is missing.</p>"
+		},
+		"wifi": {
+			"network": "CasaMarea",
+			"password": "boats-and-nets"
+		},
+		"checkout": "11:00",
+		"breakfast": "8–10:30am on the terrace",
+		"rules": "- Quiet hours from 11pm\n- Beach towels are by the door. Please bring them back.\n- The terrace bar runs on trust: write what you take in the book.",
+		"dinner": {
+			"label": "Book the wood-oven dinner",
+			"href": "https://wa.me/351910000000"
+		}
+	},
+	"page:/playground": {
+		"metadata": {
+			"title": "Component playground",
+			"description": "Every @velastack/cms component with a working example."
+		},
+		"header": {
+			"tagline": "Component playground"
+		}
+	},
+	"site": {
+		"seo": {
+			"schemaType": "Hotel",
+			"shareImage": {
+				"url": "/demo/harbour.jpg",
+				"alt": "Fishing boats in the harbour"
+			}
+		},
+		"locales": {
+			"es": true
+		}
+	}
+}

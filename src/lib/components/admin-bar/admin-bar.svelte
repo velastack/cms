@@ -154,7 +154,7 @@
 
 	// ── Teardown (shared by closeBar + onLogout) ──────────────────────
 	const stripUrlParams = (...keys: string[]) => {
-		const url = new URL(page.url.href);
+		const url = new URL((page.shallow?.url ?? page.url).href);
 		let changed = false;
 		for (const k of keys) {
 			if (url.searchParams.has(k)) {

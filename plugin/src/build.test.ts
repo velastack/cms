@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fallbackResolverFor, injectFallbacks, scanUsages } from './build.js';
+import { checkContent, fallbackResolverFor, injectFallbacks, scanUsages } from './build.js';
 
 const SRC = `<script lang="ts">
 	import { CmsText, CmsBoolean, CmsHours } from '@velastack/cms';
@@ -111,6 +111,14 @@ describe('injectFallbacks', () => {
 		});
 	});
 
+	it("uses the manifest's classification when given one, for imports it cannot read", () => {
+		const src = `<script>import { CmsText } from '#lib/index.js';</script><CmsText name="hero.title" />`;
+		const content = { hero: { title: 'Hi' } };
+		expect(injectFallbacks(src, content).injected).toEqual([]);
+		const { code } = injectFallbacks(src, content, { locals: new Map([['CmsText', 'CmsText']]) });
+		expect(code).toContain('name="hero.title" fallback={"Hi"}');
+	});
+
 	it('leaves the source byte-identical when nothing resolves', () => {
 		const { code, injected } = injectFallbacks(SRC, {});
 		expect(code).toBe(SRC);
@@ -153,5 +161,91 @@ describe('fallbackResolverFor', () => {
 				end: 0
 			})
 		).toBeUndefined();
+	});
+});
+
+describe('checkContent', () => {
+	const site = (scopeId: string, name: string, component: string, fallback = false) => ({
+		scopeId,
+		name,
+		component,
+		fallback,
+		file: `/app/src/routes${scopeId.slice(scopeId.indexOf(':') + 1)}/+page.svelte`,
+		line: 1
+	});
+	const usageSites = [
+		site('layout:/', 'footer', 'CmsText'),
+		site('layout:/', 'brand', 'CmsText'),
+		site('page:/', 'a', 'CmsText', true),
+		site('page:/', 'stats', 'CmsStats'),
+		site('page:/', 'on', 'CmsBoolean'),
+		site('page:/', 'hero.title', 'CmsText'),
+		site('page:/rooms/[slug]', 'gallery', 'CmsGallery')
+	];
+	const scope = (scopeId: string, kind: 'layout' | 'page', names: string[]) => ({
+		scopeId,
+		kind,
+		routeId: scopeId.slice(scopeId.indexOf(':') + 1),
+		ownedParams: [],
+		fields: names,
+		usages: names.map((name) => ({ name, component: 'CmsText' }))
+	});
+	const manifest = {
+		version: 1 as const,
+		routes: {
+			'/': {
+				scopes: [
+					scope('layout:/', 'layout', ['footer', 'brand']),
+					scope('page:/', 'page', ['a', 'stats', 'on', 'hero.title'])
+				],
+				entriesRouteIds: []
+			},
+			'/rooms/[slug]': {
+				scopes: [
+					scope('layout:/', 'layout', ['footer', 'brand']),
+					scope('page:/rooms/[slug]', 'page', ['gallery'])
+				],
+				entriesRouteIds: []
+			}
+		}
+	};
+	const en = {
+		'layout:/': { footer: 'F', oldBanner: { text: 'x', visible: true } },
+		'page:/': {
+			stats: { items: [{ id: '1', value: '7' }] },
+			hero: { title: 'T', subtitle: 'S' },
+			metadata: { title: 'Home', price: 3 }
+		},
+		'page:/gone': { x: 1 },
+		site: { seo: { schemaType: 'Hotel' } }
+	};
+	const es = { 'page:/': { hero: { title: 'T es', tagline: 'x' } } };
+
+	const { missing, stale } = checkContent({ manifest, usageSites }, { en, es }, 'en');
+
+	it('lists usages with neither a fallback prop nor a content value', () => {
+		expect(missing.map((m) => `${m.scopeId} ${m.name}`)).toEqual([
+			'layout:/ brand',
+			'page:/rooms/[slug] gallery'
+		]);
+	});
+
+	it('exempts CmsBoolean, whose value is false until set', () => {
+		expect(missing.some((m) => m.name === 'on')).toBe(false);
+	});
+
+	it('flags content no usage reads, once per branch, in every locale', () => {
+		expect(stale).toEqual([
+			{ locale: 'en', scopeId: 'layout:/', path: 'oldBanner' },
+			{ locale: 'en', scopeId: 'page:/', path: 'hero.subtitle' },
+			{ locale: 'en', scopeId: 'page:/gone', path: null },
+			{ locale: 'es', scopeId: 'page:/', path: 'hero.tagline' }
+		]);
+	});
+
+	it('reads a structured value as a whole and leaves metadata and site alone', () => {
+		expect(stale.some((s) => s.path?.startsWith('stats'))).toBe(false);
+		expect(stale.some((s) => s.path?.startsWith('metadata'))).toBe(false);
+		expect(stale.some((s) => s.scopeId === 'site')).toBe(false);
 	});
 });

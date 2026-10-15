@@ -159,10 +159,16 @@
 	const counts = $derived(cmsStore.workingCopyCounts);
 	const previewKey = $derived(cmsStore.openRelease?.preview_key ?? null);
 
+	// The URL the browser is showing. A shallow `goto` (how we set `?preview=`
+	// and `?version=`) leaves `page.url` at the loaded URL and exposes the new
+	// one as `page.shallow.url`; reading `page.url` alone makes the overlay
+	// effect re-issue `set-preview-param` forever.
+	const currentUrl = $derived(page.shallow?.url ?? page.url);
+
 	// `?version=<key>` opens a past published release in read-only snapshot
 	// view. Mutually exclusive with the draft `?preview=` flow: when set, we
 	// suppress draft overlays/auto-add and disable edit-mode entry.
-	const versionKey = $derived(page.url.searchParams.get('version'));
+	const versionKey = $derived(currentUrl.searchParams.get('version'));
 	let versionRelease = $state<{ id: string; preview_key: string; name?: string } | null>(null);
 
 	// `?locale=` is the editor's preview override; it wins over the server-resolved
@@ -170,7 +176,7 @@
 	// doesn't honor the param (and on static-export sites where the server load
 	// can't be re-run). Falls back to `cms.locale` when no override is set.
 	const currentLocale = $derived(
-		page.url.searchParams.get('locale') ?? (page.data.cms as CmsPayload | undefined)?.locale ?? ''
+		currentUrl.searchParams.get('locale') ?? (page.data.cms as CmsPayload | undefined)?.locale ?? ''
 	);
 	const supportedLocales = $derived((page.data.cms as CmsPayload | undefined)?.locales ?? []);
 
@@ -181,7 +187,7 @@
 
 	const previewUrl = $derived.by(() => {
 		if (versionKey) {
-			const url = new URL(page.url.href);
+			const url = new URL(currentUrl.href);
 			url.searchParams.delete('edit');
 			url.searchParams.delete('preview');
 			url.searchParams.set('version', versionKey);
@@ -189,7 +195,7 @@
 		}
 		const key = previewKey;
 		if (!key) return '';
-		const url = new URL(page.url.href);
+		const url = new URL(currentUrl.href);
 		url.searchParams.delete('edit');
 		url.searchParams.set('preview', key);
 		return url.toString();
@@ -206,7 +212,7 @@
 	};
 
 	const setPreviewParam = async (key: string | null, opts: { replace?: boolean } = {}) => {
-		const url = new URL(page.url.href);
+		const url = new URL(currentUrl.href);
 		const current = url.searchParams.get('preview');
 		url.searchParams.delete('edit');
 		if (key) {
@@ -225,7 +231,7 @@
 	};
 
 	const setVersionParam = async (key: string | null, opts: { replace?: boolean } = {}) => {
-		const url = new URL(page.url.href);
+		const url = new URL(currentUrl.href);
 		const current = url.searchParams.get('version');
 		url.searchParams.delete('edit');
 		url.searchParams.delete('preview');
@@ -259,7 +265,7 @@
 	// (and on static-export sites with no server load to re-run). Like the
 	// other gating params, we strip the param when `null`.
 	const setLocaleParam = async (locale: string | null, opts: { replace?: boolean } = {}) => {
-		const url = new URL(page.url.href);
+		const url = new URL(currentUrl.href);
 		const current = url.searchParams.get('locale');
 		if (locale) {
 			if (current === locale) return;
@@ -343,7 +349,7 @@
 			pageLocale: (page.data.cms as CmsPayload | undefined)?.locale ?? currentLocale,
 			openReleaseKey: cmsStore.openRelease?.preview_key ?? null,
 			openReleaseFetched,
-			previewParam: page.url.searchParams.get('preview')
+			previewParam: currentUrl.searchParams.get('preview')
 		});
 
 		if (intents.length === 0) return;
@@ -413,7 +419,7 @@
 
 		// While clearingLocale is true, the user intentionally stripped `?locale=`;
 		// don't re-carry the old value from `page.url` (which hasn't updated yet).
-		const localeParam = clearingLocale ? null : page.url.searchParams.get('locale');
+		const localeParam = clearingLocale ? null : currentUrl.searchParams.get('locale');
 		const localeNeedsCarry = (target: URL) =>
 			!!localeParam && target.searchParams.get('locale') !== localeParam;
 		const carryLocaleOnto = (url: URL) => {
@@ -475,7 +481,7 @@
 		if (shallow) return;
 
 		if (versionKey) {
-			const url = new URL(page.url.href);
+			const url = new URL(currentUrl.href);
 			if (url.searchParams.get('version') !== versionKey) {
 				url.searchParams.delete('preview');
 				url.searchParams.set('version', versionKey);
@@ -512,7 +518,7 @@
 			cmsStore.clearOverlay();
 			return;
 		}
-		const url = new URL(page.url.href);
+		const url = new URL(currentUrl.href);
 		if (url.searchParams.get('preview') !== key) {
 			url.searchParams.set('preview', key);
 			void goto(url.pathname + url.search + url.hash, {
@@ -913,7 +919,7 @@
 	};
 
 	const onOpenInNewTab = () => {
-		const url = previewUrl || page.url.toString();
+		const url = previewUrl || currentUrl.toString();
 		window.open(url, '_blank', 'noopener');
 	};
 

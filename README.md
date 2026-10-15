@@ -572,7 +572,7 @@ Page-kind docs own a `metadata` branch on the doc tree. `loadCms` aliases that b
 
 A page-kind scope can also resolve to a **tombstone** (`{ kind: 'gone' }` or `{ kind: 'redirect', to }`) instead of a doc. The loader short-circuits the page render and surfaces `gone` / `redirectTo` on the `LoadCmsResult` so the caller can return 410 / 308. Layout scopes never tombstone.
 
-`fetchEntries` enumerates publishable entries at one route id (used by `generateEntries` for prerender). Tombstoned entries are returned with `redirectTo` / `gone` flags so prerender visits the URL and SvelteKit emits the redirect file; the loader filters them out of `cms.entries` before display.
+`fetchEntries` enumerates publishable entries at one route id (used by `generateEntries` for prerender). Redirected entries are returned with a `redirectTo` flag so prerender visits the URL and SvelteKit emits the redirect page. `gone` entries are left out of published reads, since prerender fails on a 410 and a static host can't serve one; with a preview key they come back flagged `gone` so the editor sees the deletion. The loader filters both out of `cms.entries` before display.
 
 ### `mockAdapter` (built-in)
 
@@ -729,7 +729,7 @@ Pages can be deleted with three different outcomes:
 
 Tombstones live on the adapter's `PageEntry` (`tombstone: CmsAdapterTombstone`) for already-published deletions, and on a release's `page-delete` item (`outcome?: CmsAdapterTombstone`) for staged deletions in the editor's working copy. The loader returns whichever applies on `LoadCmsResult.{ gone, redirectTo }`; your `+layout.server.ts` branches on those flags before rendering.
 
-For prerender, `fetchEntries` returns tombstoned entries with `redirectTo` / `gone` flags so SvelteKit visits the URL and emits the redirect file — but `cms.entries[routeId]` strips them, so `<CmsEntries>` lists never display deleted pages.
+For prerender, `fetchEntries` returns redirected entries with a `redirectTo` flag so SvelteKit visits the URL and emits the redirect page. It leaves `gone` entries out: a static build has no way to serve a 410, so a removed page simply isn't written (and a link to it still fails the build, like any broken link). `cms.entries[routeId]` strips both, so `<CmsEntries>` lists never display deleted pages.
 
 ## Plugin options
 
@@ -759,7 +759,14 @@ cms({
 });
 ```
 
-Build tooling that needs the same parser — a `pack` step inlining fallbacks into a tarball, a `verify` step checking usages against a content manifest — imports it from `@velastack/cms/build`: `scanUsages(source)`, `injectFallbacks(source, treeOrResolver)` / `inlineFallbacks`, `buildManifest(...)` and `fallbackResolverFor(result, file, content)`. The manifest records each usage's component type (`scope.usages`), and the walk reports dynamic `name`s and out-of-chain `scope=` attributes as warnings instead of dropping them silently.
+Every usage should have a fallback, so a page renders before an editor touches it, and a new page created from the admin bar looks like a page. The dev server and `vite build` warn about both ways that rule breaks, each time the list changes:
+
+- **No fallback:** a usage with no `fallback`/`initial` prop, no fallback markup (the children of `CmsText`, `CmsRichText` and `CmsImage`), and no value in the default locale's content file, listed by file and line. `CmsBoolean` is exempt, since it reads `false` until set.
+- **Stale content:** a value in any `content/<locale>.json` that nothing reads, such as a scope whose route was renamed or a key left behind by a renamed `name=`. Page `metadata` and `site` aren't checked.
+
+To leave a field deliberately empty, store `null`: it renders nothing and never falls back.
+
+Build tooling that needs the same parser — a `pack` step inlining fallbacks into a tarball, a `verify` step checking usages against a content manifest — imports it from `@velastack/cms/build`: `scanUsages(source)`, `injectFallbacks(source, treeOrResolver)` / `inlineFallbacks`, `buildManifest(...)`, `fallbackResolverFor(result, file, content)` and `checkContent(result, contentByLocale, defaultLocale)`, the check above. The manifest records each usage's component type (`scope.usages`), and the walk reports dynamic `name`s and out-of-chain `scope=` attributes as warnings instead of dropping them silently.
 
 The plugin also exposes `virtual:vela-cms/manifest` (typed via the package's ambient declaration). You almost never need to import it directly — `loadCms` does that internally — but it's there if you want to introspect the manifest at build time.
 
@@ -782,7 +789,7 @@ src/lib/         Public library
   components/cms/      Display + editable components, scope helpers, store
   components/admin-bar/ Admin bar wrapper + async internal + SEO panel
   server/              loadCms, mockAdapter, types
-src/routes/      Test harness / showcase
+src/routes/      Demo site (seeded from src/demo-seed.ts) and /playground
 ```
 
 ## License

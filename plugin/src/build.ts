@@ -7,7 +7,8 @@
  * into those usages as `fallback` props ({@link injectFallbacks}), and which
  * scope a file's values live in ({@link fallbackResolverFor}, on top of
  * {@link buildManifest}). Keeping them here means no consumer carries a Svelte
- * parser of its own.
+ * parser of its own. {@link checkContent} holds a site to the manifest: every
+ * usage has a fallback, and no content value outlives the usage that read it.
  */
 import { basename } from 'node:path';
 import { parseSvelteSource, type ComponentUsage } from './parse-svelte.js';
@@ -20,7 +21,8 @@ import {
 	type BuildManifestResult,
 	type CmsManifest,
 	type CmsManifestScope,
-	type CmsManifestUsage
+	type CmsManifestUsage,
+	type UsageSite
 } from './manifest.js';
 
 export { buildManifest, resolveScopeAttr, ROOT_SCOPE_ID };
@@ -41,7 +43,8 @@ export type {
 	BuildManifestResult,
 	CmsManifest,
 	CmsManifestScope,
-	CmsManifestUsage
+	CmsManifestUsage,
+	UsageSite
 };
 
 export type CmsUsage = {
@@ -154,6 +157,13 @@ export type FallbackResolver = (usage: CmsUsage) => unknown;
 export type InjectOptions = ScanOptions & {
 	/** Replace an existing `fallback` / `initial` prop instead of skipping it. */
 	overwrite?: boolean;
+	/**
+	 * The file's CMS components, local → canonical, as {@link buildManifest}
+	 * resolved them (`cmsLocalsByFile`). Without it, components are recognised
+	 * by import string alone, which misses imports the walk resolves, such as a
+	 * project's own barrel.
+	 */
+	locals?: Map<string, string>;
 };
 
 export type InjectResult = {
@@ -184,7 +194,7 @@ export const injectFallbacks = (
 	options: InjectOptions = {}
 ): InjectResult => {
 	const parsed = parseSvelteSource(source, options.filename);
-	const locals = classifyImports(parsed.imports, options.components ?? []);
+	const locals = options.locals ?? classifyImports(parsed.imports, options.components ?? []);
 	const resolver: FallbackResolver =
 		typeof resolve === 'function' ? resolve : (u) => (u.name ? get(resolve, u.name) : undefined);
 
@@ -247,4 +257,69 @@ export const fallbackResolverFor = (
 		}
 		return undefined;
 	};
+};
+
+/** A usage that renders nothing until an editor stores a value. */
+export type MissingFallback = UsageSite;
+
+/** A content value no usage reads. `path` is null when the whole scope has no route. */
+export type StaleContent = { locale: string; scopeId: string; path: string | null };
+
+/**
+ * Check content manifests (`content/<locale>.json`, keyed by scope id)
+ * against the usages the manifest recorded.
+ *
+ * - `missing`: usages with no `fallback`/`initial`, no fallback markup, and no
+ *   value in the default locale's content. `CmsBoolean` is exempt: without
+ *   `initial` it reads `false`, a value.
+ * - `stale`: values nothing reads, in every locale: a scope no route has, or
+ *   a path under a scope that no usage's `name` covers. A structured value is
+ *   read as a whole, and a stale branch is reported once at its top. Page
+ *   `metadata` (the SEO panel's, with schemas a route may extend) and `site`
+ *   are not checked.
+ */
+export const checkContent = (
+	result: Pick<BuildManifestResult, 'manifest' | 'usageSites'>,
+	content: Record<string, Record<string, Tree> | null>,
+	defaultLocale: string
+): { missing: MissingFallback[]; stale: StaleContent[] } => {
+	const fallbacks = content[defaultLocale] ?? {};
+	const missing = result.usageSites.filter(
+		(u) =>
+			!u.fallback && u.component !== 'CmsBoolean' && get(fallbacks[u.scopeId], u.name) === undefined
+	);
+
+	const names = new Map<string, { kind: 'layout' | 'page'; names: Set<string> }>();
+	for (const route of Object.values(result.manifest.routes)) {
+		for (const scope of route.scopes) {
+			const entry = names.get(scope.scopeId) ?? { kind: scope.kind, names: new Set<string>() };
+			for (const u of scope.usages) entry.names.add(u.name);
+			names.set(scope.scopeId, entry);
+		}
+	}
+
+	const stale: StaleContent[] = [];
+	for (const [locale, tree] of Object.entries(content)) {
+		for (const [scopeId, value] of Object.entries(tree ?? {})) {
+			if (scopeId === 'site') continue;
+			const scope = names.get(scopeId);
+			if (!scope) {
+				stale.push({ locale, scopeId, path: null });
+				continue;
+			}
+			const read = [...scope.names];
+			const walk = (node: unknown, path: string) => {
+				if (scope.kind === 'page' && path.split('.')[0] === 'metadata') return;
+				if (read.some((n) => path === n || path.startsWith(n + '.'))) return;
+				const below = read.some((n) => n.startsWith(path + '.'));
+				if (!below || node === null || typeof node !== 'object') {
+					stale.push({ locale, scopeId, path });
+					return;
+				}
+				for (const [k, v] of Object.entries(node)) walk(v, `${path}.${k}`);
+			};
+			for (const [k, v] of Object.entries(value ?? {})) walk(v, k);
+		}
+	}
+	return { missing, stale };
 };

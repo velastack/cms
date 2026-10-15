@@ -272,19 +272,22 @@ export const resolveCmsPayload = async (args: ResolveCmsPayloadArgs): Promise<Lo
 };
 
 /**
- * A query parameter of the request, or null where the page cannot have one:
- * while building, and on a prerendered page, where SvelteKit (3.0 in dev too,
- * via `prerender_default`) replaces `url.search`/`url.searchParams` with a
- * getter that throws `url_search_unavailable_prerender`. A prerendered page
- * cannot vary by preview or version key, so null is the right answer, not an
- * error that takes the whole page down in `vite dev`.
+ * A query parameter of the request, or null while building.
+ *
+ * On a page with prerendering enabled, SvelteKit 3 replaces `url.search` and
+ * `url.searchParams` with a getter that throws `url_search_unavailable_prerender`,
+ * in `vite dev` as well as during a build. That guards prerendered output,
+ * which `building` already covers: nothing written to disk varies by preview
+ * or version key. Outside a build the page is rendered on demand, so the key
+ * is read from the raw request URL instead. Without it a page that exists
+ * only in the open release (one just created in the admin bar) 404s in dev.
  */
 const searchParam = (event: ServerLoadEvent, key: string): string | null => {
 	if (building) return null;
 	try {
 		return event.url.searchParams.get(key);
 	} catch {
-		return null;
+		return new URL(event.request.url).searchParams.get(key);
 	}
 };
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildManifest, readPackageImports, type ImportResolver } from './manifest.js';
@@ -159,6 +159,45 @@ describe('buildManifest', () => {
 			f.endsWith('routes/+layout.svelte')
 		)!;
 		expect(rootLayout[1]).toEqual(['layout:/']);
+	});
+
+	it('records each usage site with its target scope and whether it carries a fallback', async () => {
+		const root = mkdtempSync(join(tmpdir(), 'velacms-sites-'));
+		try {
+			const routes = join(root, 'routes');
+			mkdirSync(routes, { recursive: true });
+			const imp = `<script>import { CmsBoolean, CmsImage, CmsStats, CmsText } from '@velastack/cms';</script>\n`;
+			writeFileSync(join(routes, '+layout.svelte'), imp + `<CmsText name="footer" />\n`);
+			writeFileSync(
+				join(routes, '+page.svelte'),
+				imp +
+					[
+						`<CmsText name="a" fallback="A" />`,
+						`<CmsText name="b">B</CmsText>`,
+						`<CmsImage name="c"><img src="/x.jpg" alt="" /></CmsImage>`,
+						`<CmsStats name="stats">{#snippet children(items)}{items.length}{/snippet}</CmsStats>`,
+						`<CmsBoolean name="on" initial />`,
+						`<CmsText name="brand" scope="root" />`
+					].join('\n')
+			);
+			const result = await buildManifest({ routesDir: routes, libDir: join(root, 'lib') });
+			const sites = result.usageSites.map(
+				(s) => `${s.scopeId} ${s.name} ${s.fallback} ${s.file.slice(root.length)}:${s.line}`
+			);
+			expect(sites.sort()).toEqual(
+				[
+					'layout:/ footer false /routes/+layout.svelte:2',
+					'layout:/ brand false /routes/+page.svelte:7',
+					'page:/ a true /routes/+page.svelte:2',
+					'page:/ b true /routes/+page.svelte:3',
+					'page:/ c true /routes/+page.svelte:4',
+					'page:/ stats false /routes/+page.svelte:5',
+					'page:/ on true /routes/+page.svelte:6'
+				].sort()
+			);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 
 	it('records every visited svelte file', async () => {

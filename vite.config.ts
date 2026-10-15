@@ -13,7 +13,8 @@ export default defineConfig({
 	plugins: [
 		tailwindcss(),
 		cms({
-			endpoint: 'https://velastack.dev/v1/projects/velastack-cms/cms',
+			// Only a build against a real backend (src/cms.ts) has media to download.
+			endpoint: process.env.CMS_ENDPOINT,
 			locales: ['en', 'es']
 		}),
 		sveltekit({

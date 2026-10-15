@@ -218,6 +218,9 @@ export const mockAdapter = (options: MockAdapterOptions = {}): CmsAdapter => {
 					}
 				}
 				if (e.tombstone) {
+					// Like apiAdapter, a published read drops `gone`: prerender can
+					// only fail on a 410, while a redirect becomes a redirect page.
+					if (e.tombstone.kind === 'gone' && !previewKey) continue;
 					out.push({
 						params: { ...e.params },
 						metadata: metaOf(e.published as Tree),

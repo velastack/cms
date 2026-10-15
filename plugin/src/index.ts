@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { transformWithOxc, type Plugin, type ResolvedConfig } from 'vite';
 import { setPageCmsModules } from './build-state.js';
@@ -13,7 +13,7 @@ import {
 	type PackageImports
 } from './manifest.js';
 import { deriveUploadsBase, downloadMedia, extractMediaUrls } from './media.js';
-import { fallbackResolverFor, injectFallbacks } from './build.js';
+import { checkContent, fallbackResolverFor, injectFallbacks } from './build.js';
 import {
 	INSTALL_IMPORT_SOURCE,
 	PAGE_CMS_VIRTUAL_PREFIX,
@@ -295,30 +295,73 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 	let velacmsRoots: string[] | null = null;
 	let warned = false;
 
-	// The default-locale content manifest, re-read when its mtime changes so
-	// edits show up in dev without a restart.
+	// Content manifests, `content/<locale>.json`, re-read when their mtime
+	// changes so edits show up in dev without a restart. The default locale's
+	// values become fallbacks; every locale's are checked for staleness.
+	let contentDir: string | null = null;
 	let contentPath: string | null = null;
-	let contentCache: { mtime: number; tree: Record<string, Record<string, unknown>> } | null = null;
-	const readContent = (): Record<string, Record<string, unknown>> | null => {
-		if (!contentPath) return null;
+	let defaultLocale = 'en';
+	const contentCache = new Map<
+		string,
+		{ mtime: number; tree: Record<string, Record<string, unknown>> | null }
+	>();
+	const readContentFile = (file: string): Record<string, Record<string, unknown>> | null => {
 		let mtime: number;
 		try {
-			mtime = statSync(contentPath).mtimeMs;
+			mtime = statSync(file).mtimeMs;
 		} catch {
 			return null;
 		}
-		if (contentCache && contentCache.mtime === mtime) return contentCache.tree;
+		const hit = contentCache.get(file);
+		if (hit && hit.mtime === mtime) return hit.tree;
+		let tree: Record<string, Record<string, unknown>> | null = null;
 		try {
-			const tree = JSON.parse(readFileSync(contentPath, 'utf-8')) as Record<
-				string,
-				Record<string, unknown>
-			>;
-			contentCache = { mtime, tree };
-			return tree;
+			tree = JSON.parse(readFileSync(file, 'utf-8')) as Record<string, Record<string, unknown>>;
 		} catch (e) {
-			config.logger.warn(`@velastack/cms: could not read ${contentPath}: ${String(e)}`);
-			return null;
+			config.logger.warn(`@velastack/cms: could not read ${file}: ${String(e)}`);
 		}
+		contentCache.set(file, { mtime, tree });
+		return tree;
+	};
+	const readContent = () => (contentPath ? readContentFile(contentPath) : null);
+
+	// Usages without a fallback and content nothing reads, logged whenever the
+	// list changes: on the first manifest, after a route edit, after a content
+	// edit. Quiet while nothing changes.
+	let lastContentReport = '';
+	const reportContent = (result: BuildManifestResult) => {
+		const content: Record<string, Record<string, Record<string, unknown>> | null> = {};
+		for (const locale of options.locales ?? [defaultLocale]) {
+			content[locale] = contentDir ? readContentFile(resolve(contentDir, `${locale}.json`)) : null;
+		}
+		const { missing, stale } = checkContent(result, content, defaultLocale);
+		const lines: string[] = [];
+		if (missing.length) {
+			lines.push(
+				`@velastack/cms: ${missing.length} usage(s) have no fallback and render nothing until a value is stored:`,
+				...missing.map(
+					(m) =>
+						`  ${relative(viteRoot, m.file)}:${m.line}  <${m.component} name="${m.name}">  (${m.scopeId})`
+				)
+			);
+		}
+		if (stale.length) {
+			const dir = relative(viteRoot, contentDir ?? 'content');
+			lines.push(
+				`@velastack/cms: ${stale.length} content value(s) are not read by any component:`,
+				...stale.map((v) =>
+					v.path === null
+						? `  ${dir}/${v.locale}.json  "${v.scopeId}" (no route has this scope)`
+						: `  ${dir}/${v.locale}.json  "${v.scopeId}" › "${v.path}"`
+				)
+			);
+		}
+		const report = lines.join('\n');
+		if (report === lastContentReport) return;
+		if (report) config.logger.warn(report);
+		else if (lastContentReport)
+			config.logger.info('@velastack/cms: fallbacks and content are in sync');
+		lastContentReport = report;
 	};
 
 	const logWarnings = (result: BuildManifestResult) => {
@@ -360,6 +403,7 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 			cachedSync = result;
 			setPageCmsModules(result.pageCmsModules);
 			logWarnings(result);
+			reportContent(result);
 			return result;
 		})();
 		return cached;
@@ -397,9 +441,9 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 				? SELF_INSTALL_IMPORT_SOURCE
 				: INSTALL_IMPORT_SOURCE;
 			if (options.content !== false) {
-				const dir = resolve(config.root, options.content ?? 'content');
-				const defaultLocale = options.locales?.[0] ?? 'en';
-				const file = resolve(dir, `${defaultLocale}.json`);
+				contentDir = resolve(config.root, options.content ?? 'content');
+				defaultLocale = options.locales?.[0] ?? 'en';
+				const file = resolve(contentDir, `${defaultLocale}.json`);
 				contentPath = existsSync(file) ? file : null;
 			}
 		},
@@ -549,7 +593,8 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 				if (content) {
 					this.addWatchFile(contentPath as string);
 					next = injectFallbacks(next, fallbackResolverFor(result, id, content), {
-						filename: id
+						filename: id,
+						locals: result.cmsLocalsByFile.get(id)
 					}).code;
 				}
 				const info = result.scopeByEntryPath.get(id);
@@ -567,6 +612,21 @@ export const cms = (options: CmsPluginOptions = {}): Plugin => {
 				if (next === code) return;
 				return { code: next, map: null };
 			}
+		},
+
+		configureServer(server) {
+			// Content files are not modules, so editing one (any locale) only
+			// re-runs the content check.
+			server.watcher.on('change', (file) => {
+				if (
+					contentDir &&
+					cachedSync &&
+					file.startsWith(contentDir + '/') &&
+					file.endsWith('.json')
+				) {
+					reportContent(cachedSync);
+				}
+			});
 		},
 
 		handleHotUpdate({ file, server }) {
