@@ -465,6 +465,47 @@ The same form, but a submission opens a WhatsApp chat to the editor's number wit
 
 The chat opens in a new tab (this one, if the popup is blocked), and `redirect` then moves this tab on. Without JavaScript the form posts normally, so the answers are still stored; `form.whatsappHref` links to the number alone for a `<noscript>` fallback. `CmsFormFields` works inside it as in `CmsForm`.
 
+### `<CmsWhatsAppCart>` and `whatsappCart`
+
+A cart whose checkout is a WhatsApp chat. Visitors add items with `whatsappCart.add(...)`, kept in the browser. The checkout form asks for `name`, `phone` and an optional `note`, then opens a chat to the editor's number with the order as the message. It also records the order (reference, customer, lines, subtotal and message) to the hosted form `key`, so the order is kept even if the chat is never sent. Nothing is paid on the site: the business confirms and takes payment in the chat.
+
+```svelte
+<script lang="ts">
+	import { CmsWhatsAppCart, whatsappCart } from '@velastack/cms';
+</script>
+
+<button
+	onclick={() =>
+		whatsappCart.add({ id: 'sourdough', name: 'Sourdough', price: 4.5, currency: 'EUR' })}
+>
+	Add to order
+</button>
+
+<CmsWhatsAppCart key="order" name="whatsapp" scope="root">
+	{#snippet children({ cart, placed })}
+		{#if placed}
+			<p>Order {placed.ref} opened in WhatsApp.</p>
+			<a href={placed.href} target="_blank" rel="noopener">Open WhatsApp again</a>
+			<button type="button" onclick={() => cart.clear()}>Done</button>
+		{:else}
+			{#each cart.items as item (item.id)}
+				<p>{item.quantity} × {item.name}</p>
+			{/each}
+			<label>Name <input name="name" required /></label>
+			<label>Phone <input name="phone" type="tel" required /></label>
+			<label>Note <textarea name="note"></textarea></label>
+			<button disabled={cart.count === 0}>Order on WhatsApp</button>
+		{/if}
+	{/snippet}
+</CmsWhatsAppCart>
+```
+
+- **Prices are optional**, and written as an editor types them (`4.5`). `cart.subtotal` exists only when every item has a price in one currency; otherwise the business quotes the total in the chat.
+- **The message is the editor's**, set from the pencil like `CmsWhatsAppForm`'s, with `{ref}`, `{items}`, `{total}`, `{name}`, `{phone}` and `{note}`. Until one is set, a default lists the items, the total and the customer. Lines an empty placeholder leaves blank are dropped.
+- **After checkout**, `placed` holds the order's reference and chat link until `cart.clear()`. Adding an item starts the next order.
+- **The cart lives in the browser**, so the server renders it empty. `CmsWhatsAppCart` loads it on mount; a count shown elsewhere can call `whatsappCart.load()` in its own `onMount`.
+- Declare the `order` form in `template.json` `forms`, as for `contact`. The links, references and recording come from [`@velastack/whatsapp`](https://github.com/velastack/whatsapp).
+
 ## Custom CMS components
 
 VelaStack CMS discovers your custom or third-party CMS components by convention.
