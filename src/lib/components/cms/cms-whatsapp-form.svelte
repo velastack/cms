@@ -1,6 +1,6 @@
 <script lang="ts" module>
 	/** `CmsWhatsAppForm`: a form whose answers open a prefilled WhatsApp chat. */
-	import { getContext } from 'svelte';
+	import { getContext, setContext } from 'svelte';
 	import { isControlField } from '../../core/forms/target.js';
 	import type { CmsFormState } from './cms-form.svelte';
 
@@ -16,6 +16,11 @@
 	/** For the settings editor: the `{placeholders}` this form's inputs provide. */
 	export const getWhatsAppFieldNames = (): (() => string[]) =>
 		getContext<() => string[]>(FIELD_NAMES) ?? (() => []);
+
+	/** What a form fills its message from, for the settings editor to list. */
+	export const setWhatsAppFieldNames = (names: () => string[]): void => {
+		setContext(FIELD_NAMES, names);
+	};
 
 	const fieldNames = (form: HTMLFormElement): string[] => {
 		const names = new Set<string>();
@@ -44,14 +49,14 @@
 	 * stored and `redirect` applies; `whatsappHref` is there for a
 	 * `<noscript>` link.
 	 */
-	import { setContext, type Snippet } from 'svelte';
+	import type { Snippet } from 'svelte';
 	import type { HTMLFormAttributes } from 'svelte/elements';
 	import Structured from './cms-structured.svelte';
 	import FormControls from './cms-form-controls.svelte';
 	import { cmsStore } from './cms-store.svelte.js';
 	import { followRedirect, useFormTarget, type FormStatus } from './use-form-target.svelte.js';
 	import { cmsWhatsApp, type CmsWhatsAppValue } from '../../core/shapes/whatsapp.js';
-	import { fillMessage, whatsappHref } from '../../core/forms/whatsapp.js';
+	import { fillMessage, openChat, whatsappHref } from '@velastack/whatsapp';
 
 	type Props = Omit<HTMLFormAttributes, 'action' | 'method' | 'children'> & {
 		/** The CMS field holding the number and message. */
@@ -82,7 +87,7 @@
 	const target = useFormTarget(() => ({ key, action }));
 
 	let formEl = $state<HTMLFormElement>();
-	setContext(FIELD_NAMES, () => (formEl ? fieldNames(formEl) : []));
+	setWhatsAppFieldNames(() => (formEl ? fieldNames(formEl) : []));
 
 	let status = $state<FormStatus>('idle');
 	let message = $state<string | null>(null);
@@ -133,12 +138,7 @@
 			message = 'No WhatsApp number is set.';
 			return;
 		}
-		const chat = window.open(href, '_blank');
-		if (!chat) {
-			location.assign(href);
-			return;
-		}
-		chat.opener = null;
+		if (!openChat(href)) return;
 		if (redirect) void followRedirect(redirect);
 	};
 </script>

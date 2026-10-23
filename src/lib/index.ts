@@ -47,6 +47,13 @@ export type { CmsFormState, CmsFormStatus } from './components/cms/cms-form.svel
 export { default as CmsFormFields } from './components/cms/cms-form-fields.svelte';
 export { default as CmsWhatsAppForm } from './components/cms/cms-whatsapp-form.svelte';
 export type { CmsWhatsAppFormState } from './components/cms/cms-whatsapp-form.svelte';
+export { default as CmsWhatsAppCart } from './components/cms/cms-whatsapp-cart.svelte';
+export type { CmsWhatsAppCartState } from './components/cms/cms-whatsapp-cart.svelte';
+export { whatsappCart } from './components/cms/whatsapp-cart.svelte.js';
+export type {
+	WhatsAppCartItem,
+	WhatsAppPlacedOrder
+} from './components/cms/whatsapp-cart.svelte.js';
 export * from './core/shapes/index.js';
 
 // Admin bar (sync wrapper; admin-bar-internal + seo-panel are async chunks)
