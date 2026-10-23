@@ -7,7 +7,7 @@
 	import type { Snippet } from 'svelte';
 	import Structured from './cms-structured.svelte';
 	import { cms, cmsStore } from './cms-store.svelte.js';
-	import { siteCurrency } from '../../core/site-currency.js';
+	import { siteCurrency, siteLocale } from '../../core/site-currency.js';
 	import {
 		cmsPricing,
 		pricingView,
@@ -23,8 +23,9 @@
 		children: Snippet<[PricingTierView[]]>;
 	};
 	let { name, scope, fallback, value, children }: Props = $props();
-	const locale = $derived(cmsStore.activeLocale || 'en');
-	// The site's currency, unless the block sets one of its own.
+	// The page's language in the business's country, and the site's currency
+	// unless the block sets one of its own.
+	const locale = $derived(siteLocale(cms.site, cmsStore.activeLocale || 'en') ?? 'en');
 	const currency = $derived(siteCurrency(cms.site));
 </script>
 

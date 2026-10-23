@@ -45,7 +45,7 @@
 	import Structured from './cms-structured.svelte';
 	import FormControls from './cms-form-controls.svelte';
 	import { cms, cmsStore } from './cms-store.svelte.js';
-	import { siteCurrency } from '../../core/site-currency.js';
+	import { siteCurrency, siteLocale } from '../../core/site-currency.js';
 	import { useFormTarget, type FormStatus } from './use-form-target.svelte.js';
 	import { setWhatsAppFieldNames } from './cms-whatsapp-form.svelte';
 	import { cmsWhatsApp, type CmsWhatsAppValue } from '../../core/shapes/whatsapp.js';
@@ -94,10 +94,14 @@
 		whatsappCart.currency = currency?.trim().toUpperCase() || siteCurrency(cms.site) || '';
 	});
 
-	// The page's language, not the browser's: an English page shows MXN as
-	// `MX$5.50`, a Spanish one as `$5.50`.
+	// The page's language in the business's country, not the browser's
+	// settings: on a Mexican site an English page shows MXN as `MX$5.50` and a
+	// Spanish one as `$5.50`.
 	const pageLocale = () =>
-		(typeof document !== 'undefined' && document.documentElement.lang) || undefined;
+		siteLocale(
+			cms.site,
+			(typeof document !== 'undefined' && document.documentElement.lang) || undefined
+		);
 
 	const target = useFormTarget(() => ({ key, action }));
 	setWhatsAppFieldNames(() => ORDER_PLACEHOLDERS);

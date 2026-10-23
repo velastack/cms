@@ -317,7 +317,7 @@ Hours, navigation, a team, a price list: one value with a fixed shape, edited in
 
 Templates use only these exports; there is no open item schema. A shape outside the presets is a new preset in the package. `fallback` takes the full value or a bare item list and is normalized like a stored value, so a hand-written seed with missing fields is safe. Prices, times, dates and day names format in the visitor's locale; `isOpenNow` is computed when the page renders, so a prerendered page shows the state at build time.
 
-**Prices are in the site's currency.** A business has one currency, the one it prices in and is paid in, declared as a `currency` field in a Site Options group (see [Site options](#site-options)). `CmsCollection` fills it into each item's `price`, and `CmsPricing` uses it when the block sets none, so a template formats `item.price` or reads `priceText` without knowing about it; `siteCurrency(cms.site)` reads it for anything else. There is no per-item currency in the editor; an item written with one before this is still read as written.
+**Prices are in the site's currency, formatted for the business's country.** A business has one currency, the one it prices in and is paid in, declared as a `currency` field in a Site Options group (see [Site options](#site-options)), and one country (`country`, ISO 3166-1 alpha-2). `CmsCollection` fills the currency into each item's `price`, and `CmsPricing` uses it when the block sets none, so a template formats `item.price` or reads `priceText` without knowing about it; `siteCurrency(cms.site)` reads it for anything else. Format with `siteLocale(cms.site, locale)`, the page's language in the business's country: a bare `es` shows MXN as `360,00 MXN`, `es-MX` as `$360.00`. There is no per-item currency in the editor; an item written with one before this is still read as written.
 
 Every value type (`CmsHoursValue`, `NavItem`, …), schema (`cmsHours`, …) and JSON-LD helper is exported from the package root.
 
@@ -500,7 +500,7 @@ A cart whose checkout is a WhatsApp chat. Visitors add items with `whatsappCart.
 </CmsWhatsAppCart>
 ```
 
-- **One currency, the business's own.** Every price is in it, and the order and message are too. It comes from the `currency` Site Option (a `currency` field in any group of `createCms({ site })`), or the `currency` prop. `formatPrice` formats an amount in the page's language, so an English page shows MXN as `MX$5.50` and a Mexican Spanish one (`lang="es-MX"`) as `$5.50`.
+- **One currency, the business's own.** Every price is in it, and the order and message are too. It comes from the `currency` Site Option (a `currency` field in any group of `createCms({ site })`), or the `currency` prop. `formatPrice` formats an amount in the page's language in the business's country (`siteLocale`), so on a Mexican site an English page shows MXN as `MX$5.50` and a Spanish one as `$5.50`.
 - **The number** is the field's own setting, or the `number` prop when the template already keeps it in its contact details (`<CmsContact>`'s `whatsapp`), so an editor enters it once.
 - **Prices are optional**, and written as an editor types them (`4.5`). `cart.subtotal` exists only when every item has a price; otherwise the business quotes the total in the chat.
 - **The message is the editor's**, set from the pencil like `CmsWhatsAppForm`'s, with `{ref}`, `{items}`, `{total}`, `{name}`, `{phone}` and `{note}`. Until one is set, a default lists the items, the total and the customer. Lines an empty placeholder leaves blank are dropped.
@@ -656,7 +656,7 @@ editable page metadata (cms.metadata)
 
 ### Site options
 
-`createCms({ site })` declares the **Site Options** panel: project-wide values that never render on the page — the schema.org type (`enum`), the default share image (`image`), which locales are enabled (`boolean`), the business's currency (`text`, ISO 4217, in a group such as `business`: `siteCurrency(cms.site)` finds a `currency` field in any group). Field types are `text`, `markdown`, `number`, `datetime`, `url`, `color`, `image`, `enum` (with `values`) and `boolean`. Anything a visitor sees belongs in the root layout scope, edited in place with `scope="root"`; the site tree is one non-localised tree per project.
+`createCms({ site })` declares the **Site Options** panel: project-wide values that never render on the page — the schema.org type (`enum`), the default share image (`image`), which locales are enabled (`boolean`), the business's currency and country (`text`, ISO 4217 and ISO 3166-1 alpha-2, in a group such as `business`: `siteCurrency`, `siteCountry` and `siteLocale` find a `currency` or `country` field in any group). Field types are `text`, `markdown`, `number`, `datetime`, `url`, `color`, `image`, `enum` (with `values`) and `boolean`. Anything a visitor sees belongs in the root layout scope, edited in place with `scope="root"`; the site tree is one non-localised tree per project.
 
 ## Adapters
 
