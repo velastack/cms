@@ -9,6 +9,7 @@
  */
 import { orderSubtotal, type OrderLine } from '@velastack/whatsapp';
 
+/** A line in the cart; its `price` is in the site's currency. */
 export type WhatsAppCartItem = OrderLine & {
 	/** The template's id for the item (a slug); lines with the same id merge. */
 	id: string;
@@ -29,8 +30,13 @@ class WhatsAppCart {
 	open = $state(false);
 	placed = $state<WhatsAppPlacedOrder | null>(null);
 	count = $derived(this.items.reduce((total, item) => total + item.quantity, 0));
-	/** Only when every item has a price in one currency; otherwise the business quotes. */
-	subtotal = $derived(orderSubtotal(this.items));
+	/**
+	 * The currency every price is in: the business's own. `CmsWhatsAppCart`
+	 * sets it from its `currency` prop or the `currency` site option.
+	 */
+	currency = $state('');
+	/** Only when every item has a price; otherwise the business quotes. */
+	subtotal = $derived(this.currency ? orderSubtotal(this.items, this.currency) : undefined);
 
 	#loaded = false;
 

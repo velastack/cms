@@ -6,11 +6,12 @@ const order: Order = {
 	ref: 'A7K-3Q2',
 	name: 'Ada',
 	phone: '+44 20 7946 0000',
+	currency: 'EUR',
 	lines: [
-		{ name: 'Sourdough', quantity: 2, price: 4.5, currency: 'EUR' },
-		{ name: 'Rye', quantity: 1, price: 5, currency: 'EUR' }
+		{ name: 'Sourdough', quantity: 2, price: 4.5 },
+		{ name: 'Rye', quantity: 1, price: 5 }
 	],
-	subtotal: { amount: 14, currency: 'EUR' }
+	subtotal: 14
 };
 
 const message = (order: Order) =>

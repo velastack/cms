@@ -474,15 +474,12 @@ A cart whose checkout is a WhatsApp chat. Visitors add items with `whatsappCart.
 	import { CmsWhatsAppCart, whatsappCart } from '@velastack/cms';
 </script>
 
-<button
-	onclick={() =>
-		whatsappCart.add({ id: 'sourdough', name: 'Sourdough', price: 4.5, currency: 'EUR' })}
->
+<button onclick={() => whatsappCart.add({ id: 'concha', name: 'Concha', price: 12 })}>
 	Add to order
 </button>
 
 <CmsWhatsAppCart key="order" name="whatsapp" scope="root">
-	{#snippet children({ cart, placed })}
+	{#snippet children({ cart, placed, formatPrice })}
 		{#if placed}
 			<p>Order {placed.ref} opened in WhatsApp.</p>
 			<a href={placed.href} target="_blank" rel="noopener">Open WhatsApp again</a>
@@ -491,6 +488,7 @@ A cart whose checkout is a WhatsApp chat. Visitors add items with `whatsappCart.
 			{#each cart.items as item (item.id)}
 				<p>{item.quantity} × {item.name}</p>
 			{/each}
+			{#if cart.subtotal !== undefined}<p>{formatPrice(cart.subtotal)}</p>{/if}
 			<label>Name <input name="name" required /></label>
 			<label>Phone <input name="phone" type="tel" required /></label>
 			<label>Note <textarea name="note"></textarea></label>
@@ -500,7 +498,8 @@ A cart whose checkout is a WhatsApp chat. Visitors add items with `whatsappCart.
 </CmsWhatsAppCart>
 ```
 
-- **Prices are optional**, and written as an editor types them (`4.5`). `cart.subtotal` exists only when every item has a price in one currency; otherwise the business quotes the total in the chat.
+- **One currency, the business's own.** Every price is in it, and the order and message are too. It comes from the `currency` site option (declare it in `createCms({ site })`), or the `currency` prop. `formatPrice` formats an amount in the page's language, so an English page shows MXN as `MX$5.50` and a Spanish one as `$5.50`.
+- **Prices are optional**, and written as an editor types them (`4.5`). `cart.subtotal` exists only when every item has a price; otherwise the business quotes the total in the chat.
 - **The message is the editor's**, set from the pencil like `CmsWhatsAppForm`'s, with `{ref}`, `{items}`, `{total}`, `{name}`, `{phone}` and `{note}`. Until one is set, a default lists the items, the total and the customer. Lines an empty placeholder leaves blank are dropped.
 - **After checkout**, `placed` holds the order's reference and chat link until `cart.clear()`. Adding an item starts the next order.
 - **The cart lives in the browser**, so the server renders it empty. `CmsWhatsAppCart` loads it on mount; a count shown elsewhere can call `whatsappCart.load()` in its own `onMount`.

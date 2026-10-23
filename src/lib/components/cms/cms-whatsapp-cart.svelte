@@ -8,6 +8,8 @@
 		readonly cart: typeof whatsappCart;
 		/** The order last sent to WhatsApp, until `cart.clear()`. */
 		readonly placed: WhatsAppPlacedOrder | null;
+		/** An amount in the site's currency, formatted in the page's language. */
+		formatPrice: (amount: number) => string;
 	};
 </script>
 
@@ -31,6 +33,7 @@
 	import type { HTMLFormAttributes } from 'svelte/elements';
 	import {
 		fillMessage,
+		formatMoney,
 		openChat,
 		orderPlaceholders,
 		orderRef,
@@ -41,7 +44,7 @@
 	} from '@velastack/whatsapp';
 	import Structured from './cms-structured.svelte';
 	import FormControls from './cms-form-controls.svelte';
-	import { cmsStore } from './cms-store.svelte.js';
+	import { cms, cmsStore } from './cms-store.svelte.js';
 	import { useFormTarget, type FormStatus } from './use-form-target.svelte.js';
 	import { setWhatsAppFieldNames } from './cms-whatsapp-form.svelte';
 	import { cmsWhatsApp, type CmsWhatsAppValue } from '../../core/shapes/whatsapp.js';
@@ -61,9 +64,35 @@
 		key?: string;
 		/** Record to this route instead. */
 		action?: string;
+		/**
+		 * ISO 4217: the business's currency, which every price is in. Defaults
+		 * to the `currency` site option.
+		 */
+		currency?: string;
 		children: Snippet<[CmsWhatsAppCartState]>;
 	};
-	let { name, scope, fallback, value, key, action, children: content, ...rest }: Props = $props();
+	let {
+		name,
+		scope,
+		fallback,
+		value,
+		key,
+		action,
+		currency,
+		children: content,
+		...rest
+	}: Props = $props();
+
+	$effect.pre(() => {
+		const fromSite = cms.site.currency;
+		whatsappCart.currency =
+			currency ?? (typeof fromSite === 'string' ? fromSite.trim().toUpperCase() : '');
+	});
+
+	// The page's language, not the browser's: an English page shows MXN as
+	// `MX$5.50`, a Spanish one as `$5.50`.
+	const pageLocale = () =>
+		(typeof document !== 'undefined' && document.documentElement.lang) || undefined;
 
 	const target = useFormTarget(() => ({ key, action }));
 	setWhatsAppFieldNames(() => ORDER_PLACEHOLDERS);
@@ -82,7 +111,8 @@
 		cart: whatsappCart,
 		get placed() {
 			return whatsappCart.placed;
-		}
+		},
+		formatPrice: (amount) => formatMoney(amount, whatsappCart.currency, pageLocale())
 	};
 
 	// The cart lives in the browser, so the server renders it empty and it
@@ -120,22 +150,27 @@
 			return;
 		}
 		const body = new FormData(event.currentTarget as HTMLFormElement, event.submitter);
-		const lines = whatsappCart.items.map(({ name, quantity, price, currency }) => ({
+		if (!whatsappCart.currency) {
+			status = 'error';
+			message = 'No currency is set.';
+			return;
+		}
+		const lines = whatsappCart.items.map(({ name, quantity, price }) => ({
 			name,
 			quantity,
-			price,
-			currency
+			price
 		}));
 		const order: Order = {
 			ref: orderRef(),
 			name: field(body, 'name'),
 			phone: field(body, 'phone'),
 			note: field(body, 'note') || undefined,
+			currency: whatsappCart.currency,
 			lines,
-			subtotal: orderSubtotal(lines)
+			subtotal: orderSubtotal(lines, whatsappCart.currency)
 		};
 		const text = tidyMessage(
-			fillMessage(settings.message || DEFAULT_ORDER_MESSAGE, orderPlaceholders(order))
+			fillMessage(settings.message || DEFAULT_ORDER_MESSAGE, orderPlaceholders(order, pageLocale()))
 		);
 		const href = whatsappHref(settings.number, text);
 		if (!href) {
