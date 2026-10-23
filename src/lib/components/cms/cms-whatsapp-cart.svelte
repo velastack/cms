@@ -33,7 +33,6 @@
 	import type { HTMLFormAttributes } from 'svelte/elements';
 	import {
 		fillMessage,
-		formatMoney,
 		openChat,
 		orderPlaceholders,
 		orderRef,
@@ -45,6 +44,7 @@
 	import Structured from './cms-structured.svelte';
 	import FormControls from './cms-form-controls.svelte';
 	import { cms, cmsStore } from './cms-store.svelte.js';
+	import { displayCurrency } from './display-currency.svelte.js';
 	import { siteCurrency, siteLocale } from '../../core/site-currency.js';
 	import { useFormTarget, type FormStatus } from './use-form-target.svelte.js';
 	import { setWhatsAppFieldNames } from './cms-whatsapp-form.svelte';
@@ -121,12 +121,26 @@
 		get placed() {
 			return whatsappCart.placed;
 		},
-		formatPrice: (amount) => formatMoney(amount, whatsappCart.currency, pageLocale())
+		// In the currency the visitor reads prices in, as an estimate when it is
+		// not the business's own.
+		formatPrice: (amount) => displayCurrency.format(amount, whatsappCart.currency, pageLocale())
 	};
 
 	// The cart lives in the browser, so the server renders it empty and it
 	// fills in here.
-	onMount(() => whatsappCart.load());
+	onMount(() => {
+		whatsappCart.load();
+		displayCurrency.load();
+	});
+
+	/** `≈ US$20`, when the visitor was reading prices in another currency; else blank. */
+	const estimateOf = (order: Order): string => {
+		if (order.subtotal === undefined || displayCurrency.current === order.currency) return '';
+		const converted = displayCurrency.convert(order.subtotal, order.currency);
+		return converted === null
+			? ''
+			: displayCurrency.format(order.subtotal, order.currency, pageLocale());
+	};
 
 	const field = (body: FormData, name: string) => {
 		const value = body.get(name);
@@ -179,7 +193,10 @@
 			subtotal: orderSubtotal(lines, whatsappCart.currency)
 		};
 		const text = tidyMessage(
-			fillMessage(settings.message || DEFAULT_ORDER_MESSAGE, orderPlaceholders(order, pageLocale()))
+			fillMessage(settings.message || DEFAULT_ORDER_MESSAGE, {
+				...orderPlaceholders(order, pageLocale()),
+				estimate: estimateOf(order)
+			})
 		);
 		const href = whatsappHref(number || settings.number, text);
 		if (!href) {

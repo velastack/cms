@@ -502,6 +502,41 @@ A cart whose checkout is a WhatsApp chat. Visitors add items with `whatsappCart.
 
 - **One currency, the business's own.** Every price is in it, and the order and message are too. It comes from the `currency` Site Option (a `currency` field in any group of `createCms({ site })`), or the `currency` prop. `formatPrice` formats an amount in the page's language in the business's country (`siteLocale`), so on a Mexican site an English page shows MXN as `MX$5.50` and a Spanish one as `$5.50`.
 - **The number** is the field's own setting, or the `number` prop when the template already keeps it in its contact details (`<CmsContact>`'s `whatsapp`), so an editor enters it once.
+- **Another currency on the page** (see [`displayCurrency`](#displaycurrency-prices-in-the-visitors-currency)): `formatPrice` converts and marks the estimate `≈`, and the message gets an `{estimate}` placeholder with the total as the visitor read it. The order and the record stay in the business's currency.
+
+### `displayCurrency`: prices in the visitor's currency
+
+A site's prices are in the business's currency. When the `currencies` Site Option lists more (a hotel: `USD, EUR`), a visitor can read prices in one of them: converted at the day's rate and marked `≈`, an estimate of a price that is still charged in the business's currency. The store is headless; the template draws the select.
+
+```svelte
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import { displayCurrency, CmsCollection } from '@velastack/cms';
+	onMount(() => displayCurrency.load());
+</script>
+
+{#if displayCurrency.offered.length > 1}
+	<select
+		value={displayCurrency.current}
+		onchange={(e) => displayCurrency.set(e.currentTarget.value)}
+	>
+		{#each displayCurrency.offered as code (code)}<option value={code}>{code}</option>{/each}
+	</select>
+{/if}
+
+<CmsCollection name="rooms" scope="root">
+	{#snippet children(rooms)}
+		{#each rooms as room (room.id)}
+			<p>{displayCurrency.formatCollectionPrice(room.price, cms.locale)}</p>
+		{/each}
+	{/snippet}
+</CmsCollection>
+```
+
+- `offered` is the business's currency first, then the others; `current` is the visitor's pick, kept in a `currency` cookie for a year; `set(code)` changes it.
+- `format(amount, from?, language?)` and `formatCollectionPrice(price, language?)` return the price as the visitor reads it, formatted for the page's language in the business's country (`siteLocale`), with `≈` when converted. `convert(amount, from?)` gives the number, or `null` without a rate.
+- The rates are central bank reference rates blended by [Frankfurter](https://frankfurter.dev), published once a day at `velastack.dev/v1/rates` for every site; `load()` fetches them in the browser once a day and keeps them in localStorage. A page without rates shows the business's currency. Nothing is fetched while the site offers one currency.
+- On a static site the first render is in the business's currency and the visitor's pick applies after load, since there is no server to read the cookie.
 - **Prices are optional**, and written as an editor types them (`4.5`). `cart.subtotal` exists only when every item has a price; otherwise the business quotes the total in the chat.
 - **The message is the editor's**, set from the pencil like `CmsWhatsAppForm`'s, with `{ref}`, `{items}`, `{total}`, `{name}`, `{phone}` and `{note}`. Until one is set, a default lists the items, the total and the customer. Lines an empty placeholder leaves blank are dropped.
 - **After checkout**, `placed` holds the order's reference and chat link until `cart.clear()`. Adding an item starts the next order.
@@ -656,7 +691,7 @@ editable page metadata (cms.metadata)
 
 ### Site options
 
-`createCms({ site })` declares the **Site Options** panel: project-wide values that never render on the page — the schema.org type (`enum`), the default share image (`image`), which locales are enabled (`boolean`), the business's currency and country (`text`, ISO 4217 and ISO 3166-1 alpha-2, in a group such as `business`: `siteCurrency`, `siteCountry` and `siteLocale` find a `currency` or `country` field in any group). Field types are `text`, `markdown`, `number`, `datetime`, `url`, `color`, `image`, `enum` (with `values`) and `boolean`. Anything a visitor sees belongs in the root layout scope, edited in place with `scope="root"`; the site tree is one non-localised tree per project.
+`createCms({ site })` declares the **Site Options** panel: project-wide values that never render on the page — the schema.org type (`enum`), the default share image (`image`), which locales are enabled (`boolean`), the business's currency and country (`text`, ISO 4217 and ISO 3166-1 alpha-2, in a group such as `business`: `siteCurrency`, `siteCountry` and `siteLocale` find a `currency` or `country` field in any group), and the other currencies it shows prices in (`currencies`, a comma-separated `text`; `siteCurrencies`). Field types are `text`, `markdown`, `number`, `datetime`, `url`, `color`, `image`, `enum` (with `values`) and `boolean`. Anything a visitor sees belongs in the root layout scope, edited in place with `scope="root"`; the site tree is one non-localised tree per project.
 
 ## Adapters
 

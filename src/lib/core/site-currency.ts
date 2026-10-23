@@ -45,6 +45,37 @@ export const siteCurrency = (site: Record<string, unknown> | undefined): string 
 	siteCode(site, 'currency', CURRENCY);
 
 /**
+ * The other currencies the site shows prices in, from a `currencies` field
+ * declared like `currency`: a list, or a comma-separated text as the Site
+ * Options panel stores it. Upper-cased three-letter codes, deduplicated;
+ * empty when none is set.
+ */
+export const siteCurrencies = (site: Record<string, unknown> | undefined): string[] => {
+	if (!site) return [];
+	const raw =
+		site.currencies ??
+		Object.values(site).find(
+			(group) =>
+				group && typeof group === 'object' && !Array.isArray(group) && 'currencies' in group
+		);
+	const value =
+		raw && typeof raw === 'object' && !Array.isArray(raw)
+			? (raw as Record<string, unknown>).currencies
+			: raw;
+	const entries = Array.isArray(value)
+		? value
+		: typeof value === 'string'
+			? value.split(/[,\s]+/)
+			: [];
+	const codes: string[] = [];
+	for (const entry of entries) {
+		const code = asCode(entry, CURRENCY);
+		if (code && !codes.includes(code)) codes.push(code);
+	}
+	return codes;
+};
+
+/**
  * The ISO 3166-1 alpha-2 code of the country the business is in, from a
  * `country` field declared like `currency`. `undefined` when none is set.
  */
