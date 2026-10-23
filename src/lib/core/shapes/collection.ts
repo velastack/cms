@@ -13,7 +13,11 @@ export type CollectionDetail = { id: string; label: string; value: string };
 
 export type CollectionPrice = {
 	amount: number | null;
-	/** ISO 4217, e.g. `EUR`. */
+	/**
+	 * ISO 4217. Normally blank: a price is in the site's currency (the
+	 * `currency` Site Option), which `collectionView` fills in. Content
+	 * written before that may still carry one per item; it is kept as read.
+	 */
 	currency: string;
 	/** `night`, `person`, `hour`… shown after the amount. */
 	period: string;
@@ -168,15 +172,8 @@ export const cmsCollection = defineForm<CmsCollectionValue>({
 					placeholder: 'from',
 					group: 'Pricing'
 				},
-				{ key: 'price.amount', label: 'Amount', type: 'number', group: 'Pricing' },
-				{
-					key: 'price.currency',
-					label: 'Currency',
-					type: 'text',
-					half: true,
-					placeholder: 'EUR',
-					group: 'Pricing'
-				},
+				// In the site's currency (Site Options); there is no per-item one.
+				{ key: 'price.amount', label: 'Amount', type: 'number', half: true, group: 'Pricing' },
 				{ key: 'price.period', label: 'Per', type: 'text', placeholder: 'night', group: 'Pricing' }
 			]
 		}
@@ -192,16 +189,25 @@ export type CollectionSlice = {
 	tag?: string;
 };
 
-/** Visible items (not hidden, with a title), optionally sliced. */
+/**
+ * Visible items (not hidden, with a title), optionally sliced. `currency` is
+ * the site's; a price without one of its own is in it, so templates format
+ * `item.price` as is.
+ */
 export const collectionView = (
 	value: CmsCollectionValue,
-	slice: CollectionSlice = {}
+	slice: CollectionSlice = {},
+	currency?: string
 ): CollectionItemView[] => {
 	let items = value.items.filter((i) => !i.hidden && i.title !== '');
 	if (slice.featured) items = items.filter((i) => i.featured);
 	if (slice.tag) items = items.filter((i) => i.tags.includes(slice.tag as string));
 	if (slice.limit !== undefined && slice.limit >= 0) items = items.slice(0, slice.limit);
-	return items.map((i) => ({ ...i, href: i.link ? linkHref(i.link) || null : null }));
+	return items.map((i) => ({
+		...i,
+		price: i.price.currency || !currency ? i.price : { ...i.price, currency },
+		href: i.link ? linkHref(i.link) || null : null
+	}));
 };
 
 /** Every tag in use, in first-seen order. */

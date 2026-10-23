@@ -24,7 +24,7 @@ export type PricingTier = {
 
 export type CmsPricingValue = {
 	v: 1;
-	/** ISO 4217, e.g. `EUR`. */
+	/** ISO 4217. Blank means the site's currency (the `currency` Site Option). */
 	currency: string;
 	labels: { custom: string };
 	items: PricingTier[];
@@ -72,7 +72,13 @@ export const cmsPricing = defineForm<CmsPricingValue>({
 	},
 	empty: () => ({ v: 1, currency: '', labels: { custom: 'Custom' }, items: [] }),
 	fields: [
-		{ key: 'currency', label: 'Currency', type: 'text', half: true, placeholder: 'EUR' },
+		{
+			key: 'currency',
+			label: 'Currency',
+			type: 'text',
+			half: true,
+			placeholder: 'Blank: the site’s'
+		},
 		{ key: 'labels.custom', label: '“Custom” price label', type: 'text' },
 		{
 			key: 'items',
@@ -138,12 +144,21 @@ export const formatPrice = (
 	return tier.price.period ? `${amount} / ${tier.price.period}` : amount;
 };
 
-/** Tiers with a name, each with its formatted price and CTA href. */
-export const pricingView = (value: CmsPricingValue, locale: string): PricingTierView[] =>
-	value.items
+/**
+ * Tiers with a name, each with its formatted price and CTA href. `currency`
+ * is the site's, used when the block sets none of its own.
+ */
+export const pricingView = (
+	value: CmsPricingValue,
+	locale: string,
+	currency?: string
+): PricingTierView[] => {
+	const priced = value.currency || !currency ? value : { ...value, currency };
+	return value.items
 		.filter((t) => t.name !== '')
 		.map((t) => ({
 			...t,
-			priceText: formatPrice(t, value, locale),
+			priceText: formatPrice(t, priced, locale),
 			href: t.cta ? linkHref(t.cta) || null : null
 		}));
+};

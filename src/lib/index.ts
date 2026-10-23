@@ -54,6 +54,7 @@ export type {
 	WhatsAppCartItem,
 	WhatsAppPlacedOrder
 } from './components/cms/whatsapp-cart.svelte.js';
+export { siteCountry, siteCurrency, siteLocale } from './core/site-currency.js';
 export * from './core/shapes/index.js';
 
 // Admin bar (sync wrapper; admin-bar-internal + seo-panel are async chunks)
