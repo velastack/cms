@@ -10,6 +10,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import Structured from './cms-structured.svelte';
+	import { cms } from './cms-store.svelte.js';
+	import { siteCurrency } from '../../core/site-currency.js';
 	import {
 		cmsCollection,
 		collectionView,
@@ -33,6 +35,8 @@
 		children: Snippet<[CollectionItemView[]]>;
 	};
 	let { name, scope, fallback, value, limit, featured, tag, children }: Props = $props();
+	// Prices are in the site's currency unless an item still carries its own.
+	const currency = $derived(siteCurrency(cms.site));
 </script>
 
 <Structured
@@ -41,6 +45,6 @@
 	{scope}
 	{fallback}
 	{value}
-	view={(v: CmsCollectionValue) => collectionView(v, { limit, featured, tag })}
+	view={(v: CmsCollectionValue) => collectionView(v, { limit, featured, tag }, currency)}
 	{children}
 />

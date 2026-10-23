@@ -221,6 +221,14 @@ describe('cmsCollection', () => {
 		expect(collectionTags(v)).toEqual(['sea', 'city']);
 	});
 
+	it('prices items in the site currency unless one carries its own', () => {
+		const view = collectionView(v, {}, 'MXN');
+		// Written with a currency of its own: kept.
+		expect(view[0].price.currency).toBe('EUR');
+		expect(view[1].price.currency).toBe('MXN');
+		expect(collectionView(v)[1].price.currency).toBe('');
+	});
+
 	it('formats prices', () => {
 		expect(formatCollectionPrice(v.items[0].price, 'en-IE')).toBe('from €120 / night');
 		expect(formatCollectionPrice(v.items[1].price, 'en')).toBe('');
@@ -280,6 +288,12 @@ describe('cmsPricing', () => {
 			'item-1.text',
 			'ent.name'
 		]);
+	});
+
+	it('falls back to the site currency when the block sets none', () => {
+		const blank = cmsPricing.normalize({ ...v, currency: '' });
+		expect(pricingView(blank, 'en', 'MXN')[0].priceText).toMatch(/^MX\$/);
+		expect(pricingView(v, 'en', 'MXN')[0].priceText).toMatch(/^\$/);
 	});
 });
 

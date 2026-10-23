@@ -45,6 +45,7 @@
 	import Structured from './cms-structured.svelte';
 	import FormControls from './cms-form-controls.svelte';
 	import { cms, cmsStore } from './cms-store.svelte.js';
+	import { siteCurrency } from '../../core/site-currency.js';
 	import { useFormTarget, type FormStatus } from './use-form-target.svelte.js';
 	import { setWhatsAppFieldNames } from './cms-whatsapp-form.svelte';
 	import { cmsWhatsApp, type CmsWhatsAppValue } from '../../core/shapes/whatsapp.js';
@@ -66,9 +67,14 @@
 		action?: string;
 		/**
 		 * ISO 4217: the business's currency, which every price is in. Defaults
-		 * to the `currency` site option.
+		 * to the `currency` Site Option.
 		 */
 		currency?: string;
+		/**
+		 * The business's WhatsApp number, when the template keeps it in its
+		 * contact details rather than in this field's settings.
+		 */
+		number?: string;
 		children: Snippet<[CmsWhatsAppCartState]>;
 	};
 	let {
@@ -79,14 +85,13 @@
 		key,
 		action,
 		currency,
+		number,
 		children: content,
 		...rest
 	}: Props = $props();
 
 	$effect.pre(() => {
-		const fromSite = cms.site.currency;
-		whatsappCart.currency =
-			currency ?? (typeof fromSite === 'string' ? fromSite.trim().toUpperCase() : '');
+		whatsappCart.currency = currency?.trim().toUpperCase() || siteCurrency(cms.site) || '';
 	});
 
 	// The page's language, not the browser's: an English page shows MXN as
@@ -172,7 +177,7 @@
 		const text = tidyMessage(
 			fillMessage(settings.message || DEFAULT_ORDER_MESSAGE, orderPlaceholders(order, pageLocale()))
 		);
-		const href = whatsappHref(settings.number, text);
+		const href = whatsappHref(number || settings.number, text);
 		if (!href) {
 			status = 'error';
 			message = 'No WhatsApp number is set.';

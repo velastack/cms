@@ -6,7 +6,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import Structured from './cms-structured.svelte';
-	import { cmsStore } from './cms-store.svelte.js';
+	import { cms, cmsStore } from './cms-store.svelte.js';
+	import { siteCurrency } from '../../core/site-currency.js';
 	import {
 		cmsPricing,
 		pricingView,
@@ -23,6 +24,8 @@
 	};
 	let { name, scope, fallback, value, children }: Props = $props();
 	const locale = $derived(cmsStore.activeLocale || 'en');
+	// The site's currency, unless the block sets one of its own.
+	const currency = $derived(siteCurrency(cms.site));
 </script>
 
 <Structured
@@ -31,6 +34,6 @@
 	{scope}
 	{fallback}
 	{value}
-	view={(v: CmsPricingValue) => pricingView(v, locale)}
+	view={(v: CmsPricingValue) => pricingView(v, locale, currency)}
 	{children}
 />
