@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { siteCountry, siteCurrency, siteLocale } from './site-currency.js';
+import { siteCountry, siteCurrencies, siteCurrency, siteLocale } from './site-currency.js';
 
 describe('siteCurrency', () => {
 	it('reads a currency field from whichever group holds it', () => {
@@ -43,5 +43,19 @@ describe('siteCountry and siteLocale', () => {
 			new Intl.NumberFormat(locale, { style: 'currency', currency: 'MXN' }).format(360);
 		expect(format(siteLocale(site, 'es')!)).toBe('$360.00');
 		expect(format('es').replace(/\s/g, ' ')).toBe('360,00 MXN');
+	});
+});
+
+describe('siteCurrencies', () => {
+	it('reads a comma-separated text or a list, upper-cased and deduplicated', () => {
+		expect(siteCurrencies({ business: { currencies: 'usd, EUR,usd' } })).toEqual(['USD', 'EUR']);
+		expect(siteCurrencies({ business: { currencies: ['GBP', 'cad'] } })).toEqual(['GBP', 'CAD']);
+		expect(siteCurrencies({ currencies: 'USD' })).toEqual(['USD']);
+	});
+
+	it('is empty without any, or with codes that are not currencies', () => {
+		expect(siteCurrencies(undefined)).toEqual([]);
+		expect(siteCurrencies({ business: { currency: 'MXN' } })).toEqual([]);
+		expect(siteCurrencies({ business: { currencies: 'dollars' } })).toEqual([]);
 	});
 });

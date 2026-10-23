@@ -4,11 +4,15 @@
  */
 
 /** The `{placeholders}` an order message can use. */
-export const ORDER_PLACEHOLDERS = ['ref', 'items', 'total', 'name', 'phone', 'note'];
+export const ORDER_PLACEHOLDERS = ['ref', 'items', 'total', 'estimate', 'name', 'phone', 'note'];
 
-/** Until the editor writes one. Lines left empty (no total, no note) are dropped. */
+/**
+ * Until the editor writes one. Lines left empty (no total, no estimate, no
+ * note) are dropped. `{estimate}` is the total in the currency the visitor
+ * was reading prices in, when it was not the business's own.
+ */
 export const DEFAULT_ORDER_MESSAGE =
-	"Hi! I'd like to place an order ({ref}):\n\n{items}\n\n{total}\n\n{name} · {phone}\n{note}";
+	"Hi! I'd like to place an order ({ref}):\n\n{items}\n\n{total}\n{estimate}\n\n{name} · {phone}\n{note}";
 
 /** Drops the blank lines and dangling spaces that empty placeholders leave behind. */
 export const tidyMessage = (message: string): string =>
