@@ -44,4 +44,25 @@ describe('toMetaTags', () => {
 		});
 		expect(toMetaTags({})).toEqual({});
 	});
+
+	it('makes a root-relative image absolute on siteUrl', () => {
+		const tags = toMetaTags(
+			{ ogImage: { url: '/cms-media/room.jpg', alt: 'Room' } },
+			{ siteUrl: 'https://example.com' }
+		);
+		expect(tags.openGraph?.images).toEqual([
+			{ url: 'https://example.com/cms-media/room.jpg', alt: 'Room' }
+		]);
+		expect(tags.twitter?.image).toBe('https://example.com/cms-media/room.jpg');
+	});
+
+	it('leaves absolute and protocol-relative images, and relative ones without siteUrl', () => {
+		const url = (ogImage: string, siteUrl?: string) =>
+			toMetaTags({ ogImage }, { siteUrl }).openGraph?.images?.[0].url;
+		expect(url('https://cdn.example/a.jpg', 'https://example.com')).toBe(
+			'https://cdn.example/a.jpg'
+		);
+		expect(url('//cdn.example/a.jpg', 'https://example.com')).toBe('//cdn.example/a.jpg');
+		expect(url('/cms-media/a.jpg')).toBe('/cms-media/a.jpg');
+	});
 });
