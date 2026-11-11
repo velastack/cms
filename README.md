@@ -679,7 +679,7 @@ editable page metadata (cms.metadata)
   → static site defaults (defineBaseMetaTags)
 ```
 
-`toMetaTags(cms.metadata, { siteName })` turns the branch into `svelte-meta-tags` props, with the title template and Open Graph site name from the root layout's `branding.name`:
+`toMetaTags(cms.metadata, { siteName })` turns the branch into `svelte-meta-tags` props, with the title template and Open Graph site name from the root layout's `branding.name`. Pass `siteUrl` as well and a root-relative share image (`/cms-media/…` in a built site) comes out absolute, which the services reading `og:image` need:
 
 ```svelte
 <script lang="ts">

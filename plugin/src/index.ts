@@ -253,6 +253,22 @@ const discoverProjectMedia = async ({
 		}
 	}
 
+	// Site options (`seo.shareImage`, …) are one tree per project, outside any
+	// page or layout scope. `apiAdapter.fetchSite` rewrites its media URLs to
+	// `/cms-media/…` like any other, so the files have to be downloaded too.
+	docFetches.push(
+		fetch(`${endpoint}/site`)
+			.then(async (res) => {
+				if (!res.ok) return;
+				const body = (await res.json()) as { contents?: Record<string, unknown> };
+				if (!body.contents) return;
+				for (const url of extractMediaUrls(body.contents, uploadsBase)) {
+					found.add(url);
+				}
+			})
+			.catch(() => {})
+	);
+
 	await Promise.all(docFetches);
 	return found;
 };

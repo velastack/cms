@@ -18,6 +18,12 @@ export type MetaTagsOptions = {
 	titleTemplate?: string;
 	/** Absolute URL of the page, for `openGraph.url` when no canonical is set. */
 	url?: string;
+	/**
+	 * The site's public origin (`https://example.com`). A root-relative image
+	 * (`/cms-media/…` in a built site) is made absolute against it: the
+	 * services that read `og:image` do not resolve relative URLs.
+	 */
+	siteUrl?: string;
 };
 
 export type MetaTagsOutput = {
@@ -62,7 +68,11 @@ export const toMetaTags = (
 	const description = str(metadata.description);
 	const ogTitle = str(metadata.ogTitle) ?? title;
 	const ogDescription = str(metadata.ogDescription) ?? description;
-	const image = imageUrl(metadata.ogImage);
+	const relative = imageUrl(metadata.ogImage);
+	const image =
+		relative && options.siteUrl && relative.url.startsWith('/') && !relative.url.startsWith('//')
+			? { ...relative, url: new URL(relative.url, options.siteUrl).href }
+			: relative;
 	const canonical = str(metadata.canonical);
 	const card = str(metadata.twitterCard);
 
