@@ -157,6 +157,7 @@ Site-wide actions, grouped into six sections.
 
 **Settings**
 
+- Company — opens the Company panel: the business profile in tabs (Business, Contact, Location, Hours, Social), saved to the working copy like Site settings. Read-only, with "Managed by …" in the header, when the host manages the profile.
 - Site settings (`⌘,`)
 
 ### 5.3 View menu
