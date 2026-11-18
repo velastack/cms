@@ -373,7 +373,9 @@ const SCHEMA_DAYS: Record<DayKey, string> = {
 };
 
 /** schema.org `openingHoursSpecification` entries, one per distinct range. */
-export const toOpeningHoursSpecification = (value: CmsHoursValue): Tree[] => {
+export const toOpeningHoursSpecification = (
+	value: Pick<CmsHoursValue, 'days' | 'exceptions'>
+): Tree[] => {
 	const byRange = new Map<string, { opens: string; closes: string; days: string[] }>();
 	for (const key of DAY_KEYS) {
 		for (const r of effective(value.days[key])) {

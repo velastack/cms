@@ -254,7 +254,7 @@ export const contactView = (value: CmsContactValue): ContactView => {
 };
 
 /** A schema.org `PostalAddress` node, or `null` without an address. */
-export const toPostalAddress = (value: CmsContactValue): Tree | null => {
+export const toPostalAddress = (value: Pick<CmsContactValue, 'address'>): Tree | null => {
 	const a = value.address;
 	if (a.lines.length === 0 && !a.locality && !a.postcode && !a.country) return null;
 	const out: Tree = { '@type': 'PostalAddress' };

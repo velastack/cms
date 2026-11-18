@@ -70,6 +70,27 @@ export type {
 	SocialPlatform
 } from './social-links.js';
 
+export {
+	cmsCompany,
+	companyView,
+	companyContact,
+	companyHours,
+	companySocial,
+	companyManagedBy,
+	emptyLocation,
+	toLocalBusiness,
+	COMPANY_LOCATION_FIELDS,
+	PRICE_RANGES
+} from './company.js';
+export type {
+	CmsCompanyValue,
+	CompanyHours,
+	CompanyLocation,
+	CompanyManager,
+	CompanyView,
+	LocationView
+} from './company.js';
+
 export { cmsTeam, teamView } from './team.js';
 export type { CmsTeamValue, TeamLink, TeamMember } from './team.js';
 
