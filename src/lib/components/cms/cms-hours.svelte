@@ -11,7 +11,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import Structured from './cms-structured.svelte';
-	import { cmsStore } from './cms-store.svelte.js';
+	import { cms, cmsStore } from './cms-store.svelte.js';
+	import { cmsCompany, companyHours } from '../../core/shapes/company.js';
 	import {
 		cmsHours,
 		hoursView,
@@ -24,10 +25,22 @@
 		scope?: string;
 		fallback?: Partial<CmsHoursValue>;
 		value?: unknown;
+		/** Take the hours from the company profile: `true` for the primary
+		 * location, or a location id. */
+		company?: boolean | string;
 		children: Snippet<[HoursView]>;
 	};
-	let { name, scope, fallback, value, children }: Props = $props();
+	let { name, scope, fallback, value, company, children }: Props = $props();
 	const locale = $derived(cmsStore.activeLocale || 'en');
+
+	const bound = $derived(
+		company && cms.site.company != null
+			? companyHours(
+					cmsCompany.normalize(cms.site.company),
+					typeof company === 'string' ? company : undefined
+				)
+			: null
+	);
 </script>
 
 <Structured
@@ -36,7 +49,8 @@
 	{scope}
 	{fallback}
 	{value}
-	view={(v: CmsHoursValue) => hoursView(v, locale)}
+	view={(v: CmsHoursValue) => hoursView(bound ? { ...v, ...bound } : v, locale)}
+	company={bound !== null}
 	editable={() => import('./cms-hours-editable.svelte')}
 	{children}
 />

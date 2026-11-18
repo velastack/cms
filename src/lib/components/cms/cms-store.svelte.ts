@@ -117,6 +117,9 @@ class CmsStore {
 	 */
 	siteOverlay = $state<Tree | undefined>(undefined);
 	siteDraft = $state<Tree>({});
+	/** Whether the admin bar's Company panel is open. Lives here so a field
+	 * bound to the company profile can open it from its popover. */
+	companyPanelOpen = $state(false);
 	/**
 	 * Active editor preview locale, pushed in by the admin bar from the URL
 	 * (`?locale=`). Falls back to `page.data.cms.locale` when unset (read-only

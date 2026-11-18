@@ -11,6 +11,7 @@ export { default as CmsNav } from './cms-nav.svelte';
 export { default as CmsHours } from './cms-hours.svelte';
 export { default as CmsContact } from './cms-contact.svelte';
 export { default as CmsSocialLinks } from './cms-social-links.svelte';
+export { default as CmsCompany } from './cms-company.svelte';
 export { default as CmsCollection } from './cms-collection.svelte';
 export { default as CmsTeam } from './cms-team.svelte';
 export { default as CmsTestimonials } from './cms-testimonials.svelte';
