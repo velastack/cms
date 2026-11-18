@@ -11,7 +11,13 @@ import type { CmsStore } from '../store/queries.js';
 import type { ReadCache } from '../store/cache.js';
 import type { CmsResponders } from '../http.js';
 import type { CmsStorage } from '../storage.js';
-import type { CmsAuthAdapter, CmsAuthContext, CmsDeployAdapter, CmsEditor } from '../types.js';
+import type {
+	CmsAuthAdapter,
+	CmsAuthContext,
+	CmsCompanyOptions,
+	CmsDeployAdapter,
+	CmsEditor
+} from '../types.js';
 
 export type RouteCtx = {
 	event: RequestEvent;
@@ -33,6 +39,8 @@ export type RouteCtx = {
 	auth: CmsAuthAdapter;
 	/** The host's deploy adapter, when configured. */
 	deploy?: CmsDeployAdapter;
+	/** The host's company profile source, when configured. */
+	company?: CmsCompanyOptions;
 	authCtx: CmsAuthContext;
 	/** Absolute-or-root-relative URL for an uploaded file, per the host's
 	 * configured media base. */

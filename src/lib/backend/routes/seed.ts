@@ -15,6 +15,7 @@
 import type { PageEntry } from '../../core/page-entry.js';
 import type { Tree } from '../../core/path.js';
 import type { CmsSeed } from '../../core/wire.js';
+import { resolveManagedCompany, storableSite } from '../company.js';
 import { badRequest, isObjectRecord, isStringRecord, readJson, type RouteCtx } from './context.js';
 
 const parseEntries = (raw: unknown[]): PageEntry[] | string => {
@@ -90,6 +91,9 @@ export const postSeed = async (ctx: RouteCtx): Promise<Response> => {
 	const seed = parseSeed(body);
 	if (typeof seed === 'string') return badRequest(seed);
 	const force = isObjectRecord(body) && body.force === true;
+	if (seed.site) {
+		seed.site = storableSite(seed.site, (await resolveManagedCompany(ctx)) !== null);
+	}
 
 	const result = ctx.store.seed(ctx.projectId, seed, { force });
 	if (!result.ok) return Response.json(result, { status: 409 });

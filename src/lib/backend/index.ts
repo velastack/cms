@@ -67,6 +67,7 @@ export type {
 	CmsAuthAdapter,
 	CmsAuthContext,
 	CmsBackendOptions,
+	CmsCompanyOptions,
 	CmsCookieOptions,
 	CmsCorsOptions,
 	CmsDeployAdapter,
@@ -74,6 +75,7 @@ export type {
 	CmsDeployRun,
 	CmsDeployState,
 	CmsEditor,
+	CmsManagedCompany,
 	CmsSessionGrant
 } from './types.js';
 export type { CmsStore } from './store/queries.js';
