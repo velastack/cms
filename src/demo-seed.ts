@@ -8,7 +8,7 @@
  * plugin also injects as every component's `fallback`. This file turns those
  * files into a seed, the way a host seeds a project from a template's
  * `content/`, and adds what they cannot hold: one entry per room, and the
- * rooms that were renamed or retired. A scope with route params
+ * rooms that were renamed or retired, and the company profile. A scope with route params
  * (`page:/(marketing)/rooms/[slug]`) is the room template's fallbacks, not a
  * page, so it is never seeded.
  */
@@ -129,3 +129,67 @@ const fromContent = (seed: CmsSeed, locale: string, content: Content) => {
 export const demoSeed: CmsSeed = { pages: { en: { [ROOM]: rooms } } };
 fromContent(demoSeed, 'en', en as Content);
 fromContent(demoSeed, 'es', es as Content);
+
+// The company profile (Site → Company): the harbour house, with the contact
+// details and hours the root layout already holds, and a second house in
+// Lisbon with its own number and shorter hours.
+const { contact, hours, social } = (en as Content)['layout:/'] as Record<string, Tree>;
+const day = (open: string, close: string) => ({ closed: false, ranges: [{ open, close }] });
+
+demoSeed.site = {
+	...demoSeed.site,
+	company: {
+		v: 1,
+		name: contact.name,
+		legalName: 'Casa Marea, Lda.',
+		tagline: 'A small hotel on the harbour',
+		description: 'Twelve rooms above the fishing harbour in Ericeira, and four more in Lisbon.',
+		type: 'Hotel',
+		priceRange: '$$',
+		languages: ['pt', 'en', 'es'],
+		paymentMethods: ['Cash', 'Visa', 'Mastercard'],
+		areaServed: [],
+		phones: contact.phones,
+		emails: contact.emails,
+		whatsapp: contact.whatsapp,
+		website: 'https://casamarea.example',
+		bookingUrl: 'https://casamarea.example/book',
+		social: social.items,
+		locations: [
+			{
+				id: 'ericeira',
+				name: 'Ericeira',
+				address: contact.address,
+				geo: contact.geo,
+				directions: 'Street parking on Rua do Cais. The entrance is the blue door.',
+				hours
+			},
+			{
+				id: 'lisboa',
+				name: 'Lisboa',
+				address: {
+					lines: ['Rua da Bica 12'],
+					locality: 'Lisboa',
+					region: 'Lisboa',
+					postcode: '1200-057',
+					country: 'Portugal'
+				},
+				geo: { lat: 38.7107, lng: -9.1462 },
+				directions: 'Two minutes from the Bica funicular. No parking on the street.',
+				phones: [{ id: 'lisboa', label: 'Reception', number: '+351 210 000 000' }],
+				hours: {
+					timezone: 'Europe/Lisbon',
+					days: {
+						mon: day('08:00', '20:00'),
+						tue: day('08:00', '20:00'),
+						wed: day('08:00', '20:00'),
+						thu: day('08:00', '20:00'),
+						fri: day('08:00', '22:00'),
+						sat: day('09:00', '22:00'),
+						sun: { closed: true, ranges: [] }
+					}
+				}
+			}
+		]
+	}
+};
