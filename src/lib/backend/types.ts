@@ -83,6 +83,20 @@ export type CmsDeployAdapter = {
 	trigger(ctx: CmsDeployContext): Promise<CmsDeployState>;
 };
 
+/** A company profile the host manages for a project. `value` is normalized
+ * into a `CmsCompanyValue`; `by` names the manager ("VelaBase") and `url` is
+ * where it is edited. */
+export type CmsManagedCompany = { value: unknown; by: string; url?: string };
+
+export type CmsCompanyOptions = {
+	/** The company profile the host manages for this project, or `null` when
+	 * the CMS owns it. */
+	resolve(
+		projectId: string,
+		event: RequestEvent
+	): Promise<CmsManagedCompany | null> | CmsManagedCompany | null;
+};
+
 export type CmsCookieOptions = {
 	name?: string;
 	/**
@@ -141,6 +155,12 @@ export type CmsBackendOptions = {
 	 * and the bar never shows the action, which is right for a same-origin
 	 * mount where the site reads the CMS live. */
 	deploy?: CmsDeployAdapter;
+	/**
+	 * A host that owns the company profile. While `resolve` returns one for a
+	 * project, `GET /site` serves it at `company` with `$managed.company` set,
+	 * and site writes drop `company`. Omit it and the CMS owns the profile.
+	 */
+	company?: CmsCompanyOptions;
 	cookie?: CmsCookieOptions;
 	/**
 	 * Cross-origin access. `false` (the default) emits no CORS headers, which is

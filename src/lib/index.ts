@@ -26,6 +26,8 @@ export { default as CmsNav } from './components/cms/cms-nav.svelte';
 export { default as CmsHours } from './components/cms/cms-hours.svelte';
 export { default as CmsContact } from './components/cms/cms-contact.svelte';
 export { default as CmsSocialLinks } from './components/cms/cms-social-links.svelte';
+// The company profile, read from the site tree and edited in the Company panel.
+export { default as CmsCompany } from './components/cms/cms-company.svelte';
 export { default as CmsCollection } from './components/cms/cms-collection.svelte';
 export { default as CmsTeam } from './components/cms/cms-team.svelte';
 export { default as CmsTestimonials } from './components/cms/cms-testimonials.svelte';

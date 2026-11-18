@@ -124,6 +124,15 @@ describe('injectFallbacks', () => {
 		expect(code).toBe(SRC);
 		expect(injected).toEqual([]);
 	});
+
+	it('leaves a component without a name alone: CmsCompany reads the site tree', () => {
+		const src = `<script>import { CmsCompany } from '@velastack/cms';</script><CmsCompany>{#snippet children(c)}{c.name}{/snippet}</CmsCompany>`;
+		expect(scanUsages(src).warnings).toEqual([]);
+		const { code, injected, missing } = injectFallbacks(src, { company: { name: 'x' } });
+		expect(code).toBe(src);
+		expect(injected).toEqual([]);
+		expect(missing).toEqual([]);
+	});
 });
 
 describe('fallbackResolverFor', () => {

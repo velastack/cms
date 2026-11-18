@@ -93,6 +93,7 @@
 			shareLinkOpen ||
 			shortcutsOpen ||
 			siteSettingsOpen ||
+			cmsStore.companyPanelOpen ||
 			deployOpen
 	);
 	let publishing = $state(false);
@@ -145,6 +146,7 @@
 		shareLinkOpen = false;
 		shortcutsOpen = false;
 		siteSettingsOpen = false;
+		cmsStore.companyPanelOpen = false;
 		deployOpen = false;
 		newDialog = null;
 		newPageError = null;
@@ -1038,13 +1040,20 @@
 		siteSettingsOpen = true;
 	};
 
+	const onOpenCompany = () => {
+		closeAllPanels();
+		cmsStore.companyPanelOpen = true;
+	};
+
 	// Mirrors `onSaveSeo`: flush the site-options draft as part of the open
 	// release, refresh overlays so the just-saved values show via the
-	// preview-overlay path on the live page.
+	// preview-overlay path on the live page. The Company panel saves the
+	// same way.
 	const onSaveSiteSettings = async () => {
 		const result = await cmsStore.save(endpoint);
 		if (!result.ok) return;
 		siteSettingsOpen = false;
+		cmsStore.companyPanelOpen = false;
 		const newKey = result.release?.preview_key ?? null;
 		if (newKey) await setPreviewParam(newKey, { replace: true });
 		await Promise.all([
@@ -1440,6 +1449,7 @@
 							</Menubar.Item>
 
 							<Menubar.Label class={menuLabelClass}>Settings</Menubar.Label>
+							<Menubar.Item class={menuItemClass} onSelect={onOpenCompany}>Company</Menubar.Item>
 							<Menubar.Item class={menuItemClass} onSelect={onOpenSiteSettings}>
 								Site Options
 								<KbdShortcut keys="⌘," class={menuShortcutClass} />
@@ -1665,6 +1675,15 @@
 		{#if siteSettingsOpen}
 			{#await import('./site-options-panel.svelte') then { default: SiteOptionsPanel }}
 				<SiteOptionsPanel onClose={() => (siteSettingsOpen = false)} onSave={onSaveSiteSettings} />
+			{/await}
+		{/if}
+
+		{#if cmsStore.companyPanelOpen}
+			{#await import('./company-panel.svelte') then { default: CompanyPanel }}
+				<CompanyPanel
+					onClose={() => (cmsStore.companyPanelOpen = false)}
+					onSave={onSaveSiteSettings}
+				/>
 			{/await}
 		{/if}
 

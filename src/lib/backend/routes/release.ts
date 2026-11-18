@@ -6,6 +6,7 @@
  * the router has already returned 403 for anonymous and cross-project callers.
  */
 import type { AddReleaseItemInput, DiscardItemTarget } from '../../core/wire.js';
+import { resolveManagedCompany, storableSite } from '../company.js';
 import {
 	badRequest,
 	isObjectRecord,
@@ -69,6 +70,14 @@ export const postReleaseItems = async (ctx: RouteCtx): Promise<Response> => {
 
 	const items = parseItems(body.items);
 	if (typeof items === 'string') return badRequest(items);
+
+	// The marker is never stored, and neither is a company the host manages.
+	if (items.some((i) => i.kind === 'site')) {
+		const managed = (await resolveManagedCompany(ctx)) !== null;
+		for (const item of items) {
+			if (item.kind === 'site') item.tree = storableSite(item.tree, managed);
+		}
+	}
 
 	const release = ctx.store.addReleaseItems(ctx.projectId, user.id, items);
 	return Response.json({ release });

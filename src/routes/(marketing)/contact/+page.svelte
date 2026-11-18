@@ -2,6 +2,7 @@
 	import {
 		cms,
 		CmsBoolean,
+		CmsCompany,
 		CmsContact,
 		CmsDateTime,
 		CmsFaq,
@@ -29,12 +30,12 @@
 	notes={[
 		{
 			title: 'Contact details',
-			body: 'The same value as the footer. This page reads it with `scope="root"`, so editing the address here changes the footer on every page.',
+			body: 'The footer’s value, read with `scope="root"` and bound with `company`: name, address and numbers come from the company profile, and the field keeps its labels.',
 			component: 'CmsContact'
 		},
 		{
 			title: 'Opening hours',
-			body: 'Also shared with the footer. The view gives grouped rows, dated exceptions and whether reception is open right now, in the visitor’s locale.',
+			body: 'Also bound with `company`, to the primary location. The view gives grouped rows, dated exceptions and whether reception is open right now, in the visitor’s locale.',
 			component: 'CmsHours'
 		},
 		{
@@ -51,6 +52,10 @@
 			title: 'FAQ',
 			body: 'Questions with rich-text answers. `toFaqPage` builds the schema.org data.',
 			component: 'CmsFaq'
+		},
+		{
+			title: 'Locations',
+			body: 'Every location of the company profile with its address, hours and map. `CmsCompany` takes no `name`: the profile is edited in Site → Company.'
 		}
 	]}
 	beyond={[
@@ -61,8 +66,8 @@
 	]}
 >
 	<p>
-		Contact details and opening hours appear in the footer of every page and in full here. They are
-		one value in the root layout, edited from wherever they appear.
+		Contact details and opening hours appear in the footer of every page and in full here. They come
+		from the company profile, one value for the whole site, edited in Site → Company.
 	</p>
 </Explainer>
 
@@ -88,7 +93,7 @@
 	<div class="cols">
 		<section>
 			<Marker n={1} />
-			<CmsContact name="contact" scope="root">
+			<CmsContact name="contact" scope="root" company>
 				{#snippet children(c)}
 					<h2>{c.name}</h2>
 					<address>
@@ -117,7 +122,7 @@
 
 		<section>
 			<Marker n={2} />
-			<CmsHours name="hours" scope="root">
+			<CmsHours name="hours" scope="root" company>
 				{#snippet children(h)}
 					<h2>
 						Reception
@@ -138,6 +143,36 @@
 			</CmsHours>
 		</section>
 	</div>
+
+	<section>
+		<h2>Our houses <Marker n={6} /></h2>
+		<CmsCompany>
+			{#snippet children(company)}
+				<div class="cols">
+					{#each company.locations as l (l.id)}
+						<article>
+							{#if company.isMultiLocation}<h3>{l.name}</h3>{/if}
+							<address>
+								{#each l.formattedAddress as line, i (i)}{line}<br />{/each}
+							</address>
+							{#if l.telHref}<p><a href={l.telHref}>{l.phones[0].number}</a></p>{/if}
+							{#if l.directions}<p class="muted">{l.directions}</p>{/if}
+							<dl>
+								{#each l.hours.rows as row (row.id)}
+									<dt>{row.days}</dt>
+									<dd>{row.text}</dd>
+								{/each}
+							</dl>
+							{#if l.mapEmbedUrl}
+								<iframe src={l.mapEmbedUrl} title={`Map: ${l.name || company.name}`} loading="lazy"
+								></iframe>
+							{/if}
+						</article>
+					{/each}
+				</div>
+			{/snippet}
+		</CmsCompany>
+	</section>
 
 	<section>
 		<h2><CmsText name="gettingHere.heading" /> <Marker n={4} /></h2>
@@ -196,7 +231,8 @@
 		grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
 		gap: 2rem;
 	}
-	.cols section {
+	.cols section,
+	.cols article {
 		padding: 1.5rem;
 		background: var(--paper);
 	}
@@ -206,6 +242,12 @@
 	address {
 		font-style: normal;
 		line-height: 1.5;
+	}
+	iframe {
+		width: 100%;
+		height: 14rem;
+		margin-top: 1rem;
+		border: 0;
 	}
 	dl {
 		display: grid;

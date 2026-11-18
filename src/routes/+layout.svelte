@@ -28,11 +28,12 @@
 	</main>
 
 	<!-- Root layout scope: every page shares these values, and pages that show
-	     the same `name` with `scope="root"` edit the same value. -->
+	     the same `name` with `scope="root"` edit the same value. `company`
+	     fills hours, contact and social from the company profile. -->
 	<footer class="footer">
 		<div class="cols">
 			<div>
-				<CmsHours name="hours">
+				<CmsHours name="hours" company>
 					{#snippet children(h)}
 						<p>
 							<strong>Reception {h.today.label.toLowerCase()}:</strong>
@@ -41,7 +42,7 @@
 						</p>
 					{/snippet}
 				</CmsHours>
-				<CmsContact name="contact">
+				<CmsContact name="contact" company>
 					{#snippet children(c)}
 						<p>{c.formattedAddress.join(', ')}</p>
 						<p class="links">
@@ -52,7 +53,7 @@
 				</CmsContact>
 			</div>
 			<div class="right">
-				<CmsSocialLinks name="social">
+				<CmsSocialLinks name="social" company>
 					{#snippet children(items)}
 						<p class="links">
 							{#each items as item (item.id)}

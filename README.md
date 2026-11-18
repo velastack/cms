@@ -321,6 +321,100 @@ Templates use only these exports; there is no open item schema. A shape outside 
 
 Every value type (`CmsHoursValue`, `NavItem`, …), schema (`cmsHours`, …) and JSON-LD helper is exported from the package root.
 
+### Company profile
+
+One profile per business: its name, contact details, social links and locations. It lives in the site tree at `company`, not in a route scope, is not localised, and is edited in **Site → Company** (or by the host, see [Managed company profile](#managed-company-profile)).
+
+```ts
+type CmsCompanyValue = {
+	v: 1;
+	name: string;
+	legalName: string;
+	tagline: string;
+	description: string;
+	type: string; // schema.org type: 'Hotel', 'Restaurant'; empty reads as LocalBusiness
+	priceRange: string; // '', '$', '$$', '$$$' or '$$$$'
+	languages: string[]; // BCP-47 codes staff speak
+	paymentMethods: string[];
+	areaServed: string[];
+	phones: ContactPhone[];
+	emails: ContactEmail[];
+	whatsapp: string;
+	website: string;
+	bookingUrl: string;
+	social: SocialLink[];
+	locations: CompanyLocation[]; // the first is the primary
+};
+type CompanyLocation = {
+	id: string;
+	name: string; // 'Downtown'; empty when there is only one
+	address: ContactAddress;
+	geo: { lat: number; lng: number } | null;
+	directionsUrl: string;
+	directions: string; // parking, entrance, transit
+	phones: ContactPhone[]; // own contact details; empty means the company's
+	emails: ContactEmail[];
+	whatsapp: string;
+	hours: { timezone; days; note; exceptions; byAppointment };
+};
+```
+
+A location owns its address, map position and hours. Its phones, emails and WhatsApp number are the company's unless it sets its own. A business with one location is a list of one: the panel shows that location's fields directly, and "Add location" turns them into a picker.
+
+`<CmsCompany>` reads the profile and hands the view to `children`. It takes no `name` and is not edited in place. Props: `fallback` (a partial value, shown until one is stored) and `labels` (the hours labels: `closed`, `today`, `openNow`, `closedNow`).
+
+```svelte
+<script lang="ts">
+	import { CmsCompany } from '@velastack/cms';
+</script>
+
+<CmsCompany>
+	{#snippet children(company)}
+		{#each company.locations as l (l.id)}
+			<article>
+				{#if company.isMultiLocation}<h3>{l.name}</h3>{/if}
+				<address>{l.formattedAddress.join(', ')}</address>
+				{#if l.telHref}<a href={l.telHref}>{l.phones[0].number}</a>{/if}
+				<p>{l.hours.today.text} · {l.hours.status}</p>
+				{#each l.hours.rows as row (row.id)}<dt>{row.days}</dt>
+					<dd>{row.text}</dd>{/each}
+				{#if l.mapEmbedUrl}<iframe src={l.mapEmbedUrl} title="Map" loading="lazy"></iframe>{/if}
+			</article>
+		{/each}
+	{/snippet}
+</CmsCompany>
+```
+
+The view is the value plus: `phones` and `emails` with `href`, `telHref`, `mailto`, `whatsappHref`, `social` with display names, `locations`, `location` (the primary, or `null`), `hasLocations` and `isMultiLocation`. Each location has its resolved contact details with the same hrefs, `formattedAddress`, `hasAddress`, `mapsHref`, `mapEmbedUrl` (a Google map with a pin that needs no API key, from `geo` or else the address) and `hours`, the same view `CmsHours` gives.
+
+**The `company` prop** binds an existing `CmsContact`, `CmsHours` or `CmsSocialLinks` to the profile. `company` (or `company={true}`) reads the primary location; `company="downtown"` reads the location with that id.
+
+```svelte
+<CmsContact name="contact" scope="root" company>…</CmsContact>
+<CmsHours name="hours" scope="root" company="downtown">…</CmsHours>
+<CmsSocialLinks name="social" company>…</CmsSocialLinks>
+```
+
+The profile then supplies the contact's name, address, phones, emails, WhatsApp number, directions URL and geo; the hours' timezone, days, note and exceptions; the social items. The field keeps its `labels`, still stored at `name` and edited in its popover, which shows a button to the Company panel in place of the other inputs. When the profile has nothing for the field (no profile yet, no hours set, an unknown location id) the field renders its own value as before, so adding the prop to a live site removes nothing. `companyContact`, `companyHours` and `companySocial` are the projections, for use outside the components.
+
+`toLocalBusiness(value, { url, image })` returns the JSON-LD nodes: one node of the company's `type` for a single location, or an `Organization` plus one node per location with `parentOrganization` for several.
+
+```svelte
+<script lang="ts">
+	import { cms, cmsCompany, toLocalBusiness } from '@velastack/cms';
+
+	const nodes = $derived(
+		toLocalBusiness(cmsCompany.normalize(cms.site.company), { url: 'https://example.com' })
+	);
+</script>
+
+<svelte:head>
+	{#each nodes as node}
+		{@html `<script type="application/ld+json">${JSON.stringify(node)}</script>`}
+	{/each}
+</svelte:head>
+```
+
 ### Building one
 
 The package ships the pieces a structured component is made of, and the components above are built from nothing else.
@@ -842,6 +936,30 @@ export const myAdapter = (config: { project: string; client: MyClient }): CmsAda
 ```
 
 The adapter doesn't need to implement default-locale fallback — `resolveCmsPayload` issues a parallel default-locale `fetchDocs` when needed and merges trees on the loader side. Just return what's stored for the requested locale.
+
+### Managed company profile
+
+A host that already holds the business's details can supply the [company profile](#company-profile) instead of the CMS storing it. Pass `company.resolve` to `createCmsBackend`:
+
+```ts
+createCmsBackend({
+	company: {
+		// The profile the host manages for this project, or null when the CMS owns it.
+		resolve: async (projectId, event) => {
+			const profile = await host.companyFor(projectId);
+			return profile ? { value: profile, by: 'VelaBase', url: host.companyUrl(projectId) } : null;
+		}
+	}
+});
+```
+
+While `resolve` returns a profile for a project:
+
+- `GET /site`, with or without `?preview=` or `?version=`, returns the stored tree with `company` replaced by the normalized `value`, plus the reserved key `$managed: { company: { by, url } }`.
+- The published response's ETag includes a hash of the profile and skips the read cache, so a change on the host shows without a publish. `?version=` responses are not marked immutable.
+- A `site` release item and `POST /seed` have `company` dropped before they are stored.
+
+`$managed` is never stored, managed or not. The client reads managed state only from the site tree (`companyManagedBy(cms.site)` returns `{ by, url? }` or `null`), so a prerendered build, a preview and a past version all agree. In the admin bar the Company panel is read-only and says "Managed by {by}", with a link to `url`; a field bound with `company` says the same in its popover. Without the option nothing changes.
 
 ## Locales
 

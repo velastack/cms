@@ -216,6 +216,7 @@ export const createCmsBackend = (options: CmsBackendOptions = {}): CmsBackend =>
 			storage,
 			auth,
 			deploy,
+			company: options.company,
 			authCtx,
 			mediaUrl: mediaUrlFor(event),
 			mountPath,

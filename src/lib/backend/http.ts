@@ -98,6 +98,26 @@ export const createResponders = (store: CmsStore, cache: ReadCache) => {
 		return new Response(null, { status: 404 });
 	};
 
+	/**
+	 * Serve a public read whose body also depends on something outside the
+	 * store, summed up by `tag`. The validator carries the tag, so a change on
+	 * either side misses; the LRU is keyed on `cms_version` alone and is skipped.
+	 */
+	const servePublicTagged = (
+		event: CacheEvent,
+		projectId: string,
+		tag: string,
+		payload: () => unknown
+	): Response => {
+		const etag = `"${store.getCmsVersion(projectId)}-${tag}"`;
+		if (event.request.headers.get('if-none-match') === etag) {
+			event.setHeaders({ 'cache-control': PUBLIC_CC, etag });
+			return new Response(null, { status: 304 });
+		}
+		event.setHeaders({ 'cache-control': PUBLIC_CC, etag, 'content-type': JSON_TYPE });
+		return new Response(JSON.stringify(payload()), { status: 200 });
+	};
+
 	/** Serve a JSON 200 for `?version=<key>` — immutable per release. */
 	const serveImmutableJson = (event: CacheEvent, payload: unknown): Response => {
 		event.setHeaders({ 'cache-control': IMMUTABLE_CC, 'content-type': JSON_TYPE });
@@ -113,6 +133,7 @@ export const createResponders = (store: CmsStore, cache: ReadCache) => {
 		tryPublicCache,
 		servePublicJson,
 		servePublicNotFound,
+		servePublicTagged,
 		serveImmutableJson,
 		serveImmutableNotFound
 	};
