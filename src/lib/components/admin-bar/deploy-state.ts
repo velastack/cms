@@ -5,8 +5,32 @@
 import type { CmsDeployRun, CmsDeployState } from '../../core/wire.js';
 import { formatRelative } from './format-relative.js';
 
-export const isDeploying = (state: CmsDeployState | null): boolean =>
-	state?.latest?.status === 'pending' || state?.latest?.status === 'building';
+export const isRunInFlight = (run: CmsDeployRun | null | undefined): boolean =>
+	run?.status === 'pending' || run?.status === 'building';
+
+export const isDeploying = (state: CmsDeployState | null): boolean => isRunInFlight(state?.latest);
+
+/**
+ * The deploy Recent Releases lists above the releases: one in flight, or the
+ * one the panel watched finish (`watchedId`), so its row turns into the result
+ * instead of vanishing. A deploy that ended before the panel opened is not
+ * listed; the Site menu already says how it went.
+ */
+export const deployToList = (
+	latest: CmsDeployRun | null | undefined,
+	watchedId: string | null
+): CmsDeployRun | null => {
+	if (!latest) return null;
+	return isRunInFlight(latest) || latest.id === watchedId ? latest : null;
+};
+
+/** The second line of that row. */
+export const describeListedDeploy = (run: CmsDeployRun, now = Date.now()): string => {
+	if (isRunInFlight(run)) return `started ${formatRelative(run.createdAt, now)}`;
+	const when = formatRelative(run.finishedAt ?? run.createdAt, now);
+	if (run.status === 'failed') return run.error ? `failed ${when}: ${run.error}` : `failed ${when}`;
+	return `finished ${when}`;
+};
 
 export const describeLatestRun = (
 	latest: CmsDeployRun | null | undefined,

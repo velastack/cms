@@ -692,7 +692,9 @@
 				return;
 			}
 			deployState = (await res.json()) as CmsDeployState;
-			deployOpen = false;
+			// Recent Releases lists the run while it is in flight: open it, so
+			// the editor watches the deploy instead of an unchanged page.
+			onOpenHistory();
 		} finally {
 			deploying = false;
 		}
@@ -1690,6 +1692,7 @@
 		{#if historyOpen}
 			<HistoryPanel
 				{endpoint}
+				deploy={deployState?.available ? (deployState.latest ?? null) : null}
 				onClose={() => (historyOpen = false)}
 				onChanged={refreshAfterReleaseChange}
 			/>

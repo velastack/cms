@@ -2,6 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { cmsFetch } from '../../core/cms-fetch.js';
+	import type { CmsDeployRun } from '../../core/wire.js';
+	import { deployToList, describeListedDeploy, isRunInFlight } from './deploy-state.js';
 	import PanelFooter from './panel-footer.svelte';
 	import PanelHeader from './panel-header.svelte';
 	import Panel from './panel.svelte';
@@ -36,10 +38,22 @@
 
 	type Props = {
 		endpoint: string;
+		/** The site's latest deploy, as the bar polls it; absent where the host
+		 * has no deploy adapter. */
+		deploy?: CmsDeployRun | null;
 		onClose: () => void;
 		onChanged: () => Promise<void> | void;
 	};
-	let { endpoint, onClose, onChanged }: Props = $props();
+	let { endpoint, deploy = null, onClose, onChanged }: Props = $props();
+
+	// A deploy is not a release, but this is where an editor looks for what
+	// is on its way to the live site: one in flight heads the list, and stays
+	// there with its result once it ends while the panel is open.
+	let watchedDeploy = $state<string | null>(null);
+	$effect(() => {
+		if (deploy && isRunInFlight(deploy)) watchedDeploy = deploy.id;
+	});
+	const listedDeploy = $derived(deployToList(deploy, watchedDeploy));
 
 	let history = $state<PublishedRelease[]>([]);
 	let loading = $state(false);
@@ -163,6 +177,42 @@
 	</PanelHeader>
 
 	<div class="vela:overflow-y-auto vela:px-4 vela:pb-2">
+		{#if listedDeploy}
+			{@const inFlight = isRunInFlight(listedDeploy)}
+			{@const failed = listedDeploy.status === 'failed'}
+			<div
+				class="vela:relative vela:pl-6 vela:pr-1 vela:py-2.5 vela:border-b vela:border-[var(--cms-bar-divider)]"
+				role="status"
+				data-testid="history-deploy"
+				data-status={listedDeploy.status}
+			>
+				<span
+					class="vela:absolute vela:left-0 vela:top-3.5 vela:w-[11px] vela:h-[11px]
+						vela:flex vela:items-center vela:justify-center"
+					aria-hidden="true"
+				>
+					<span
+						class="vela:w-2 vela:h-2 vela:rounded-full {inFlight ? 'vela:animate-bar-pulse' : ''}"
+						style:background-color={inFlight
+							? 'var(--cms-status-warn-dot)'
+							: failed
+								? 'var(--cms-status-error-text)'
+								: 'var(--cms-status-clean-dot)'}
+					></span>
+				</span>
+				<div class="vela:flex vela:items-center vela:gap-2 vela:min-w-0">
+					<span class="vela:text-[13px] vela:font-medium vela:text-bar-text vela:truncate">
+						{inFlight ? 'Deploying live site…' : failed ? 'Deploy failed' : 'Live site deployed'}
+					</span>
+					{#if inFlight}
+						<Badge variant="warn" size="sm">in progress</Badge>
+					{/if}
+				</div>
+				<div class="vela:text-[11px] vela:text-bar-text-tertiary vela:mt-0.5 vela:break-words">
+					{describeListedDeploy(listedDeploy)}
+				</div>
+			</div>
+		{/if}
 		{#if loading && history.length === 0}
 			<p class="vela:text-[13px] vela:text-bar-text-tertiary vela:py-2">Loading…</p>
 		{:else if history.length === 0}
@@ -206,7 +256,8 @@
 									{/if}
 								</div>
 								<div class="vela:text-[11px] vela:text-bar-text-tertiary vela:mt-0.5">
-									{formatDate(release.publishedAt)} · published by {release.publishedBy.email ??
+									{formatDate(release.publishedAt)} · published by {release.publishedBy.email ||
+										release.publishedBy.name ||
 										release.publishedBy.id}{isLive ? ' · ' : ''}{#if isLive}<span
 											class="vela:text-[var(--cms-status-clean-dot)]">live now</span
 										>{/if}
