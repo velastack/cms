@@ -93,6 +93,8 @@ export type {
 	CmsDeployState,
 	CmsEditor,
 	CmsManagedCompany,
+	CmsOAuthSignIn,
+	CmsOAuthTokens,
 	CmsSessionGrant
 } from './types.js';
 export type { CmsStore } from './store/queries.js';

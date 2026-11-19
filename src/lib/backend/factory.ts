@@ -181,7 +181,7 @@ export const createCmsBackend = (options: CmsBackendOptions = {}): CmsBackend =>
 		// cookie keeps answering for this mount alongside the scoped one.
 		const legacyPath = options.cookie?.path === undefined && cookiePath !== '/' ? '/' : null;
 
-		const authCtx: CmsAuthContext = { db, projectId, cookieName };
+		const authCtx: CmsAuthContext = { db, projectId, cookieName, event };
 
 		// Resolve, then authorize, on every route class, before any handler body
 		// runs. A session with no grant on this project is anonymous on this
