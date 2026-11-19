@@ -224,13 +224,18 @@ describe('the client', () => {
 			})
 		]);
 
+		// a day on, the server may have dropped a registration nobody holds a grant under
+		vi.useFakeTimers({ now: Date.now() + 25 * 60 * 60 * 1000, toFake: ['Date'] });
+		expect((await start()).searchParams.get('client_id')).toBe('registered-2');
+		vi.useRealTimers();
+
 		server.supportsDocuments = true;
 		const plain = createCmsTestClient(backend, {
 			basePath: '/cms',
 			origin: 'http://localhost:5173'
 		});
 		const local = await start(plain);
-		expect(local.searchParams.get('client_id')).toBe('registered-2');
+		expect(local.searchParams.get('client_id')).toBe('registered-3');
 	});
 });
 

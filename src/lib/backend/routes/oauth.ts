@@ -89,8 +89,13 @@ async function serverMetadata(ctx: RouteCtx, issuer: string): Promise<ServerMeta
 	return metadata;
 }
 
-/** Clients registered dynamically, by issuer and redirect URI, for this process. */
-const registered = new Map<string, string>();
+/**
+ * Clients registered dynamically, by issuer and redirect URI. Remembered for
+ * a day and no longer: a server may drop a registration nobody holds a grant
+ * under, and this client gives every grant back as soon as it has been used.
+ */
+const REGISTRATION_TTL_MS = 24 * 60 * 60 * 1000;
+const registered = new Map<string, { clientId: string; until: number }>();
 
 /**
  * The client id to use with this authorization server: the URL of the
@@ -106,7 +111,7 @@ async function clientId(ctx: RouteCtx, oauth: CmsOAuthSignIn, metadata: ServerMe
 	}
 	const key = `${metadata.issuer} ${redirectUri(ctx)}`;
 	const known = registered.get(key);
-	if (known) return known;
+	if (known && known.until > Date.now()) return known.clientId;
 	const response = await ctx.event.fetch(metadata.registration_endpoint, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
@@ -115,7 +120,7 @@ async function clientId(ctx: RouteCtx, oauth: CmsOAuthSignIn, metadata: ServerMe
 	if (!response.ok) throw new Error(`client registration answered ${response.status}`);
 	const { client_id } = (await response.json()) as { client_id?: string };
 	if (!client_id) throw new Error('client registration returned no client_id');
-	registered.set(key, client_id);
+	registered.set(key, { clientId: client_id, until: Date.now() + REGISTRATION_TTL_MS });
 	return client_id;
 }
 
