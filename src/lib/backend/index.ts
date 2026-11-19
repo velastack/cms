@@ -41,6 +41,23 @@
  */
 export { createCmsBackend, type CmsBackend } from './factory.js';
 export { CmsDeployError } from './routes/deploy.js';
+export {
+	CONTENT_READ_BUDGET,
+	ContentEditError,
+	applyChanges,
+	changeProblem,
+	contentLocales,
+	fitContent,
+	publishStaged,
+	readContent,
+	readDraft,
+	stageChanges,
+	stagedChanges,
+	toReleaseItems,
+	type ContentChange,
+	type ContentDoc,
+	type StagedChange
+} from './content.js';
 export { localEditors, type LocalEditorsOptions } from './auth/local-editors.js';
 export {
 	createEditorStore,

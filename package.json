@@ -1,6 +1,6 @@
 {
 	"name": "@velastack/cms",
-	"version": "0.10.0",
+	"version": "0.11.0",
 	"description": "A scope-aware CMS for SvelteKit, for static or dynamic sites.",
 	"keywords": [
 		"svelte",
@@ -70,6 +70,10 @@
 			"types": "./dist/backend/index.d.ts",
 			"default": "./dist/backend/index.js"
 		},
+		"./mcp": {
+			"types": "./dist/mcp/index.d.ts",
+			"default": "./dist/mcp/index.js"
+		},
 		"./vite": {
 			"types": "./plugin/dist/index.d.ts",
 			"default": "./plugin/dist/index.js"
@@ -100,6 +104,7 @@
 	},
 	"devDependencies": {
 		"@internationalized/date": "^3.12.3",
+		"@modelcontextprotocol/client": "^2.4.0",
 		"@sveltejs/kit": "^3.0.0",
 		"@sveltejs/package": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.3.1",
@@ -121,6 +126,7 @@
 		"vitest": "^5.0.1"
 	},
 	"dependencies": {
+		"@modelcontextprotocol/server": "^2.4.0",
 		"@sveltejs/adapter-static": "^4.0.0",
 		"@tiptap/core": "^3.30.6",
 		"@tiptap/extension-link": "^3.30.6",
@@ -129,7 +135,8 @@
 		"@velastack/whatsapp": "^0.1.0",
 		"bits-ui": "^2.19.0",
 		"devalue": "^6.0.0",
-		"tailwind-merge": "^3.6.0"
+		"tailwind-merge": "^3.6.0",
+		"zod": "^4.6.7"
 	},
 	"imports": {
 		"#lib": "./src/lib/index.js",
