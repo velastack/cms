@@ -13,6 +13,7 @@ import { getSite } from './site.js';
 import { deletePages, getPages, postPages, postPagesRename } from './pages.js';
 import { getUser, postLogout } from './user.js';
 import { getLogin, getLoginSuccess, postLogin } from './login.js';
+import { getClientDocument, getOAuthCallback, getOAuthStart } from './oauth.js';
 import {
 	deleteReleaseItems,
 	getRelease,
@@ -49,6 +50,12 @@ export const ROUTES: Route[] = [
 		auth: 'exempt',
 		handler: getLoginSuccess
 	},
+
+	// Sign-in through an authorization server (`auth.oauth`), in a popup the
+	// login page opens.
+	{ method: 'GET', segments: ['oauth', 'client.json'], auth: 'exempt', handler: getClientDocument },
+	{ method: 'GET', segments: ['oauth', 'start'], auth: 'exempt', handler: getOAuthStart },
+	{ method: 'GET', segments: ['oauth', 'callback'], auth: 'exempt', handler: getOAuthCallback },
 
 	{ method: 'GET', segments: ['release'], auth: 'required', handler: getRelease },
 	{ method: 'POST', segments: ['release', 'items'], auth: 'required', handler: postReleaseItems },

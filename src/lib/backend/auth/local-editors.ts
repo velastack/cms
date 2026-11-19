@@ -6,7 +6,13 @@
  * accounts writes its own adapter instead; the router only ever sees this
  * interface.
  */
-import type { CmsAuthAdapter, CmsAuthContext, CmsEditor, CmsSessionGrant } from '../types.js';
+import type {
+	CmsAuthAdapter,
+	CmsAuthContext,
+	CmsEditor,
+	CmsOAuthSignIn,
+	CmsSessionGrant
+} from '../types.js';
 import type { ScryptParams } from './scrypt.js';
 import { createEditorStore, type CmsEditorStore } from './editors.js';
 
@@ -36,6 +42,24 @@ export type LocalEditorsOptions = {
 	sessionTtlMs?: number;
 	/** Password work factor. Lower it only in tests. */
 	scrypt?: ScryptParams;
+	/**
+	 * Also let editors sign in through an authorization server. They are kept
+	 * in the same table and hold the same sessions as password editors, under
+	 * the id `identify` gives them, but hold no grants: pair this with an
+	 * `authorize` of your own that says which sites such an editor may edit.
+	 *
+	 * ```ts
+	 * const local = localEditors({ oauth: { label, issuer, identify } });
+	 * createCmsBackend({
+	 * 	auth: {
+	 * 		...local,
+	 * 		authorize: async (user, projectId, ctx) =>
+	 * 			(await local.authorize(user, projectId, ctx)) || mayEdit(user.id, projectId)
+	 * 	}
+	 * });
+	 * ```
+	 */
+	oauth?: Omit<CmsOAuthSignIn, 'createSession' | 'redeem'>;
 };
 
 /**
@@ -88,6 +112,28 @@ export const localEditors = (options: LocalEditorsOptions = {}): CmsAuthAdapter 
 
 		async discard(grant, ctx): Promise<void> {
 			storeFor(ctx).destroySession(grant.token);
-		}
+		},
+
+		...(options.oauth
+			? {
+					oauth: {
+						...options.oauth,
+						async createSession(user, ctx, session = {}): Promise<CmsSessionGrant> {
+							const store = storeFor(ctx);
+							const editor = store.upsertExternal(user);
+							const { token, expiresAt } = store.createSession(editor.id, {
+								ttlMs: session.ttlMs ?? options.sessionTtlMs
+							});
+							return { user: editor, token, expiresAt };
+						},
+						async redeem(token, ctx): Promise<CmsEditor | null> {
+							const store = storeFor(ctx);
+							const user = store.resolveSession(token);
+							store.destroySession(token);
+							return user;
+						}
+					}
+				}
+			: {})
 	};
 };

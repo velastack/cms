@@ -961,6 +961,46 @@ While `resolve` returns a profile for a project:
 
 `$managed` is never stored, managed or not. The client reads managed state only from the site tree (`companyManagedBy(cms.site)` returns `{ by, url? }` or `null`), so a prerendered build, a preview and a past version all agree. In the admin bar the Company panel is read-only and says "Managed by {by}", with a link to `url`; a field bound with `company` says the same in its popover. Without the option nothing changes.
 
+## Signing editors in with accounts they already have
+
+By default an editor is an email and a password kept by the CMS (`localEditors()`), granted site by site. A host whose editors already have accounts somewhere can let them sign in with those instead, through any OAuth 2.1 authorization server:
+
+```ts
+import { createCmsBackend, localEditors } from '@velastack/cms/backend';
+
+const local = localEditors({
+	oauth: {
+		label: 'Continue with Example',
+		issuer: () => 'https://accounts.example.com',
+		scope: 'site:edit',
+		// Who the access token stands for, or null to refuse. It was issued to this
+		// backend for `resource`, the mount's URL: check that, not just that it is valid.
+		identify: async (tokens, resource, ctx) => {
+			const access = await introspect(tokens.accessToken);
+			if (!access || access.resource !== resource) return null;
+			return { id: access.userId, email: access.email, name: access.name };
+		}
+	}
+});
+
+export const cms = createCmsBackend({
+	auth: {
+		...local,
+		// Which sites such an editor may edit is yours to say: they hold no grants.
+		authorize: async (user, projectId, ctx) =>
+			(await local.authorize(user, projectId, ctx)) || (await mayEdit(user.id, projectId))
+	}
+});
+```
+
+The login page then has the button, above the password form (leave `login` out of the adapter and it is the button alone). Nothing changes in the admin bar or the site.
+
+The backend is the OAuth client, and the browser never holds a token. The button opens the authorization server in a popup, since its own sign-in needs cookies a frame inside another site is not given. The popup comes back to `<mount>/oauth/callback`, where the code is exchanged (with PKCE, and for `resource` = the mount's URL) and `identify` is asked who it is. That editor gets an ordinary CMS session, handed from the popup to the framed login page so the cookie is set where the admin bar's requests carry it, and the token is revoked.
+
+The backend names itself to the authorization server with a [Client ID Metadata Document](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-00) it serves at `<mount>/oauth/client.json`, so there is nothing to register. Where the server does not read those, or the mount is not on https (local development), it registers dynamically instead. With PocketBase the authorization server is [pocketbase-oauth](https://github.com/velastack/pocketbase-oauth).
+
+An editor who signs in this way is kept under the id `identify` returns, apart from any password editor with the same address: nobody gains a password account's sites by having an email that matches it. Use the same id for the same person in `@velastack/cms/mcp` and what their assistant stages is in their open release in the admin bar, and the other way round.
+
 ## Editing from ChatGPT, Claude and other assistants
 
 `@velastack/cms/mcp` serves the backend as an [MCP](https://modelcontextprotocol.io) server, so people can read and change their site from the assistant they already use, on their phone or computer.

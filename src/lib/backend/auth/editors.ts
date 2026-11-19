@@ -40,6 +40,13 @@ const toEditor = (row: EditorRow): CmsEditor => ({
 
 const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
+/**
+ * What an external editor's `email_lower` starts with. The column is the
+ * unique key password sign-in looks addresses up by; no address contains a
+ * colon before its `@` unquoted, so these rows are never found that way.
+ */
+const EXTERNAL = 'external:';
+
 export const createEditorStore = (db: SqliteDb, scryptParams?: ScryptParams) => {
 	const insertEditor = db.prepare<[string, string, string, string, string, string]>(
 		`INSERT INTO cms_editors (id, email, email_lower, name, password_hash, created_at)
@@ -56,6 +63,9 @@ export const createEditorStore = (db: SqliteDb, scryptParams?: ScryptParams) => 
 	);
 	const updateHash = db.prepare<[string, string]>(
 		'UPDATE cms_editors SET password_hash = ? WHERE id = ?'
+	);
+	const updateExternal = db.prepare<[string, string, string]>(
+		'UPDATE cms_editors SET email = ?, name = ? WHERE id = ?'
 	);
 	const removeEditor = db.prepare<[string]>('DELETE FROM cms_editors WHERE id = ?');
 	const setDisabled = db.prepare<[string | null, string]>(
@@ -117,6 +127,30 @@ export const createEditorStore = (db: SqliteDb, scryptParams?: ScryptParams) => 
 				insertGrant.run(projectId, id, 'editor', nowIso());
 			}
 			return { id, email, name: input.name ?? email };
+		},
+
+		/**
+		 * An editor who signs in through an authorization server instead of a
+		 * password: created on first sign-in, refreshed on each one. The id is
+		 * the one the authorization server knows them by.
+		 *
+		 * The row has no password, and is kept out of the email lookup: someone
+		 * with a password account under the same address stays a separate
+		 * editor, and nobody gains that account's sites by having an email that
+		 * matches it. What an external editor may edit is for the adapter's
+		 * `authorize` to say, not for a grant row.
+		 */
+		upsertExternal(editor: CmsEditor): CmsEditor {
+			const name = editor.name || editor.email || editor.id;
+			const row = byId.get(editor.id);
+			if (!row) {
+				insertEditor.run(editor.id, editor.email, EXTERNAL + editor.id, name, '', nowIso());
+			} else if (row.password_hash !== '') {
+				throw new Error(`editor ${editor.id} signs in with a password`);
+			} else {
+				updateExternal.run(editor.email, name, editor.id);
+			}
+			return { id: editor.id, email: editor.email, name };
 		},
 
 		async setPassword(idOrEmail: string, password: string): Promise<void> {

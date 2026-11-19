@@ -26,6 +26,59 @@ export type CmsAuthContext = {
 	db: SqliteDb;
 	projectId: string;
 	cookieName: string;
+	/** The request being served, for an adapter that needs the host's own
+	 * clients (`event.locals`) or the origin it was reached on. */
+	event: RequestEvent;
+};
+
+/** What the authorization server issued for a sign-in. */
+export type CmsOAuthTokens = {
+	accessToken: string;
+	refreshToken?: string;
+	scope?: string;
+};
+
+/**
+ * Sign-in through an OAuth 2.1 authorization server: a button on the login
+ * page, next to the password form or instead of it.
+ *
+ * The backend is the OAuth client. It sends the person to the authorization
+ * server in a popup, exchanges the code it comes back with, and asks
+ * `identify` who the token stands for. That editor then gets an ordinary CMS
+ * session, so nothing else in the backend or the admin bar knows the
+ * difference, and no token ever reaches the browser.
+ *
+ * The backend names itself by a Client ID Metadata Document it serves at
+ * `<mount>/oauth/client.json`, where the authorization server supports those
+ * and the mount is on https; otherwise it registers dynamically (RFC 7591).
+ */
+export type CmsOAuthSignIn = {
+	/** The button's text: "Continue with Example". */
+	label: string | ((ctx: CmsAuthContext) => string | Promise<string>);
+	/** The authorization server's issuer URL. */
+	issuer: (ctx: CmsAuthContext) => string | Promise<string>;
+	/** The scope to ask for. Its only use is `identify`. */
+	scope?: string;
+	/** What the authorization server calls this client on its consent page. */
+	clientName?: string;
+	/**
+	 * Who the token stands for, or `null` to refuse the sign-in. The token
+	 * was issued to this backend for `resource` (the mount's URL): check that
+	 * with the authorization server rather than assume it.
+	 */
+	identify: (
+		tokens: CmsOAuthTokens,
+		resource: string,
+		ctx: CmsAuthContext
+	) => Promise<CmsEditor | null>;
+	/** Start a session for an editor `identify` returned. */
+	createSession: (
+		user: CmsEditor,
+		ctx: CmsAuthContext,
+		options?: { ttlMs?: number }
+	) => Promise<CmsSessionGrant>;
+	/** End the session `token` names and return whose it was, or `null`. */
+	redeem: (token: string, ctx: CmsAuthContext) => Promise<CmsEditor | null>;
 };
 
 /**
@@ -43,10 +96,12 @@ export type CmsAuthAdapter = {
 	 * anonymous on this project: `required` routes 403, `public` routes serve
 	 * published content, and the login page shows its form. */
 	authorize(user: CmsEditor, projectId: string, ctx: CmsAuthContext): Promise<boolean>;
-	/** Backs the built-in login page. Omit it and `/iframe/login` 404s, leaving
-	 * login entirely to the host. The router runs `authorize` on the grant
+	/** Backs the password form of the built-in login page. Omit it, and
+	 * `oauth` too, and `/iframe/login` 404s, leaving login entirely to the host. The router runs `authorize` on the grant
 	 * before issuing it, so an implementation need not check the project. */
 	login?(email: string, password: string, ctx: CmsAuthContext): Promise<CmsSessionGrant | null>;
+	/** Sign-in through an authorization server. See `CmsOAuthSignIn`. */
+	oauth?: CmsOAuthSignIn;
 	/** Throw away a grant `login` minted but the router refused to issue,
 	 * because the account has no grant on this project. Optional: without it
 	 * the session stays valid server-side, but its token never left the

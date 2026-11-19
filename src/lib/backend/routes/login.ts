@@ -21,8 +21,9 @@
  * since the cookie is scoped to this mount.
  */
 import type { RouteCtx } from './context.js';
+import { oauthLabel, redeemHandoff } from './oauth.js';
 
-const escapeHtml = (s: string): string =>
+export const escapeHtml = (s: string): string =>
 	s.replace(
 		/[&<>"']/g,
 		(c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string
@@ -82,6 +83,7 @@ button:hover { background: #262626; }
 	background: #fef2f2;
 	color: #b91c1c;
 }
+.or { margin: 0.75rem 0; color: #737373; text-align: center; }
 .hint {
 	margin: 0 0 1rem;
 	padding: 0.5rem 0.75rem;
@@ -96,13 +98,13 @@ button:hover { background: #262626; }
 	input:focus-visible { outline-color: #fafafa; }
 	button { background: #fafafa; color: #0a0a0a; }
 	button:hover { background: #e5e5e5; }
-	p.sub { color: #a3a3a3; }
+	p.sub, .or { color: #a3a3a3; }
 	.error { background: #2a1215; color: #fca5a5; }
 	.hint { background: #171717; color: #a3a3a3; }
 }
 `;
 
-const page = (title: string, body: string): string =>
+export const page = (title: string, body: string): string =>
 	`<!doctype html>
 <html lang="en">
 <head>
@@ -119,14 +121,41 @@ ${body}
 </body>
 </html>`;
 
-const loginForm = (error?: string, hint?: string): string =>
-	page(
-		'Sign in to edit',
-		`<h1>Sign in to edit</h1>
-<p class="sub">Use your email and password</p>
-${hint ? `<p class="hint">${escapeHtml(hint)}</p>` : ''}
-${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ''}
-<form method="POST">
+/** What the login page offers: the password form, a sign-in button, or both. */
+type LoginOptions = {
+	/** Whether the adapter takes an email and password. */
+	password: boolean;
+	/** The sign-in button's text, when the adapter signs in through an
+	 * authorization server. */
+	oauthLabel: string | null;
+	/** Where the button's popup starts. */
+	oauthStart: string;
+};
+
+const oauthButton = (options: LoginOptions): string =>
+	options.oauthLabel
+		? `<button type="button" id="oauth">${escapeHtml(options.oauthLabel)}</button>
+<form method="POST" id="handoff" hidden><input type="hidden" name="handoff"></form>
+<script>
+	// The authorization server signs the person in on its own site, so it gets
+	// a window of its own. That window hands back a one-time token, which is
+	// posted from here so the session cookie is set where the admin bar's
+	// requests will carry it.
+	var popup = null;
+	document.getElementById('oauth').addEventListener('click', function () {
+		popup = window.open(${JSON.stringify(options.oauthStart)}, 'velastack-cms-signin', 'popup,width=480,height=720');
+	});
+	window.addEventListener('message', function (event) {
+		if (event.origin !== window.location.origin || !popup || event.source !== popup) return;
+		if (!event.data || event.data.type !== 'velastack-cms-oauth') return;
+		var form = document.getElementById('handoff');
+		form.elements.handoff.value = String(event.data.handoff || '');
+		form.submit();
+	});
+</script>`
+		: '';
+
+const passwordForm = (): string => `<form method="POST">
 	<div class="field">
 		<label for="email">Email</label>
 		<input id="email" name="email" type="email" autocomplete="email" required autofocus>
@@ -136,7 +165,18 @@ ${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ''}
 		<input id="password" name="password" type="password" autocomplete="current-password" required>
 	</div>
 	<button type="submit">Sign in</button>
-</form>`
+</form>`;
+
+const loginForm = (options: LoginOptions, error?: string, hint?: string): string =>
+	page(
+		'Sign in to edit',
+		`<h1>Sign in to edit</h1>
+${options.password ? `<p class="sub">${options.oauthLabel ? 'Choose how to sign in' : 'Use your email and password'}</p>` : '<p class="sub">Sign in with your account</p>'}
+${hint ? `<p class="hint">${escapeHtml(hint)}</p>` : ''}
+${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ''}
+${oauthButton(options)}
+${options.password && options.oauthLabel ? '<p class="or">or</p>' : ''}
+${options.password ? passwordForm() : ''}`
 	);
 
 const successPage = (): string =>
@@ -152,13 +192,19 @@ const successPage = (): string =>
 </script>`
 	);
 
-const html = (body: string, ctx: RouteCtx, status = 200): Response =>
+export const html = (
+	body: string,
+	ctx: RouteCtx,
+	status = 200,
+	// The bar embeds the login page cross-origin, so the host decides who may
+	// frame it.
+	frameAncestors = ctx.frameAncestors
+): Response =>
 	new Response(body, {
 		status,
 		headers: {
 			'content-type': 'text/html; charset=utf-8',
-			// The bar embeds this cross-origin, so the host decides who may frame it.
-			'content-security-policy': `frame-ancestors ${ctx.frameAncestors}`,
+			'content-security-policy': `frame-ancestors ${frameAncestors}`,
 			'cache-control': 'no-store'
 		}
 	});
@@ -170,41 +216,66 @@ const foreignSessionHint = (ctx: RouteCtx): string | undefined =>
 		? `Signed in as ${ctx.sessionUser.email}, but that account can't edit this site. Sign in with one that can.`
 		: undefined;
 
-export const getLogin = (ctx: RouteCtx): Response => {
-	if (!ctx.auth.login) return new Response(null, { status: 404 });
+const loginOptions = async (ctx: RouteCtx): Promise<LoginOptions> => ({
+	password: Boolean(ctx.auth.login),
+	oauthLabel: await oauthLabel(ctx),
+	oauthStart: `${ctx.mountPath}/oauth/start`
+});
+
+const hasLogin = (ctx: RouteCtx) => Boolean(ctx.auth.login || ctx.auth.oauth);
+
+export const getLogin = async (ctx: RouteCtx): Promise<Response> => {
+	if (!hasLogin(ctx)) return new Response(null, { status: 404 });
 	// Authorized for this project already — straight to the signed-in screen.
 	if (ctx.user) return html(successPage(), ctx);
 	// Anonymous, or a session with no grant here: the form, never the
 	// signed-in screen (see the file header).
-	return html(loginForm(undefined, foreignSessionHint(ctx)), ctx);
+	return html(loginForm(await loginOptions(ctx), undefined, foreignSessionHint(ctx)), ctx);
 };
 
 export const postLogin = async (ctx: RouteCtx): Promise<Response> => {
-	if (!ctx.auth.login) return new Response(null, { status: 404 });
+	if (!hasLogin(ctx)) return new Response(null, { status: 404 });
+	const options = await loginOptions(ctx);
 
 	let form: FormData;
 	try {
 		form = await ctx.event.request.formData();
 	} catch {
-		return html(loginForm('Could not read the submitted form.'), ctx, 400);
+		return html(loginForm(options, 'Could not read the submitted form.'), ctx, 400);
 	}
+
+	// Signed in through the authorization server: the popup's hand-off.
+	const handoff = form.get('handoff');
+	if (typeof handoff === 'string' && handoff) {
+		const session = await redeemHandoff(ctx, handoff);
+		if (!session) {
+			return html(loginForm(options, 'That sign-in has expired. Try again.'), ctx, 400);
+		}
+		ctx.setSessionCookie(session.token, session.expiresAt);
+		return html(successPage(), ctx);
+	}
+
+	if (!ctx.auth.login) return new Response(null, { status: 404 });
 
 	const email = form.get('email');
 	const password = form.get('password');
 	if (typeof email !== 'string' || typeof password !== 'string' || !email || !password) {
-		return html(loginForm('Enter both an email and a password.'), ctx, 400);
+		return html(loginForm(options, 'Enter both an email and a password.'), ctx, 400);
 	}
 
 	const grant = await ctx.auth.login(email, password, ctx.authCtx);
 	// One message either way — which half was wrong is not the caller's business.
-	if (!grant) return html(loginForm('Invalid email or password.'), ctx, 400);
+	if (!grant) return html(loginForm(options, 'Invalid email or password.'), ctx, 400);
 
 	// Right password, wrong site. The session must not reach the browser: the
 	// bar would be told "signed in" and then refused by `/user`.
 	if (!(await ctx.auth.authorize(grant.user, ctx.projectId, ctx.authCtx))) {
 		await ctx.auth.discard?.(grant, ctx.authCtx);
 		return html(
-			loginForm(`${grant.user.email} can't edit this site. Sign in with an account that can.`),
+			loginForm(
+				options,
+				`${grant.user.email} can't edit this site. Sign in with an account that can.`
+			),
 			ctx,
 			403
 		);
