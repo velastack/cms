@@ -961,6 +961,67 @@ While `resolve` returns a profile for a project:
 
 `$managed` is never stored, managed or not. The client reads managed state only from the site tree (`companyManagedBy(cms.site)` returns `{ by, url? }` or `null`), so a prerendered build, a preview and a past version all agree. In the admin bar the Company panel is read-only and says "Managed by {by}", with a link to `url`; a field bound with `company` says the same in its popover. Without the option nothing changes.
 
+## Editing from ChatGPT, Claude and other assistants
+
+`@velastack/cms/mcp` serves the backend as an [MCP](https://modelcontextprotocol.io) server, so people can read and change their site from the assistant they already use, on their phone or computer.
+
+```ts
+// src/lib/server/cms-mcp.ts
+import { createCmsMcp } from '@velastack/cms/mcp';
+import { cms } from '#lib/server/cms.js';
+
+export const mcp = createCmsMcp({
+	backend: cms,
+	// Who the bearer token stands for, or null. One call to your authorization server.
+	verifyToken: async (token, event) => {
+		const access = await introspect(token);
+		if (!access) return null;
+		return {
+			editor: { id: access.userId, email: access.email, name: access.name },
+			scopes: access.scopes,
+			clientId: access.clientId,
+			expiresAt: access.expiresAt,
+			resource: access.resource // the token's audience
+		};
+	},
+	// The sites this person may work on. Single-tenant: the one project.
+	sites: () => [{ id: 'default', name: 'My site', url: 'https://example.com' }]
+});
+```
+
+```ts
+// src/routes/mcp/+server.ts
+import { mcp } from '#lib/server/cms-mcp.js';
+export const prerender = false;
+export const fallback = mcp.handler;
+
+// src/routes/.well-known/oauth-protected-resource/mcp/+server.ts
+import { mcp } from '#lib/server/cms-mcp.js';
+export const prerender = false;
+export const GET = mcp.metadata;
+```
+
+The person adds `https://your-app.example/mcp` as a custom connector in their assistant and signs in.
+
+**Authorization.** The server is an OAuth 2.1 resource server, as the MCP specification asks, and nothing more: it issues no tokens and sees no passwords. A request without a valid bearer token gets a `401` naming the metadata route, which names the authorization server (`issuer`, by default the origin the request came in on). Any authorization server will do; with PocketBase it is [pocketbase-oauth](https://github.com/velastack/pocketbase-oauth), and `@velastack/pocketbase/oauth` has the `introspectAccessToken` that `verifyToken` calls. A token is refused unless it was issued for this server's own URL, so `resource` must be filled in.
+
+**Tools.** Releases are published under the `editor` the token stands for, and every call is checked against `sites`.
+
+| Tool                      | Scope           |                                                                                |
+| ------------------------- | --------------- | ------------------------------------------------------------------------------ |
+| `list_sites`              |                 | The sites, their languages and how many changes are staged.                    |
+| `read_content`            |                 | The documents (site options, layouts, pages) as JSON, staged changes included. |
+| `list_pending_changes`    |                 | What is staged, with the published value each change replaces.                 |
+| `stage_changes`           | `content:write` | Stage new values for existing fields. Nothing is published.                    |
+| `discard_pending_changes` | `content:write` | Throw the staged changes away.                                                 |
+| `publish_changes`         | `content:write` | Publish what is staged as one release.                                         |
+
+Changes are staged, then published, as two tools: staging answers with the old and new value of each field, and the assistant is told to publish only once the person has agreed. Staged changes live in the editor's open release, the one the admin bar fills, and a publish is in the release history and can be reverted from there. An edit replaces one existing field with a value of the same type; adding fields, list items or pages, and changing images, stay with the admin bar.
+
+**Options.** `afterPublish(site, release, request)` runs after a publish, for whatever makes it reach visitors (a static site is rebuilt); what it returns is told to the assistant. `extend(server, request)` registers the host's own tools next to these, with `requireScopes` for those that need a scope and `scopes` to advertise them. A site with `readOnly: 'why'` can be read but not changed. `registerCmsTools(server, ctx)` is the same tools without the HTTP layer, for a host with its own MCP server.
+
+The functions under the tools are exported from `@velastack/cms/backend` for anything else that edits without the admin bar, a chat bot for one: `readContent`, `readDraft`, `stageChanges`, `stagedChanges`, `publishStaged`, `applyChanges` (stage and publish at once), `changeProblem`, `contentLocales` and `fitContent`.
+
 ## Locales
 
 Locale support is first-class and lives at the release / version dimension: every release contains items across every locale you've touched, so publishing ships all locales atomically. Items are tagged `(scope, locale, tree)`; switching the editor's preview locale is a free UI op against the same release.
